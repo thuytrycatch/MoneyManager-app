@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2024-01-15T10:30:00Z",
+  "budgets": {
+    "Ăn uống": 3000000,
+    "Di chuyển": 1000000,
+    "Mua sắm": 2000000,
+    "Giải trí": 1000000,
+    "Sức khỏe": 500000,
+    "Hóa đơn": 2000000,
+    "Khác": 500000
+  },
+  "transactions": []
+}
