@@ -398,7 +398,7 @@
   function statTile(label, value, kind, ic) {
     return '<div class="tile ' + (kind || '') + '">' +
       '<div class="tile-top">' + (ic ? icon(ic) : '') + '<span>' + label + '</span></div>' +
-      '<div class="tile-val">' + mask(fmtShort(Math.abs(value)) + '₫') + '</div></div>';
+      '<div class="tile-val">' + fmtShort(Math.abs(value)) + '₫</div></div>';
   }
   function txRow(tx) {
     if (tx.type === 'transfer') {
@@ -508,8 +508,8 @@
       '<button id="eyeToggle" class="eye-btn" title="' + (hideAmounts ? t('showBalance') : t('hideBalance')) + '">' + icon(hideAmounts ? 'eyeOff' : 'eye') + '</button></div>' +
       '<div class="hero-balance">' + mask(fmtVND(bal)) + '</div>' +
       '<div class="hero-chips">' +
-      '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + mask(fmtShort(mt.income) + '₫') + '</b></div>' +
-      '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + mask(fmtShort(mt.expense) + '₫') + '</b></div>' +
+      '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + fmtShort(mt.income) + '₫</b></div>' +
+      '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + fmtShort(mt.expense) + '₫</b></div>' +
       '</div></div>' +
 
       '<div class="tiles">' +
