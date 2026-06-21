@@ -52,6 +52,8 @@
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
     more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
     globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    bank: '<line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
+    phone: '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -74,6 +76,13 @@
       week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', trend: 'Diễn biến thu chi',
       budgetProgress: 'Tiến độ ngân sách', topSpending: 'Khoản chi lớn nhất', summary: 'Tổng kết',
       save: 'Lưu', cancel: 'Hủy', delete: 'Xóa', edit: 'Sửa', category: 'Danh mục', note: 'Ghi chú', amount: 'Số tiền',
+      date: 'Ngày', time: 'Giờ', today: 'Hôm nay', yesterday: 'Hôm qua', pickDate: 'Chọn ngày',
+      wallets: 'Ví / Tài khoản', wallet: 'Ví', walletCash: 'Tiền mặt', addWallet: 'Thêm ví',
+      walletName: 'Tên ví', walletType: 'Loại', openingBalance: 'Số dư đầu kỳ',
+      typeCash: 'Tiền mặt', typeBank: 'Ngân hàng', typeEwallet: 'Ví điện tử', typeOther: 'Khác',
+      totalBalance: 'Tổng số dư', walletSaved: 'Đã lưu ví', walletDeleted: 'Đã xóa ví',
+      confirmDeleteWallet: 'Xóa ví này? Giao dịch cũ vẫn giữ nhưng sẽ không còn gắn ví.',
+      noWallets: 'Chưa có ví nào.', unassignedWallet: 'Chưa gán ví', needWalletName: 'Nhập tên ví.',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
       budgetNotSet: 'Chưa thiết lập ngân sách.', noExpenseData: 'Chưa có dữ liệu chi tiêu.',
       weekLabel: 'Tuần', moPrefix: 'T', dows: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
@@ -121,6 +130,13 @@
       week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', trend: 'Income & expense trend',
       budgetProgress: 'Budget progress', topSpending: 'Top spending', summary: 'Summary',
       save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', category: 'Category', note: 'Note', amount: 'Amount',
+      date: 'Date', time: 'Time', today: 'Today', yesterday: 'Yesterday', pickDate: 'Pick date',
+      wallets: 'Wallets / Accounts', wallet: 'Wallet', walletCash: 'Cash', addWallet: 'Add wallet',
+      walletName: 'Wallet name', walletType: 'Type', openingBalance: 'Opening balance',
+      typeCash: 'Cash', typeBank: 'Bank', typeEwallet: 'E-wallet', typeOther: 'Other',
+      totalBalance: 'Total balance', walletSaved: 'Wallet saved', walletDeleted: 'Wallet deleted',
+      confirmDeleteWallet: 'Delete this wallet? Past transactions are kept but will no longer be linked to a wallet.',
+      noWallets: 'No wallets yet.', unassignedWallet: 'No wallet', needWalletName: 'Enter a wallet name.',
       allCats: 'All categories', allTypes: 'Income & expense',
       budgetNotSet: 'No budget set yet.', noExpenseData: 'No expense data yet.',
       weekLabel: 'Week', moPrefix: 'M', dows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -175,7 +191,7 @@
   function catLabel(c) { return (CAT_LABELS[lang] && CAT_LABELS[lang][c]) || c; }
 
   /* ============== State ============== */
-  let DATA = { household: null, budgets: {}, transactions: [] };
+  let DATA = { household: null, budgets: {}, transactions: [], accounts: [] };
   let authMode = 'login'; // 'config' | 'login'
   let authIsSignup = false;
   let currentUserEmail = '';
@@ -198,6 +214,7 @@
   /* ============== Date helpers ============== */
   function pad(n) { return String(n).padStart(2, '0'); }
   function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
   function monthKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
   function startOfWeek(d) { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - day); return x; }
   function endOfWeek(d) { const s = startOfWeek(d); const e = new Date(s); e.setDate(s.getDate() + 6); return e; }
@@ -223,6 +240,52 @@
   function allTimeBalance() { return totals(DATA.transactions).net; }
   function totalBudget() { return Object.values(DATA.budgets).reduce((a, b) => a + (b || 0), 0); }
 
+  /* ============== Accounts (wallets) ============== */
+  const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'other'];
+  const ACCOUNT_TYPE_META = {
+    cash: { icon: 'wallet', key: 'typeCash' },
+    bank: { icon: 'bank', key: 'typeBank' },
+    ewallet: { icon: 'phone', key: 'typeEwallet' },
+    other: { icon: 'more', key: 'typeOther' },
+  };
+  function accountTypeIcon(type) { return icon((ACCOUNT_TYPE_META[type] || ACCOUNT_TYPE_META.other).icon); }
+  function accountTypeLabel(type) { return t((ACCOUNT_TYPE_META[type] || ACCOUNT_TYPE_META.other).key); }
+  function activeAccounts() { return (DATA.accounts || []).filter((a) => !a.archived); }
+  function accountById(id) { return (DATA.accounts || []).find((a) => a.id === id) || null; }
+  // Balance of one wallet = opening balance + incomes − expenses recorded against it.
+  function accountBalance(id) {
+    const acc = accountById(id); if (!acc) return 0;
+    let bal = acc.openingBalance || 0;
+    DATA.transactions.forEach((tx) => {
+      if (tx.accountId !== id) return;
+      bal += tx.type === 'income' ? tx.amount : -tx.amount;
+    });
+    return bal;
+  }
+  // Total balance = sum of opening balances + net of every transaction (assigned or not).
+  function totalBalance() {
+    const opening = (DATA.accounts || []).reduce((s, a) => s + (a.openingBalance || 0), 0);
+    return opening + allTimeBalance();
+  }
+  // Remember the last wallet used for quick entry, scoped per household.
+  function lastAccountKey() { return 'mm_last_account_' + (DATA.household ? DATA.household.id : ''); }
+  function getLastAccountId() { try { return localStorage.getItem(lastAccountKey()) || ''; } catch (e) { return ''; } }
+  function setLastAccountId(id) { try { localStorage.setItem(lastAccountKey(), id || ''); } catch (e) { /* ignore */ } }
+  function defaultAccountId() {
+    const accs = activeAccounts(); if (!accs.length) return '';
+    const last = getLastAccountId();
+    return accs.some((a) => a.id === last) ? last : accs[0].id;
+  }
+  // <select> of wallets for the entry forms; empty string when the household has no wallets.
+  function accountSelect(id, selectedId) {
+    const accs = activeAccounts();
+    if (!accs.length) return '';
+    const sel = selectedId || defaultAccountId();
+    return '<select id="' + id + '" class="acct-select">' +
+      accs.map((a) => '<option value="' + esc(a.id) + '"' + (a.id === sel ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('') +
+      '</select>';
+  }
+
   /* ============== Toast ============== */
   let toastTimer = null;
   function toast(msg, kind) {
@@ -239,7 +302,7 @@
   }
 
   /* ============== Transaction actions ============== */
-  async function addFromInput(raw, btnId) {
+  async function addFromInput(raw, btnId, dateInputId, accountSelectId) {
     if (!raw.trim()) { toast(t('emptyInput'), 'warn'); return; }
     const btn = btnId && document.getElementById(btnId);
     const old = btn && btn.innerHTML;
@@ -252,17 +315,30 @@
       toast(t('cantParse'), 'warn'); return;
     }
     const now = new Date();
+    const today = ymd(now);
+    // Date priority: a date the user picked in the date bar wins; otherwise a date
+    // detected in the sentence ("hôm qua", "20/6"); otherwise today.
+    const dateInput = dateInputId && document.getElementById(dateInputId);
+    const picked = dateInput ? dateInput.value : '';
+    let date = picked || today;
+    if (parsed.date && (!picked || picked === today)) date = parsed.date;
+    // Keep a real clock time only for today's entries; past days get no misleading time.
+    const time = date === today ? now.toTimeString().slice(0, 5) : '';
+    const acctSel = accountSelectId && document.getElementById(accountSelectId);
+    const accountId = acctSel ? acctSel.value : defaultAccountId();
     const draft = {
-      date: ymd(now), time: now.toTimeString().slice(0, 5),
+      date: date, time: time,
       rawInput: raw, amount: parsed.amount, type: parsed.type,
       category: parsed.category, note: parsed.note,
+      accountId: accountId || null,
     };
     setStatus(t('saving'));
     try {
       const saved = await window.Store.addTransaction(draft);
       DATA.transactions.unshift(saved);
+      if (accountId) setLastAccountId(accountId);
       setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 2500);
-      toast(t('added') + ': ' + parsed.note + ' · ' + fmtVND(parsed.amount), 'success');
+      toast(t('added') + ': ' + parsed.note + ' · ' + fmtVND(parsed.amount) + (date !== today ? ' · ' + date : ''), 'success');
       if (parsed.type === 'expense') checkBudgetWarning(parsed.category);
       render();
     } catch (err) {
@@ -323,12 +399,46 @@
     }).join('');
   }
 
+  // Date selector for quick-add: "Hôm nay" / "Hôm qua" chips + a native date picker.
+  // Defaults to today; capped at today (no future dates).
+  function dateBar(inputId) {
+    const today = ymd(new Date());
+    return '<div class="date-bar">' +
+      '<button type="button" class="date-chip active" data-dateset="' + today + '" data-for="' + inputId + '">' + t('today') + '</button>' +
+      '<button type="button" class="date-chip" data-dateset="' + ymd(addDays(new Date(), -1)) + '" data-for="' + inputId + '">' + t('yesterday') + '</button>' +
+      '<input type="date" id="' + inputId + '" class="date-input" value="' + today + '" max="' + today + '" title="' + t('pickDate') + '"/>' +
+      '</div>';
+  }
+  function wireDateBar() {
+    document.querySelectorAll('.date-bar').forEach((bar) => {
+      const input = bar.querySelector('.date-input');
+      const chips = bar.querySelectorAll('.date-chip');
+      const syncChips = () => chips.forEach((c) => c.classList.toggle('active', input && c.dataset.dateset === input.value));
+      chips.forEach((c) => c.addEventListener('click', () => { if (input) { input.value = c.dataset.dateset; syncChips(); } }));
+      if (input) input.addEventListener('change', syncChips);
+    });
+  }
+
+  // Horizontal strip of wallet cards (Overview). Empty when there are no wallets.
+  function walletStripHtml() {
+    const accs = activeAccounts();
+    if (!accs.length) return '';
+    const cards = accs.map((a) => {
+      const b = accountBalance(a.id);
+      return '<div class="wallet-card">' +
+        '<div class="wallet-top">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
+        '<div class="wallet-bal ' + (b < 0 ? 'neg' : '') + '">' + fmtShort(b) + '₫</div></div>';
+    }).join('');
+    return '<div class="section-title">' + t('wallets') + '</div>' +
+      '<div class="wallet-strip">' + cards + '</div>';
+  }
+
   /* ============== VIEW: Overview ============== */
   function viewOverview() {
     const now = new Date();
     const monthTx = inRange(startOfMonth(now), endOfMonth(now));
     const mt = totals(monthTx);
-    const bal = allTimeBalance();
+    const bal = totalBalance();
     const budget = totalBudget();
     const remain = budget - mt.expense;
     const daysInMonth = endOfMonth(now).getDate();
@@ -365,6 +475,9 @@
       statTile(t('spentToday'), spentToday, 'expense', 'up') +
       statTile(t('avgPerDay'), avgDay, 'neutral', 'chart') +
       '</div>' +
+
+      // Wallet balances
+      walletStripHtml() +
 
       // Weekly review card
       '<div class="card week-card">' +
@@ -527,6 +640,8 @@
     return (
       '<div class="quick-add"><input id="txInput" type="text" placeholder="' + t('placeholder') + '" autocomplete="off"/>' +
       '<button id="addBtn" class="add-btn-inline">' + icon('plus') + '</button></div>' +
+      dateBar('txDate') +
+      (accountSelect('txAccount') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccount') + '</div>' : '') +
       '<div class="filters">' +
       '<select id="fMonth">' + monthOpts + '</select>' +
       '<select id="fCat">' + catOpts + '</select>' +
@@ -541,6 +656,8 @@
     return '<div class="add-page">' +
       '<div class="section-title">' + t('addTx') + '</div>' +
       '<textarea id="txInputBig" rows="3" placeholder="' + t('placeholder') + '"></textarea>' +
+      dateBar('txDateBig') +
+      (accountSelect('txAccountBig') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccountBig') + '</div>' : '') +
       '<button id="addBtnBig" class="primary-btn">' + icon('plus') + ' ' + t('add') + '</button>' +
       '<div class="examples">' +
       ['ăn sáng 35k', 'lương 15 triệu', 'đổ xăng 80k', 'cafe 2 triệu rưỡi', 'grab 1tr2', 'tiền điện 500 nghìn', 'mua giày 800k', 'khám bệnh 250k']
@@ -569,6 +686,32 @@
       '<div class="member-list">' + rows + '</div>';
   }
 
+  // Editable list of wallets in Settings (name, type, opening balance, delete) + add button.
+  function walletEditRowHtml(acc) {
+    const a = acc || { id: '', name: '', type: 'cash', openingBalance: 0 };
+    const typeOpts = ACCOUNT_TYPES.map((ty) => '<option value="' + ty + '"' + (ty === a.type ? ' selected' : '') + '>' + accountTypeLabel(ty) + '</option>').join('');
+    const balHtml = acc ? '<span class="w-bal">= ' + fmtShort(accountBalance(a.id)) + '₫</span>' : '';
+    return '<div class="wallet-edit-row" data-acc="' + esc(a.id) + '">' +
+      '<div class="wallet-edit-main">' +
+      '<input type="text" class="w-name" value="' + esc(a.name) + '" placeholder="' + t('walletName') + '"/>' +
+      '<select class="w-type">' + typeOpts + '</select>' +
+      (acc ? '<button class="icon-btn danger" data-delacc="' + esc(a.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') +
+      '</div>' +
+      '<div class="wallet-edit-sub"><label>' + t('openingBalance') + '</label>' +
+      '<input type="number" inputmode="numeric" class="w-open" value="' + (a.openingBalance || 0) + '"/>' + balHtml +
+      '</div></div>';
+  }
+  function walletsEditorHtml() {
+    const accs = activeAccounts();
+    const rows = accs.length ? accs.map((a) => walletEditRowHtml(a)).join('') : '<div class="empty">' + t('noWallets') + '</div>';
+    return '<div class="section-title">' + t('wallets') + '</div>' +
+      '<div class="wallet-edit" id="walletEdit">' + rows + '</div>' +
+      '<div class="wallet-edit-actions">' +
+      '<button id="addWalletBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addWallet') + '</button>' +
+      '<button id="saveWalletsBtn" class="primary-btn">' + icon('wallet') + ' ' + t('save') + '</button>' +
+      '</div>';
+  }
+
   function viewSettings() {
     const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
       '<div class="budget-edit-row"><label>' + catIcon(c) + esc(catLabel(c)) + '</label>' +
@@ -581,6 +724,9 @@
       '<div class="section-title">' + t('budget') + ' (' + t('month').toLowerCase() + ')</div>' +
       '<div class="budget-edit">' + budgetInputs + '</div>' +
       '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>' +
+
+      // Wallets / Accounts
+      walletsEditorHtml() +
 
       // Household
       '<div class="section-title">' + t('household') + '</div>' +
@@ -639,6 +785,9 @@
       '<label>' + t('amount') + '</label><input id="eAmount" type="number" inputmode="numeric" value="' + tx.amount + '"/>' +
       '<label>' + t('category') + '</label><select id="eCat">' + catOpts + '</select>' +
       '<label>' + t('note') + '</label><input id="eNote" type="text" value="' + esc(tx.note) + '"/>' +
+      '<div class="edit-datetime"><div><label>' + t('date') + '</label><input id="eDate" type="date" value="' + esc(tx.date) + '" max="' + ymd(new Date()) + '"/></div>' +
+      '<div><label>' + t('time') + '</label><input id="eTime" type="time" value="' + esc(tx.time || '') + '"/></div></div>' +
+      (activeAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('eAccount', tx.accountId) : '') +
       '<div class="seg" style="margin-top:10px"><button class="seg-btn ' + (tx.type === 'expense' ? 'active' : '') + '" data-type="expense">' + t('expense') + '</button>' +
       '<button class="seg-btn ' + (tx.type === 'income' ? 'active' : '') + '" data-type="income">' + t('income') + '</button></div>' +
       '<div class="modal-actions"><button class="ghost-btn" id="eCancel">' + t('cancel') + '</button>' +
@@ -658,7 +807,11 @@
         category: document.getElementById('eCat').value,
         note: document.getElementById('eNote').value.trim(),
         type: newType,
+        date: document.getElementById('eDate').value || tx.date,
+        time: document.getElementById('eTime').value || '',
       };
+      const eAcct = document.getElementById('eAccount');
+      if (eAcct) fields.accountId = eAcct.value || null;
       try {
         await window.Store.updateTransaction(tx.id, fields);
         Object.assign(tx, fields);
@@ -697,11 +850,13 @@
   function wire() {
     // quick add (transactions)
     const ti = document.getElementById('txInput');
-    if (ti) { document.getElementById('addBtn').addEventListener('click', () => addFromInput(ti.value, 'addBtn')); ti.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFromInput(ti.value, 'addBtn'); }); }
+    if (ti) { document.getElementById('addBtn').addEventListener('click', () => addFromInput(ti.value, 'addBtn', 'txDate', 'txAccount')); ti.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFromInput(ti.value, 'addBtn', 'txDate', 'txAccount'); }); }
     // add page
     const tib = document.getElementById('txInputBig');
-    if (tib) document.getElementById('addBtnBig').addEventListener('click', () => addFromInput(tib.value, 'addBtnBig'));
+    if (tib) document.getElementById('addBtnBig').addEventListener('click', () => addFromInput(tib.value, 'addBtnBig', 'txDateBig', 'txAccountBig'));
     document.querySelectorAll('.chip[data-ex]').forEach((c) => c.addEventListener('click', () => { if (tib) { tib.value = c.dataset.ex; tib.focus(); } }));
+    // date bar: "Hôm nay" / "Hôm qua" chips set the date input; manual change clears chip highlight
+    wireDateBar();
     // filters
     const fm = document.getElementById('fMonth'); if (fm) fm.addEventListener('change', () => { filterMonth = fm.value; render(); });
     const fc = document.getElementById('fCat'); if (fc) fc.addEventListener('change', () => { filterCategory = fc.value; render(); });
@@ -726,6 +881,41 @@
         toast(t('syncError') + ': ' + err.message, 'error');
       }
     });
+    // wallets: add a blank editable row
+    const aw = document.getElementById('addWalletBtn');
+    if (aw) aw.addEventListener('click', () => {
+      const box = document.getElementById('walletEdit');
+      if (!box) return;
+      const empty = box.querySelector('.empty'); if (empty) empty.remove();
+      box.insertAdjacentHTML('beforeend', walletEditRowHtml(null));
+      const last = box.querySelector('.wallet-edit-row:last-child .w-name'); if (last) last.focus();
+    });
+    // wallets: save all rows (update existing, insert new)
+    const sw = document.getElementById('saveWalletsBtn');
+    if (sw) sw.addEventListener('click', async () => {
+      const rows = Array.from(document.querySelectorAll('#walletEdit .wallet-edit-row'));
+      try {
+        for (const row of rows) {
+          const id = row.dataset.acc;
+          const name = (row.querySelector('.w-name').value || '').trim();
+          const type = row.querySelector('.w-type').value;
+          const openingBalance = Math.round(Number(row.querySelector('.w-open').value) || 0);
+          if (id) await window.Store.updateAccount(id, { name: name || t('wallet'), type: type, openingBalance: openingBalance });
+          else if (name) await window.Store.addAccount({ name: name, type: type, openingBalance: openingBalance, sortOrder: rows.indexOf(row) });
+        }
+        await refreshData(true);
+        toast(t('walletSaved'), 'success');
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
+    // wallets: delete
+    document.querySelectorAll('[data-delacc]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('confirmDeleteWallet'))) return;
+      try {
+        await window.Store.deleteAccount(b.dataset.delacc);
+        await refreshData(true);
+        toast(t('walletDeleted'), 'info');
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
     // lang
     document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { lang = b.dataset.lang; localStorage.setItem('lang', lang); document.getElementById('langToggle').textContent = lang.toUpperCase(); render(); }));
     const tt2 = document.getElementById('themeToggle2'); if (tt2) tt2.addEventListener('click', toggleTheme);
@@ -922,6 +1112,7 @@
     }
     if (!DATA.budgets) DATA.budgets = {};
     if (!DATA.transactions) DATA.transactions = [];
+    if (!DATA.accounts) DATA.accounts = [];
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     currentTab = 'overview';

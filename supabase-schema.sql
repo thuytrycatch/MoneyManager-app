@@ -61,8 +61,24 @@ create table if not exists public.budgets (
   primary key (household_id, category)
 );
 
+-- accounts (wallets): each "place where money lives" — cash, bank, e-wallet… — tied to a household
+create table if not exists public.accounts (
+  id              uuid primary key default gen_random_uuid(),
+  household_id    uuid not null references public.households(id) on delete cascade,
+  name            text not null,
+  type            text not null default 'cash',     -- cash | bank | ewallet | other
+  opening_balance bigint not null default 0,
+  archived        boolean not null default false,
+  sort_order      int not null default 0,
+  created_at      timestamptz not null default now()
+);
+
+-- Link each transaction to a wallet (null = not yet assigned). on delete set null keeps the transaction.
+alter table public.transactions add column if not exists account_id uuid references public.accounts(id) on delete set null;
+
 create index if not exists idx_tx_household_date on public.transactions (household_id, date desc);
 create index if not exists idx_members_user on public.household_members (user_id);
+create index if not exists idx_accounts_hh on public.accounts (household_id);
 
 -- ---------------------------------------------------------------------
 -- Helper function: list of households the current user belongs to.
@@ -85,6 +101,7 @@ alter table public.households        enable row level security;
 alter table public.household_members enable row level security;
 alter table public.transactions      enable row level security;
 alter table public.budgets           enable row level security;
+alter table public.accounts          enable row level security;
 
 -- ---------------------------------------------------------------------
 -- Policies (drop first so re-running doesn't error)
@@ -144,6 +161,12 @@ create policy budgets_all on public.budgets for all
   using (household_id in (select public.user_households()))
   with check (household_id in (select public.user_households()));
 
+-- accounts -------------------------------------------------------------
+drop policy if exists accounts_all on public.accounts;
+create policy accounts_all on public.accounts for all
+  using (household_id in (select public.user_households()))
+  with check (household_id in (select public.user_households()));
+
 -- ---------------------------------------------------------------------
 -- Realtime: allow the app to receive instant changes (synced across members).
 -- Safe to re-run (skips if the table is already in the publication).
@@ -152,4 +175,5 @@ do $$
 begin
   begin alter publication supabase_realtime add table public.transactions; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.budgets;      exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.accounts;     exception when duplicate_object then null; end;
 end $$;

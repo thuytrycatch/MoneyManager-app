@@ -30,13 +30,24 @@
 
   const SYSTEM_PROMPT =
     'Bạn là assistant parse chi tiêu tài chính từ văn bản tiếng Việt.\n' +
-    'Trả về JSON với format: {"amount": number, "type": "expense"|"income", "category": string, "note": string}\n' +
+    'Trả về JSON với format: {"amount": number, "type": "expense"|"income", "category": string, "note": string, "date": string|null}\n' +
     '- amount: số tiền (số nguyên, đơn vị VND)\n' +
     '- type: "income" nếu là thu nhập, "expense" nếu là chi tiêu\n' +
     '- category: một trong [Ăn uống, Di chuyển, Mua sắm, Giải trí, Sức khỏe, Hóa đơn, Thu nhập, Khác]\n' +
-    '- note: mô tả ngắn gọn bằng tiếng Việt\n' +
+    '- note: mô tả ngắn gọn bằng tiếng Việt (không chứa cụm chỉ ngày)\n' +
+    '- date: ngày giao dịch dạng "YYYY-MM-DD" nếu câu có nhắc ngày ("hôm qua", "hôm kia", "20/6"…); nếu không nhắc ngày thì để null\n' +
     'Quy đổi tiền: k/nghìn/ngàn = nghìn, tr/triệu/củ = triệu, "rưỡi" = thêm một nửa đơn vị (vd "2 triệu rưỡi" = 2500000, "1tr2" = 1200000).\n' +
     'Chỉ trả về JSON, không giải thích thêm.';
+
+  // Validate a "YYYY-MM-DD" string; return it normalized or null.
+  function normDate(v) {
+    if (!v || typeof v !== 'string') return null;
+    const m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return null;
+    const mon = parseInt(m[2], 10), day = parseInt(m[3], 10);
+    if (mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+    return m[1] + '-' + String(mon).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
 
   /* ---------------------------------------------------------------
    *  Amount parser (used for the fallback)
@@ -111,12 +122,58 @@
     return note || raw.trim();
   }
 
+  /* ---------------------------------------------------------------
+   *  Date parser — detect a transaction date inside the sentence
+   *  ("hôm qua", "hôm kia", "20/6", "20/6/2025"). Returns the date as
+   *  YYYY-MM-DD (or null) plus the sentence with the date phrase removed.
+   *  Only "/" and "-" are treated as date separators so amounts written
+   *  in Vietnamese style ("35.000", "1.200.000") are never mistaken for dates.
+   * --------------------------------------------------------------- */
+  function ymdOf(d) {
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function parseDate(raw) {
+    const now = new Date();
+    const lower = ' ' + raw.toLowerCase() + ' ';
+    let date = null;
+    let cleaned = raw;
+
+    if (/\bhôm nay\b/.test(lower)) {
+      date = ymdOf(now);
+      cleaned = raw.replace(/hôm nay/gi, '');
+    } else if (/\bhôm qua\b/.test(lower)) {
+      const d = new Date(now); d.setDate(d.getDate() - 1);
+      date = ymdOf(d); cleaned = raw.replace(/hôm qua/gi, '');
+    } else if (/\bhôm kia\b/.test(lower)) {
+      const d = new Date(now); d.setDate(d.getDate() - 2);
+      date = ymdOf(d); cleaned = raw.replace(/hôm kia/gi, '');
+    } else {
+      // "ngày 20", "20/6", "20/6/2025", "20-6" (slash/dash only — avoids money like 35.000)
+      const m = raw.match(/(?:ngày\s+)?\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/i);
+      if (m) {
+        const day = parseInt(m[1], 10);
+        const mon = parseInt(m[2], 10) - 1;
+        let yr = m[3] ? parseInt(m[3], 10) : now.getFullYear();
+        if (yr < 100) yr += 2000;
+        if (day >= 1 && day <= 31 && mon >= 0 && mon <= 11) {
+          date = ymdOf(new Date(yr, mon, day));
+          cleaned = raw.replace(m[0], '');
+        }
+      }
+    }
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    return { date, cleaned };
+  }
+
   function parseWithRegex(raw) {
-    const type = detectType(raw);
-    const amount = parseAmount(raw);
-    const category = detectCategory(raw, type);
-    const note = cleanNote(raw);
-    return { amount, type, category, note };
+    const { date, cleaned } = parseDate(raw);
+    const base = cleaned || raw;
+    const type = detectType(base);
+    const amount = parseAmount(base);
+    const category = detectCategory(base, type);
+    const note = cleanNote(base);
+    return { amount, type, category, note, date };
   }
 
   /* ---------------------------------------------------------------
@@ -135,7 +192,7 @@
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
         max_tokens: 256,
-        system: SYSTEM_PROMPT,
+        system: SYSTEM_PROMPT + '\nHôm nay là ' + ymdOf(new Date()) + '.',
         messages: [{ role: 'user', content: raw }],
       }),
     });
@@ -162,7 +219,8 @@
       category = type === 'income' ? 'Thu nhập' : 'Khác';
     }
     const note = String(parsed.note || raw).trim();
-    return { amount, type, category, note };
+    const date = normDate(parsed.date);
+    return { amount, type, category, note, date };
   }
 
   /* ---------------------------------------------------------------
@@ -192,6 +250,7 @@
     parseTransaction,
     parseWithRegex,
     parseAmount,
+    parseDate,
     CATEGORIES,
   };
 })();

@@ -251,7 +251,18 @@
       category: r.category,
       note: r.note || '',
       rawInput: r.raw_input || '',
+      accountId: r.account_id || null,
       createdAt: r.created_at,
+    };
+  }
+  function mapAccount(a) {
+    return {
+      id: a.id,
+      name: a.name,
+      type: a.type || 'cash',
+      openingBalance: Number(a.opening_balance || 0),
+      archived: !!a.archived,
+      sortOrder: a.sort_order || 0,
     };
   }
 
@@ -269,23 +280,46 @@
         .eq('user_id', user.id).is('email', null).then(() => {}, () => {});
     }
 
-    const [txRes, budRes] = await Promise.all([
+    // Ensure the household has at least one wallet; migrate legacy transactions into a default "Tiền mặt" wallet.
+    await ensureDefaultAccount(hid);
+
+    const [txRes, budRes, accRes] = await Promise.all([
       sb.from('transactions').select('*')
         .eq('household_id', hid)
         .order('date', { ascending: false })
         .order('time', { ascending: false, nullsFirst: false }),
       sb.from('budgets').select('category,amount').eq('household_id', hid),
+      sb.from('accounts').select('*').eq('household_id', hid)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true }),
     ]);
     if (txRes.error) throw new Error(txRes.error.message);
     if (budRes.error) throw new Error(budRes.error.message);
+    if (accRes.error) throw new Error(accRes.error.message);
 
     const budgets = {};
     (budRes.data || []).forEach((b) => { budgets[b.category] = Number(b.amount); });
     const transactions = (txRes.data || []).map(mapRow);
+    const accounts = (accRes.data || []).map(mapAccount);
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts };
     idbSet('data', data).catch(() => {});
     return data;
+  }
+
+  // Create a default "Tiền mặt" wallet (and assign all unassigned transactions to it) if the household has none yet.
+  async function ensureDefaultAccount(hid) {
+    const sb = getClient();
+    const { data: existing, error } = await sb.from('accounts').select('id').eq('household_id', hid).limit(1);
+    if (error) throw new Error(error.message);
+    if (existing && existing.length) return; // already has at least one wallet
+    const { data: acc, error: e1 } = await sb.from('accounts')
+      .insert({ household_id: hid, name: tr('walletCash', 'Tiền mặt'), type: 'cash', sort_order: 0 })
+      .select().single();
+    if (e1) throw new Error(e1.message);
+    // Move legacy (account_id is null) transactions into the new default wallet.
+    await sb.from('transactions').update({ account_id: acc.id })
+      .eq('household_id', hid).is('account_id', null).then(() => {}, () => {});
   }
 
   /* ---------------- Transaction CRUD ---------------- */
@@ -303,6 +337,7 @@
       category: tx.category,
       note: tx.note || null,
       raw_input: tx.rawInput || null,
+      account_id: tx.accountId || null,
     };
     const { data, error } = await sb.from('transactions').insert(row).select().single();
     if (error) throw new Error(error.message);
@@ -316,6 +351,9 @@
     if ('category' in fields) patch.category = fields.category;
     if ('note' in fields) patch.note = fields.note || null;
     if ('type' in fields) patch.type = fields.type;
+    if ('date' in fields) patch.date = fields.date;
+    if ('time' in fields) patch.time = fields.time || null;
+    if ('accountId' in fields) patch.account_id = fields.accountId || null;
     const { error } = await sb.from('transactions').update(patch).eq('id', id);
     if (error) throw new Error(error.message);
   }
@@ -341,6 +379,40 @@
     return saveBudgetsInternal(household.id, obj);
   }
 
+  /* ---------------- Accounts (wallets) ---------------- */
+  async function addAccount(acc) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { data, error } = await sb.from('accounts').insert({
+      household_id: household.id,
+      name: acc.name,
+      type: acc.type || 'cash',
+      opening_balance: Math.round(acc.openingBalance || 0),
+      sort_order: acc.sortOrder || 0,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return mapAccount(data);
+  }
+
+  async function updateAccount(id, fields) {
+    const sb = getClient();
+    const patch = {};
+    if ('name' in fields) patch.name = fields.name;
+    if ('type' in fields) patch.type = fields.type;
+    if ('openingBalance' in fields) patch.opening_balance = Math.round(fields.openingBalance || 0);
+    if ('sortOrder' in fields) patch.sort_order = fields.sortOrder || 0;
+    if ('archived' in fields) patch.archived = !!fields.archived;
+    const { error } = await sb.from('accounts').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // Delete a wallet. Its transactions are kept (account_id becomes null via the FK).
+  async function deleteAccount(id) {
+    const sb = getClient();
+    const { error } = await sb.from('accounts').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
   /* ---------------- Realtime sync ---------------- */
   let channel = null;
   function subscribeChanges(onChange) {
@@ -351,6 +423,7 @@
     channel = sb.channel('hh-' + hid)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: 'household_id=eq.' + hid }, onChange)
       .subscribe();
     return channel;
   }
@@ -380,6 +453,9 @@
     updateTransaction,
     deleteTransaction,
     saveBudgets,
+    addAccount,
+    updateAccount,
+    deleteAccount,
     subscribeChanges,
     unsubscribeChanges,
     DEFAULT_BUDGETS,

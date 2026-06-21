@@ -167,6 +167,44 @@ main { padding: 4px 16px 110px; }
 .filters { display: flex; gap: 8px; margin: 12px 0; }
 .filters select { flex: 1; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 10px; box-shadow: var(--shadow); }
 
+/* ---------- Date bar (quick-add date picker) ---------- */
+.date-bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.date-chip { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 20px; padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary); box-shadow: var(--shadow); }
+.date-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.date-input { flex: 1; min-width: 130px; min-height: 40px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; color: var(--text-primary); box-shadow: var(--shadow); }
+.date-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.edit-datetime { display: flex; gap: 10px; margin-top: 4px; }
+.edit-datetime > div { flex: 1; }
+.edit-datetime input { width: 100%; }
+
+/* Wallet selector on entry forms */
+.acct-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-secondary); }
+.acct-row .ic { width: 18px; height: 18px; flex: none; }
+.acct-select, .acct-row select { flex: 1; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; color: var(--text-primary); box-shadow: var(--shadow); }
+
+/* Wallet cards strip (Overview) */
+.wallet-strip { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 6px; -webkit-overflow-scrolling: touch; }
+.wallet-card { flex: 0 0 auto; min-width: 130px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
+.wallet-top { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+.wallet-top .ic { width: 15px; height: 15px; }
+.wallet-bal { font-size: 17px; font-weight: 800; margin-top: 4px; }
+.wallet-bal.neg { color: var(--expense); }
+
+/* Wallet editor (Settings) */
+.wallet-edit { display: flex; flex-direction: column; gap: 12px; }
+.wallet-edit-row { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow); }
+.wallet-edit-main { display: flex; gap: 8px; align-items: center; }
+.wallet-edit-main .w-name { flex: 1; min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; }
+.wallet-edit-main .w-type { min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; }
+.wallet-edit-sub { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.wallet-edit-sub label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+.wallet-edit-sub .w-open { flex: 1; min-height: 40px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; }
+.wallet-edit-sub .w-bal { font-size: 13px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; }
+.wallet-edit-actions { display: flex; gap: 10px; margin-top: 12px; }
+.wallet-edit-actions .ghost-btn { flex: 1; justify-content: center; }
+.wallet-edit-actions .primary-btn { flex: 1; margin-top: 0; }
+.icon-btn.danger { color: var(--expense); }
+
 /* ---------- Segmented controls ---------- */
 .seg { display: inline-flex; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 3px; box-shadow: var(--shadow); }
 .seg-btn { background: none; border: none; cursor: pointer; padding: 9px 16px; font-weight: 700; border-radius: 9px; color: var(--text-secondary); transition: all .15s; }
