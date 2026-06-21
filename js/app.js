@@ -499,10 +499,6 @@
     const recent = DATA.transactions.slice().sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || ''))).slice(0, 5);
 
     return (
-      '<div class="overview-toolbar">' +
-      '<button id="refreshBtn" class="refresh-btn" title="' + t('refresh') + '">' + icon('refresh') + '<span>' + t('refresh') + '</span></button>' +
-      '</div>' +
-
       '<div class="hero">' +
       '<div class="hero-label">' + icon('wallet') + ' ' + t('balance') +
       '<button id="eyeToggle" class="eye-btn" title="' + (hideAmounts ? t('showBalance') : t('hideBalance')) + '">' + icon(hideAmounts ? 'eyeOff' : 'eye') + '</button></div>' +
@@ -970,13 +966,6 @@
       try { localStorage.setItem('hideAmounts', hideAmounts ? '1' : '0'); } catch (e) { /* ignore */ }
       render();
     });
-    // manual refresh (Overview): pull the latest data without reloading the page
-    const rf = document.getElementById('refreshBtn');
-    if (rf) rf.addEventListener('click', async () => {
-      rf.classList.add('spinning'); rf.disabled = true;
-      try { await refreshData(false); }
-      finally { rf.classList.remove('spinning'); rf.disabled = false; }
-    });
     // reports period + nav
     document.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => { reportPeriod = b.dataset.period; render(); }));
     document.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', () => shiftReport(parseInt(b.dataset.shift, 10))));
@@ -1122,6 +1111,17 @@
     lt.textContent = lang.toUpperCase();
     lt.addEventListener('click', () => { lang = lang === 'vi' ? 'en' : 'vi'; localStorage.setItem('lang', lang); lt.textContent = lang.toUpperCase(); render(); });
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+    // manual refresh: pull the latest data without reloading the page
+    const rf = document.getElementById('refreshBtn');
+    if (rf) {
+      rf.innerHTML = icon('refresh');
+      rf.title = t('refresh');
+      rf.addEventListener('click', async () => {
+        rf.classList.add('spinning'); rf.disabled = true;
+        try { await refreshData(false); }
+        finally { rf.classList.remove('spinning'); rf.disabled = false; }
+      });
+    }
   }
 
   /* ============== Sync events ============== */

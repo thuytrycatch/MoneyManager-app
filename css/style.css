@@ -86,13 +86,10 @@ main { padding: 4px 16px 110px; }
 .link-btn .ic { width: 16px; height: 16px; }
 .empty { text-align: center; color: var(--text-secondary); padding: 22px 0; font-size: 14px; }
 
-/* ---------- Overview toolbar (manual refresh) ---------- */
-.overview-toolbar { display: flex; justify-content: flex-end; margin-top: 4px; }
-.refresh-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-secondary); font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
-.refresh-btn .ic { width: 16px; height: 16px; }
-.refresh-btn:active { background: var(--border); }
-.refresh-btn:disabled { opacity: .7; cursor: default; }
-.refresh-btn.spinning .ic { animation: spin .8s linear infinite; }
+/* ---------- Header refresh button ---------- */
+#refreshBtn .ic { width: 18px; height: 18px; }
+#refreshBtn:disabled { opacity: .7; cursor: default; }
+#refreshBtn.spinning .ic { animation: spin .8s linear infinite; }
 
 /* ---------- Hero balance ---------- */
 .hero {
