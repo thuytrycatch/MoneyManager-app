@@ -92,6 +92,9 @@
       copyCode: 'Sao chép mã', copied: 'Đã sao chép', joinHousehold: 'Tham gia hộ khác', joinCodePh: 'Dán mã mời vào đây',
       join: 'Tham gia', joined: 'Đã tham gia hộ', renameOk: 'Đã đổi tên hộ', account: 'Tài khoản',
       switchHousehold: 'Chọn hộ đang xem',
+      members: 'Thành viên', roleOwner: 'Chủ hộ', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
+      confirmRemoveMember: 'Xóa thành viên này khỏi hộ?', memberRemoved: 'Đã xóa thành viên',
+      leaveHousehold: 'Rời hộ này', confirmLeave: 'Rời khỏi hộ này?', onlyOwnerRemove: 'Chỉ chủ hộ mới xóa được thành viên.',
       added: 'Đã thêm', deleted: 'Đã xóa', confirmDelete: 'Xóa giao dịch này?',
       emptyInput: 'Vui lòng nhập nội dung.', cantParse: 'Không nhận diện được số tiền.',
       warn80: 'Sắp vượt ngân sách', warn100: 'Vượt ngân sách', parsing: 'Đang phân tích…',
@@ -128,6 +131,9 @@
       copyCode: 'Copy code', copied: 'Copied', joinHousehold: 'Join another household', joinCodePh: 'Paste invite code here',
       join: 'Join', joined: 'Joined household', renameOk: 'Household renamed', account: 'Account',
       switchHousehold: 'Active household',
+      members: 'Members', roleOwner: 'Owner', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
+      confirmRemoveMember: 'Remove this member from the household?', memberRemoved: 'Member removed',
+      leaveHousehold: 'Leave this household', confirmLeave: 'Leave this household?', onlyOwnerRemove: 'Only the owner can remove members.',
       added: 'Added', deleted: 'Deleted', confirmDelete: 'Delete this transaction?',
       emptyInput: 'Please enter something.', cantParse: 'Could not detect amount.',
       warn80: 'Near budget limit', warn100: 'Over budget', parsing: 'Parsing…',
@@ -145,7 +151,9 @@
   let authMode = 'login'; // 'config' | 'login'
   let authIsSignup = false;
   let currentUserEmail = '';
+  let currentUserId = '';
   let myHouseholds = []; // [{id, name}] các hộ người dùng tham gia
+  let householdMembers = []; // [{userId, email, role}] thành viên hộ đang xem
   let currentTab = 'overview';
   const CATS = window.Parser.CATEGORIES;
   // Filters (transactions tab)
@@ -513,6 +521,26 @@
   }
 
   /* ============== VIEW: Settings ============== */
+  function membersHtml() {
+    if (!householdMembers.length) return '';
+    const ownerId = DATA.household && DATA.household.createdBy;
+    const iAmOwner = ownerId && ownerId === currentUserId;
+    const rows = householdMembers.map((m) => {
+      const isSelf = m.userId === currentUserId;
+      const isOwn = ownerId && ownerId === m.userId;
+      const label = esc(m.email || t('unknownMember')) + (isSelf ? ' <span class="member-you">(' + t('you') + ')</span>' : '');
+      const role = isOwn ? t('roleOwner') : t('roleMember');
+      let act = '';
+      if (isSelf && !isOwn) act = '<button class="icon-btn danger" data-leave="1" title="' + t('leaveHousehold') + '">' + icon('right') + '</button>';
+      else if (iAmOwner && !isSelf) act = '<button class="icon-btn danger" data-remove="' + esc(m.userId) + '" title="' + t('confirmRemoveMember') + '">' + icon('trash') + '</button>';
+      return '<div class="member-row">' +
+        '<div class="member-info"><div class="member-email">' + label + '</div>' +
+        '<div class="member-role ' + (isOwn ? 'owner' : '') + '">' + role + '</div></div>' + act + '</div>';
+    }).join('');
+    return '<div class="section-title">' + t('members') + ' (' + householdMembers.length + ')</div>' +
+      '<div class="member-list">' + rows + '</div>';
+  }
+
   function viewSettings() {
     const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
       '<div class="budget-edit-row"><label>' + catIcon(c) + esc(c) + '</label>' +
@@ -542,6 +570,9 @@
       '<div class="conn-row" style="margin-top:12px"><label>' + t('joinHousehold') + '</label>' +
       '<input id="joinCode" type="text" placeholder="' + t('joinCodePh') + '"/></div>' +
       '<button id="joinHhBtn" class="ghost-btn">' + icon('check') + ' ' + t('join') + '</button>' +
+
+      // Thành viên
+      membersHtml() +
 
       // Ngôn ngữ / giao diện
       '<div class="section-title">' + t('language') + ' · ' + t('theme') + '</div>' +
@@ -712,6 +743,26 @@
         await enterApp();
       } catch (err) { toast(err.message, 'error'); }
     });
+    // Xóa thành viên (chủ hộ xóa người khác)
+    document.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('confirmRemoveMember'))) return;
+      try {
+        await window.Store.removeMember(b.dataset.remove);
+        householdMembers = await window.Store.listMembers().catch(() => []);
+        toast(t('memberRemoved'), 'success'); render();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
+    // Rời hộ (tự xóa mình)
+    const lv = document.querySelector('[data-leave]');
+    if (lv) lv.addEventListener('click', async () => {
+      if (!confirm(t('confirmLeave'))) return;
+      try {
+        window.Store.unsubscribeChanges();
+        await window.Store.removeMember(currentUserId);
+        toast(t('memberRemoved'), 'info');
+        await enterApp();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
     // Chuyển hộ (khi ở nhiều hộ)
     const hs = document.getElementById('switchHh');
     if (hs) hs.addEventListener('change', async () => {
@@ -827,6 +878,7 @@
     const user = await window.Store.getUser();
     if (!user) { showAuth('login'); return; }
     currentUserEmail = user.email || '';
+    currentUserId = user.id || '';
     hideAuth();
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('appShell').classList.remove('hidden');
@@ -843,6 +895,7 @@
     if (!DATA.budgets) DATA.budgets = {};
     if (!DATA.transactions) DATA.transactions = [];
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
+    householdMembers = await window.Store.listMembers().catch(() => []);
     currentTab = 'overview';
     render();
     startAutoSync();

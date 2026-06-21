@@ -122,20 +122,23 @@
   function getActiveId() { try { return localStorage.getItem(ACTIVE_KEY) || ''; } catch (e) { return ''; } }
   function setActiveId(id) { try { localStorage.setItem(ACTIVE_KEY, id || ''); } catch (e) { /* ignore */ } }
 
-  // Trả về TẤT CẢ các hộ mà người dùng tham gia: [{id, name}]
+  // Trả về TẤT CẢ các hộ mà người dùng tham gia: [{id, name, createdBy}]
   async function listHouseholds() {
     const user = await getUser();
     if (!user) return [];
     const sb = getClient();
     const { data, error } = await sb
       .from('household_members')
-      .select('households(id,name)')
+      .select('households(id,name,created_by)')
       .eq('user_id', user.id);
     if (error) throw new Error(error.message);
-    return (data || []).filter((m) => m.households).map((m) => ({ id: m.households.id, name: m.households.name }));
+    return (data || []).filter((m) => m.households).map((m) => ({
+      id: m.households.id, name: m.households.name, createdBy: m.households.created_by,
+    }));
   }
 
   async function ensureHousehold(user) {
+    const sb = getClient();
     const list = await listHouseholds();
     if (list.length) {
       // Ưu tiên hộ đang chọn (lưu ở localStorage) nếu vẫn còn là thành viên
@@ -155,9 +158,9 @@
     if (e1) throw new Error(e1.message);
     const { error: e2 } = await sb
       .from('household_members')
-      .insert({ household_id: h.id, user_id: user.id, role: 'owner' });
+      .insert({ household_id: h.id, user_id: user.id, role: 'owner', email: user.email });
     if (e2) throw new Error(e2.message);
-    household = { id: h.id, name: h.name };
+    household = { id: h.id, name: h.name, createdBy: h.created_by };
     setActiveId(household.id);
     // Seed ngân sách mặc định
     try { await saveBudgetsInternal(h.id, DEFAULT_BUDGETS); } catch (e) { /* không chặn */ }
@@ -173,17 +176,41 @@
     // Tự thêm mình vào hộ (FK sẽ chặn nếu mã hộ không tồn tại)
     const { error } = await sb
       .from('household_members')
-      .insert({ household_id: id, user_id: user.id, role: 'member' });
+      .insert({ household_id: id, user_id: user.id, role: 'member', email: user.email });
     if (error && !/duplicate key/i.test(error.message)) {
       throw new Error('Mã hộ không hợp lệ hoặc không tồn tại.');
     }
     // Giờ đã là thành viên → đọc được tên hộ
     const { data: h, error: e2 } = await sb
-      .from('households').select('id,name').eq('id', id).single();
+      .from('households').select('id,name,created_by').eq('id', id).single();
     if (e2 || !h) throw new Error('Không đọc được thông tin hộ.');
-    household = { id: h.id, name: h.name };
+    household = { id: h.id, name: h.name, createdBy: h.created_by };
     setActiveId(household.id);
     return household;
+  }
+
+  /* ---------------- Thành viên ---------------- */
+  async function listMembers() {
+    if (!household) return [];
+    const sb = getClient();
+    const { data, error } = await sb
+      .from('household_members')
+      .select('user_id,email,role,joined_at')
+      .eq('household_id', household.id)
+      .order('joined_at', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map((m) => ({ userId: m.user_id, email: m.email, role: m.role }));
+  }
+
+  async function removeMember(userId) {
+    if (!household) throw new Error('Chưa có hộ.');
+    const sb = getClient();
+    const { error } = await sb
+      .from('household_members')
+      .delete()
+      .eq('household_id', household.id)
+      .eq('user_id', userId);
+    if (error) throw new Error(error.message);
   }
 
   // Chuyển sang hộ khác (cho người ở nhiều hộ)
@@ -230,6 +257,12 @@
     const sb = getClient();
     const hid = household.id;
 
+    // Tự điền email cho dòng thành viên của mình (nếu còn trống) để hiển thị danh sách thành viên.
+    if (user.email) {
+      sb.from('household_members').update({ email: user.email })
+        .eq('user_id', user.id).is('email', null).then(() => {}, () => {});
+    }
+
     const [txRes, budRes] = await Promise.all([
       sb.from('transactions').select('*')
         .eq('household_id', hid)
@@ -244,7 +277,7 @@
     (budRes.data || []).forEach((b) => { budgets[b.category] = Number(b.amount); });
     const transactions = (txRes.data || []).map(mapRow);
 
-    const data = { household: { id: household.id, name: household.name }, budgets, transactions };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions };
     idbSet('data', data).catch(() => {});
     return data;
   }
@@ -333,6 +366,8 @@
     getHousehold,
     listHouseholds,
     switchHousehold,
+    listMembers,
+    removeMember,
     loadData,
     getCachedData,
     addTransaction,

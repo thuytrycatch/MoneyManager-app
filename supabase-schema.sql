@@ -32,9 +32,13 @@ create table if not exists public.household_members (
   household_id uuid not null references public.households(id) on delete cascade,
   user_id      uuid not null references auth.users(id) on delete cascade,
   role         text not null default 'member',
+  email        text,
   joined_at    timestamptz not null default now(),
   primary key (household_id, user_id)
 );
+
+-- (nếu bảng đã tạo từ trước, thêm cột email)
+alter table public.household_members add column if not exists email text;
 
 create table if not exists public.transactions (
   id           uuid primary key default gen_random_uuid(),
@@ -114,9 +118,19 @@ drop policy if exists members_insert on public.household_members;
 create policy members_insert on public.household_members for insert
   with check (user_id = auth.uid());
 
+-- Tự cập nhật dòng của chính mình (để điền email hiển thị).
+drop policy if exists members_update on public.household_members;
+create policy members_update on public.household_members for update
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Xóa thành viên: tự rời hộ, HOẶC chủ hộ (created_by) xóa thành viên khác.
 drop policy if exists members_delete on public.household_members;
 create policy members_delete on public.household_members for delete
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    or household_id in (select id from public.households where created_by = auth.uid())
+  );
 
 -- transactions ---------------------------------------------------------
 drop policy if exists tx_all on public.transactions;

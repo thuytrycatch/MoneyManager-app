@@ -280,3 +280,41 @@ main { padding: 4px 16px 110px; }
 .auth-card input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 .auth-card .link-btn { width: 100%; justify-content: center; margin-top: 14px; }
 .auth-card .link-btn.subtle { color: var(--text-secondary); font-weight: 600; margin-top: 8px; }
+
+/* ---------- Member list ---------- */
+.member-list { display: flex; flex-direction: column; gap: 8px; }
+.member-row { display: flex; align-items: center; gap: 10px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); }
+.member-info { flex: 1; min-width: 0; }
+.member-email { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-you { color: var(--text-secondary); font-weight: 500; }
+.member-role { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+.member-role.owner { color: var(--accent); font-weight: 600; }
+.icon-btn.danger { color: var(--expense); }
+
+/* ---------- Compact (giao diện gọn hơn) ---------- */
+body { font-size: 14px; line-height: 1.45; }
+main { padding: 4px 12px 92px; }
+.section-title { margin: 14px 4px 8px; font-size: 12px; }
+.section-row { margin-top: 14px; }
+.brand { font-size: 17px; }
+.header { padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top)); }
+.header-actions button { min-width: 38px; height: 36px; }
+.hero { padding: 16px 16px; margin-top: 6px; }
+.hero-balance { font-size: 26px; margin: 6px 0 12px; }
+.hero-chip { padding: 8px 10px; }
+.hero-chip b { font-size: 15px; }
+.tiles { gap: 8px; margin-top: 10px; }
+.tile { padding: 11px; }
+.tile-val { font-size: 17px; }
+.card { padding: 13px; }
+.card-title { font-size: 14px; margin-bottom: 10px; }
+.week-amount { font-size: 20px; }
+.tx-row { padding: 9px 11px; gap: 10px; }
+.tx-note { font-size: 14px; }
+.day-head { padding: 10px 4px 3px; }
+.primary-btn { min-height: 44px; font-size: 15px; margin-top: 10px; }
+.ghost-btn { min-height: 40px; }
+.quick-add input { min-height: 44px; }
+.filters select { min-height: 40px; }
+.conn-row input { min-height: 42px; }
+.nav-fab { width: 52px; height: 52px; }
