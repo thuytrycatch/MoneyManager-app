@@ -118,17 +118,31 @@
   }
 
   /* ---------------- Hộ gia đình ---------------- */
-  async function ensureHousehold(user) {
+  const ACTIVE_KEY = 'mm_active_household';
+  function getActiveId() { try { return localStorage.getItem(ACTIVE_KEY) || ''; } catch (e) { return ''; } }
+  function setActiveId(id) { try { localStorage.setItem(ACTIVE_KEY, id || ''); } catch (e) { /* ignore */ } }
+
+  // Trả về TẤT CẢ các hộ mà người dùng tham gia: [{id, name}]
+  async function listHouseholds() {
+    const user = await getUser();
+    if (!user) return [];
     const sb = getClient();
-    // Đã thuộc hộ nào chưa?
-    const { data: mems, error } = await sb
+    const { data, error } = await sb
       .from('household_members')
-      .select('household_id,households(id,name)')
-      .eq('user_id', user.id)
-      .limit(1);
+      .select('households(id,name)')
+      .eq('user_id', user.id);
     if (error) throw new Error(error.message);
-    if (mems && mems.length && mems[0].households) {
-      household = { id: mems[0].households.id, name: mems[0].households.name };
+    return (data || []).filter((m) => m.households).map((m) => ({ id: m.households.id, name: m.households.name }));
+  }
+
+  async function ensureHousehold(user) {
+    const list = await listHouseholds();
+    if (list.length) {
+      // Ưu tiên hộ đang chọn (lưu ở localStorage) nếu vẫn còn là thành viên
+      const active = getActiveId();
+      const found = list.find((h) => h.id === active);
+      household = found || list[0];
+      setActiveId(household.id);
       return household;
     }
     // Chưa có → tạo hộ mới + thêm chính mình làm thành viên
@@ -144,6 +158,7 @@
       .insert({ household_id: h.id, user_id: user.id, role: 'owner' });
     if (e2) throw new Error(e2.message);
     household = { id: h.id, name: h.name };
+    setActiveId(household.id);
     // Seed ngân sách mặc định
     try { await saveBudgetsInternal(h.id, DEFAULT_BUDGETS); } catch (e) { /* không chặn */ }
     return household;
@@ -167,6 +182,17 @@
       .from('households').select('id,name').eq('id', id).single();
     if (e2 || !h) throw new Error('Không đọc được thông tin hộ.');
     household = { id: h.id, name: h.name };
+    setActiveId(household.id);
+    return household;
+  }
+
+  // Chuyển sang hộ khác (cho người ở nhiều hộ)
+  async function switchHousehold(id) {
+    const list = await listHouseholds();
+    const found = list.find((h) => h.id === id);
+    if (!found) throw new Error('Bạn không thuộc hộ này.');
+    household = found;
+    setActiveId(id);
     return household;
   }
 
@@ -276,6 +302,23 @@
     return saveBudgetsInternal(household.id, obj);
   }
 
+  /* ---------------- Đồng bộ thời gian thực (Realtime) ---------------- */
+  let channel = null;
+  function subscribeChanges(onChange) {
+    if (!household) return;
+    const sb = getClient();
+    unsubscribeChanges();
+    const hid = household.id;
+    channel = sb.channel('hh-' + hid)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: 'household_id=eq.' + hid }, onChange)
+      .subscribe();
+    return channel;
+  }
+  function unsubscribeChanges() {
+    if (channel) { try { getClient().removeChannel(channel); } catch (e) { /* ignore */ } channel = null; }
+  }
+
   /* ---------------- Xuất global ---------------- */
   window.Store = {
     isConfigured,
@@ -288,12 +331,16 @@
     joinHousehold,
     renameHousehold,
     getHousehold,
+    listHouseholds,
+    switchHousehold,
     loadData,
     getCachedData,
     addTransaction,
     updateTransaction,
     deleteTransaction,
     saveBudgets,
+    subscribeChanges,
+    unsubscribeChanges,
     DEFAULT_BUDGETS,
   };
 })();

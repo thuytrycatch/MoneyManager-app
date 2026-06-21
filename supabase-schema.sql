@@ -129,3 +129,13 @@ drop policy if exists budgets_all on public.budgets;
 create policy budgets_all on public.budgets for all
   using (household_id in (select public.user_households()))
   with check (household_id in (select public.user_households()));
+
+-- ---------------------------------------------------------------------
+-- Realtime: cho phép app nhận thay đổi tức thời (đồng bộ giữa các thành viên).
+-- An toàn khi chạy lại (bỏ qua nếu bảng đã có trong publication).
+-- ---------------------------------------------------------------------
+do $$
+begin
+  begin alter publication supabase_realtime add table public.transactions; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.budgets;      exception when duplicate_object then null; end;
+end $$;

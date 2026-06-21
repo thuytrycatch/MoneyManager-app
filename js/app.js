@@ -91,6 +91,7 @@
       household: 'Hộ gia đình', householdName: 'Tên hộ', inviteCode: 'Mã mời (chia sẻ để người thân cùng dùng)',
       copyCode: 'Sao chép mã', copied: 'Đã sao chép', joinHousehold: 'Tham gia hộ khác', joinCodePh: 'Dán mã mời vào đây',
       join: 'Tham gia', joined: 'Đã tham gia hộ', renameOk: 'Đã đổi tên hộ', account: 'Tài khoản',
+      switchHousehold: 'Chọn hộ đang xem',
       added: 'Đã thêm', deleted: 'Đã xóa', confirmDelete: 'Xóa giao dịch này?',
       emptyInput: 'Vui lòng nhập nội dung.', cantParse: 'Không nhận diện được số tiền.',
       warn80: 'Sắp vượt ngân sách', warn100: 'Vượt ngân sách', parsing: 'Đang phân tích…',
@@ -126,6 +127,7 @@
       household: 'Household', householdName: 'Household name', inviteCode: 'Invite code (share with family)',
       copyCode: 'Copy code', copied: 'Copied', joinHousehold: 'Join another household', joinCodePh: 'Paste invite code here',
       join: 'Join', joined: 'Joined household', renameOk: 'Household renamed', account: 'Account',
+      switchHousehold: 'Active household',
       added: 'Added', deleted: 'Deleted', confirmDelete: 'Delete this transaction?',
       emptyInput: 'Please enter something.', cantParse: 'Could not detect amount.',
       warn80: 'Near budget limit', warn100: 'Over budget', parsing: 'Parsing…',
@@ -143,6 +145,7 @@
   let authMode = 'login'; // 'config' | 'login'
   let authIsSignup = false;
   let currentUserEmail = '';
+  let myHouseholds = []; // [{id, name}] các hộ người dùng tham gia
   let currentTab = 'overview';
   const CATS = window.Parser.CATEGORIES;
   // Filters (transactions tab)
@@ -525,6 +528,10 @@
 
       // Hộ gia đình
       '<div class="section-title">' + t('household') + '</div>' +
+      (myHouseholds.length > 1 ?
+        '<div class="conn-row" style="margin-bottom:12px"><label>' + t('switchHousehold') + '</label><select id="switchHh">' +
+        myHouseholds.map((h) => '<option value="' + esc(h.id) + '"' + (hh.id === h.id ? ' selected' : '') + '>' + esc(h.name) + '</option>').join('') +
+        '</select></div>' : '') +
       '<div class="conn-form">' +
       '<div class="conn-row"><label>' + t('householdName') + '</label><input id="hhName" type="text" value="' + esc(hh.name) + '"/></div>' +
       '</div>' +
@@ -705,9 +712,16 @@
         await enterApp();
       } catch (err) { toast(err.message, 'error'); }
     });
+    // Chuyển hộ (khi ở nhiều hộ)
+    const hs = document.getElementById('switchHh');
+    if (hs) hs.addEventListener('change', async () => {
+      try { await window.Store.switchHousehold(hs.value); await enterApp(); }
+      catch (err) { toast(err.message, 'error'); }
+    });
     // Đăng xuất
     const so = document.getElementById('signOutBtn');
     if (so) so.addEventListener('click', async () => {
+      try { window.Store.unsubscribeChanges(); } catch (e) { /* ignore */ }
       await window.Store.signOut();
       DATA = { household: null, budgets: {}, transactions: [] };
       showAuth('login');
@@ -828,8 +842,38 @@
     }
     if (!DATA.budgets) DATA.budgets = {};
     if (!DATA.transactions) DATA.transactions = [];
+    myHouseholds = await window.Store.listHouseholds().catch(() => []);
     currentTab = 'overview';
     render();
+    startAutoSync();
+  }
+
+  /* ============== Auto-sync (realtime + khi quay lại app) ============== */
+  let refreshTimer = null;
+  let autoSyncWired = false;
+  async function refreshData(silent) {
+    try {
+      const fresh = await window.Store.loadData();
+      DATA = fresh;
+      if (!DATA.budgets) DATA.budgets = {};
+      if (!DATA.transactions) DATA.transactions = [];
+      render();
+      if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
+    } catch (e) { /* giữ dữ liệu hiện có */ }
+  }
+  function scheduleRefresh() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => refreshData(true), 400); // gộp nhiều thay đổi liên tiếp
+  }
+  function startAutoSync() {
+    // Realtime: có người trong hộ thêm/sửa/xóa → tự cập nhật
+    try { window.Store.subscribeChanges(scheduleRefresh); } catch (e) { /* ignore */ }
+    if (autoSyncWired) return;
+    autoSyncWired = true;
+    // Dự phòng: tải lại khi quay lại tab / có mạng lại
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshData(true); });
+    window.addEventListener('focus', () => refreshData(true));
+    window.addEventListener('online', () => refreshData(true));
   }
 
   /* ============== Init ============== */
