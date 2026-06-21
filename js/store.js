@@ -35,6 +35,12 @@
   /* ---------------- Configuration & client ---------------- */
   function cfg() { return window.CONFIG || {}; }
 
+  // Localized message: use the app's i18n (window.t) when available, else the Vietnamese fallback.
+  function tr(key, fallback) {
+    try { if (window.t) { const v = window.t(key); if (v && v !== key) return v; } } catch (e) { /* ignore */ }
+    return fallback;
+  }
+
   function isConfigured() {
     const c = cfg();
     return !!(c.SUPABASE_URL && c.SUPABASE_ANON_KEY);
@@ -50,9 +56,9 @@
 
   function getClient() {
     if (client) return client;
-    if (!isConfigured()) throw new Error('Chưa cấu hình Supabase (thiếu URL hoặc anon key).');
+    if (!isConfigured()) throw new Error(tr('errNotConfigured', 'Chưa cấu hình Supabase (thiếu URL hoặc anon key).'));
     if (!window.supabase || !window.supabase.createClient) {
-      throw new Error('Chưa tải được thư viện Supabase — kiểm tra kết nối mạng.');
+      throw new Error(tr('errLibNotLoaded', 'Chưa tải được thư viện Supabase — kiểm tra kết nối mạng.'));
     }
     client = window.supabase.createClient(normalizeUrl(cfg().SUPABASE_URL), (cfg().SUPABASE_ANON_KEY || '').trim(), {
       auth: { persistSession: true, autoRefreshToken: true },
@@ -149,10 +155,10 @@
       return household;
     }
     // None yet → create a new household + add self as a member
-    const baseName = user.email ? user.email.split('@')[0] : 'tôi';
+    const baseName = user.email ? user.email.split('@')[0] : tr('me', 'tôi');
     const { data: h, error: e1 } = await sb
       .from('households')
-      .insert({ name: 'Gia đình của ' + baseName, created_by: user.id })
+      .insert({ name: tr('hhDefaultPrefix', 'Gia đình của') + ' ' + baseName, created_by: user.id })
       .select()
       .single();
     if (e1) throw new Error(e1.message);
@@ -169,21 +175,21 @@
 
   async function joinHousehold(code) {
     const user = await getUser();
-    if (!user) throw new Error('Chưa đăng nhập.');
+    if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
     const sb = getClient();
     const id = (code || '').trim();
-    if (!id) throw new Error('Vui lòng nhập mã hộ.');
+    if (!id) throw new Error(tr('errEnterCode', 'Vui lòng nhập mã hộ.'));
     // Add self to the household (the FK constraint blocks it if the household code does not exist)
     const { error } = await sb
       .from('household_members')
       .insert({ household_id: id, user_id: user.id, role: 'member', email: user.email });
     if (error && !/duplicate key/i.test(error.message)) {
-      throw new Error('Mã hộ không hợp lệ hoặc không tồn tại.');
+      throw new Error(tr('errInvalidCode', 'Mã hộ không hợp lệ hoặc không tồn tại.'));
     }
     // Now a member → can read the household name
     const { data: h, error: e2 } = await sb
       .from('households').select('id,name,created_by').eq('id', id).single();
-    if (e2 || !h) throw new Error('Không đọc được thông tin hộ.');
+    if (e2 || !h) throw new Error(tr('errReadHousehold', 'Không đọc được thông tin hộ.'));
     household = { id: h.id, name: h.name, createdBy: h.created_by };
     setActiveId(household.id);
     return household;
@@ -203,7 +209,7 @@
   }
 
   async function removeMember(userId) {
-    if (!household) throw new Error('Chưa có hộ.');
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
     const sb = getClient();
     const { error } = await sb
       .from('household_members')
@@ -217,14 +223,14 @@
   async function switchHousehold(id) {
     const list = await listHouseholds();
     const found = list.find((h) => h.id === id);
-    if (!found) throw new Error('Bạn không thuộc hộ này.');
+    if (!found) throw new Error(tr('errNotMember', 'Bạn không thuộc hộ này.'));
     household = found;
     setActiveId(id);
     return household;
   }
 
   async function renameHousehold(name) {
-    if (!household) throw new Error('Chưa có hộ.');
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
     const sb = getClient();
     const { error } = await sb.from('households').update({ name: name }).eq('id', household.id);
     if (error) throw new Error(error.message);
@@ -252,7 +258,7 @@
   /* ---------------- Read all of the household's data ---------------- */
   async function loadData() {
     const user = await getUser();
-    if (!user) throw new Error('Chưa đăng nhập.');
+    if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
     if (!household) await ensureHousehold(user);
     const sb = getClient();
     const hid = household.id;
@@ -284,7 +290,7 @@
 
   /* ---------------- Transaction CRUD ---------------- */
   async function addTransaction(tx) {
-    if (!household) throw new Error('Chưa có hộ.');
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
     const user = await getUser();
     const sb = getClient();
     const row = {
@@ -331,7 +337,7 @@
     if (error) throw new Error(error.message);
   }
   async function saveBudgets(obj) {
-    if (!household) throw new Error('Chưa có hộ.');
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
     return saveBudgetsInternal(household.id, obj);
   }
 

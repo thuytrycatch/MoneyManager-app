@@ -29,9 +29,11 @@
   function colors() { return { text: cssVar('--text-secondary', '#6b7280'), grid: cssVar('--border', '#e5e7eb') }; }
   const FONT = 'Be Vietnam Pro, system-ui, sans-serif';
 
-  /* Donut + legend */
-  function donut(canvasId, legendId, byCat, onClick) {
-    const labels = Object.keys(byCat).filter((k) => byCat[k] > 0);
+  /* Donut + legend. labelFn maps a canonical category to its localized display label. */
+  function donut(canvasId, legendId, byCat, onClick, labelFn) {
+    labelFn = labelFn || ((x) => x);
+    const labels = Object.keys(byCat).filter((k) => byCat[k] > 0); // canonical keys (used for click)
+    const display = labels.map(labelFn);                            // localized labels (shown)
     const values = labels.map((k) => byCat[k]);
     const total = values.reduce((a, b) => a + b, 0);
     const ctx = document.getElementById(canvasId);
@@ -40,7 +42,7 @@
       if (labels.length) {
         reg[canvasId] = new Chart(ctx, {
           type: 'doughnut',
-          data: { labels, datasets: [{ data: values, backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 0, hoverOffset: 6 }] },
+          data: { labels: display, datasets: [{ data: values, backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 0, hoverOffset: 6 }] },
           options: {
             responsive: true, maintainAspectRatio: false, cutout: '70%',
             plugins: {
@@ -54,13 +56,13 @@
     }
     const leg = document.getElementById(legendId);
     if (leg) {
-      if (!labels.length) leg.innerHTML = '<div class="empty">Chưa có dữ liệu chi tiêu.</div>';
+      if (!labels.length) leg.innerHTML = '<div class="empty">' + (window.t ? window.t('noExpenseData') : 'Chưa có dữ liệu chi tiêu.') + '</div>';
       else {
         leg.innerHTML = labels.map((l, i) => {
           const p = total ? Math.round(values[i] / total * 100) : 0;
           return '<button class="legend-item" data-cat="' + l + '">' +
             '<span class="legend-dot" style="background:' + PALETTE[i % PALETTE.length] + '"></span>' +
-            '<span class="legend-label">' + l + '</span>' +
+            '<span class="legend-label">' + display[i] + '</span>' +
             '<span class="legend-val">' + fmtShort(values[i]) + '₫ · ' + p + '%</span></button>';
         }).join('');
         if (onClick) leg.querySelectorAll('.legend-item').forEach((b) => b.addEventListener('click', () => onClick(b.dataset.cat)));

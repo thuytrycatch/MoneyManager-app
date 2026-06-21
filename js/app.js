@@ -75,6 +75,14 @@
       budgetProgress: 'Tiến độ ngân sách', topSpending: 'Khoản chi lớn nhất', summary: 'Tổng kết',
       save: 'Lưu', cancel: 'Hủy', delete: 'Xóa', edit: 'Sửa', category: 'Danh mục', note: 'Ghi chú', amount: 'Số tiền',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
+      budgetNotSet: 'Chưa thiết lập ngân sách.', noExpenseData: 'Chưa có dữ liệu chi tiêu.',
+      weekLabel: 'Tuần', moPrefix: 'T', dows: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+      errNotConfigured: 'Chưa cấu hình Supabase (thiếu URL hoặc anon key).',
+      errLibNotLoaded: 'Chưa tải được thư viện Supabase — kiểm tra kết nối mạng.',
+      errNotSignedIn: 'Chưa đăng nhập.', errEnterCode: 'Vui lòng nhập mã hộ.',
+      errInvalidCode: 'Mã hộ không hợp lệ hoặc không tồn tại.', errReadHousehold: 'Không đọc được thông tin hộ.',
+      errNoHousehold: 'Chưa có hộ.', errNotMember: 'Bạn không thuộc hộ này.',
+      hhDefaultPrefix: 'Gia đình của', me: 'tôi',
       saveBudget: 'Lưu ngân sách', budgetSaved: 'Đã lưu ngân sách', language: 'Ngôn ngữ', theme: 'Giao diện',
       connTitle: 'Kết nối Supabase', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
       anthropicKey: 'Claude API Key (tùy chọn)', saveConnect: 'Lưu & kết nối',
@@ -114,6 +122,14 @@
       budgetProgress: 'Budget progress', topSpending: 'Top spending', summary: 'Summary',
       save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', category: 'Category', note: 'Note', amount: 'Amount',
       allCats: 'All categories', allTypes: 'Income & expense',
+      budgetNotSet: 'No budget set yet.', noExpenseData: 'No expense data yet.',
+      weekLabel: 'Week', moPrefix: 'M', dows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      errNotConfigured: 'Supabase is not configured (missing URL or anon key).',
+      errLibNotLoaded: 'Could not load the Supabase library — check your connection.',
+      errNotSignedIn: 'Not signed in.', errEnterCode: 'Please enter a household code.',
+      errInvalidCode: 'Invalid or non-existent household code.', errReadHousehold: 'Could not read household info.',
+      errNoHousehold: 'No household yet.', errNotMember: 'You do not belong to this household.',
+      hhDefaultPrefix: 'Family of', me: 'me',
       saveBudget: 'Save budget', budgetSaved: 'Budget saved', language: 'Language', theme: 'Theme',
       connTitle: 'Supabase connection', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
       anthropicKey: 'Claude API Key (optional)', saveConnect: 'Save & connect',
@@ -145,6 +161,18 @@
   };
   let lang = localStorage.getItem('lang') || 'vi';
   function t(k) { return (I18N[lang] && I18N[lang][k]) || k; }
+  window.t = t; // expose so store.js / charts.js can localize their messages
+
+  // Category display labels per language (the underlying value stays canonical Vietnamese).
+  const CAT_LABELS = {
+    vi: {},
+    en: {
+      'Ăn uống': 'Food & Drink', 'Di chuyển': 'Transport', 'Mua sắm': 'Shopping',
+      'Giải trí': 'Entertainment', 'Sức khỏe': 'Health', 'Hóa đơn': 'Bills',
+      'Thu nhập': 'Income', 'Khác': 'Other',
+    },
+  };
+  function catLabel(c) { return (CAT_LABELS[lang] && CAT_LABELS[lang][c]) || c; }
 
   /* ============== State ============== */
   let DATA = { household: null, budgets: {}, transactions: [] };
@@ -276,20 +304,20 @@
     return '<div class="tx-row" data-id="' + tx.id + '">' +
       '<div class="tx-ic ' + tx.type + '">' + catIcon(tx.category) + '</div>' +
       '<div class="tx-main"><div class="tx-note">' + esc(tx.note || tx.rawInput) + '</div>' +
-      '<div class="tx-meta">' + esc(tx.category) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + '</div></div>' +
+      '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '₫</div>' +
       '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
       '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div></div></div>';
   }
   function budgetBarsHtml(byCat, budgets) {
     const cats = Object.keys(budgets).filter((c) => budgets[c] > 0);
-    if (!cats.length) return '<div class="empty">Chưa thiết lập ngân sách.</div>';
+    if (!cats.length) return '<div class="empty">' + t('budgetNotSet') + '</div>';
     return cats.map((cat) => {
       const limit = budgets[cat], used = byCat[cat] || 0;
       const raw = limit ? used / limit * 100 : 0, pct = Math.min(100, Math.round(raw));
       let cls = 'ok'; if (raw >= 90) cls = 'danger'; else if (raw >= 70) cls = 'warn';
       return '<div class="budget-row">' +
-        '<div class="budget-top"><span class="budget-cat">' + catIcon(cat) + esc(cat) + '</span>' +
+        '<div class="budget-top"><span class="budget-cat">' + catIcon(cat) + esc(catLabel(cat)) + '</span>' +
         '<span class="budget-nums ' + (used > limit ? 'over' : '') + '">' + fmtShort(used) + ' / ' + fmtShort(limit) + '₫</span></div>' +
         '<div class="budget-track"><div class="budget-fill ' + cls + '" style="width:' + pct + '%"></div></div></div>';
     }).join('');
@@ -411,14 +439,14 @@
   function trendData(txs, range) {
     let labels = [], inc = [], exp = [];
     if (reportPeriod === 'week') {
-      labels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+      labels = t('dows').slice();
       const s = startOfWeek(reportAnchor);
       for (let i = 0; i < 7; i++) { const d = new Date(s); d.setDate(s.getDate() + i); const dt = ymd(d); const dd = txs.filter((x) => x.date === dt); inc.push(totals(dd).income); exp.push(totals(dd).expense); }
     } else if (reportPeriod === 'year') {
-      for (let m = 0; m < 12; m++) { labels.push('T' + (m + 1)); const mk = reportAnchor.getFullYear() + '-' + pad(m + 1); const dd = txs.filter((x) => x.date.slice(0, 7) === mk); inc.push(totals(dd).income); exp.push(totals(dd).expense); }
+      for (let m = 0; m < 12; m++) { labels.push(t('moPrefix') + (m + 1)); const mk = reportAnchor.getFullYear() + '-' + pad(m + 1); const dd = txs.filter((x) => x.date.slice(0, 7) === mk); inc.push(totals(dd).income); exp.push(totals(dd).expense); }
     } else {
       const days = endOfMonth(reportAnchor).getDate(); const weeks = Math.ceil(days / 7);
-      for (let w = 0; w < weeks; w++) { labels.push('Tuần ' + (w + 1)); inc.push(0); exp.push(0); }
+      for (let w = 0; w < weeks; w++) { labels.push(t('weekLabel') + ' ' + (w + 1)); inc.push(0); exp.push(0); }
       txs.forEach((x) => { const day = parseInt(x.date.slice(8, 10), 10); const wi = Math.min(weeks - 1, Math.floor((day - 1) / 7)); if (x.type === 'income') inc[wi] += x.amount; else exp[wi] += x.amount; });
     }
     return { labels, inc, exp };
@@ -435,7 +463,7 @@
     const top = txs.filter((x) => x.type === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 5);
 
     setTimeout(() => {
-      window.Charts.donut('repDonut', 'repLegend', byCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); currentTab = 'transactions'; render(); });
+      window.Charts.donut('repDonut', 'repLegend', byCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); currentTab = 'transactions'; render(); }, catLabel);
       window.Charts.bars('repTrend', td.labels, [
         { label: t('income'), data: td.inc, color: incColor },
         { label: t('expense'), data: td.exp, color: expColor },
@@ -484,7 +512,7 @@
 
     const months = new Set(DATA.transactions.map((tx) => tx.date.slice(0, 7))); months.add(monthKey(new Date()));
     const monthOpts = Array.from(months).sort().reverse().map((m) => '<option value="' + m + '"' + (m === filterMonth ? ' selected' : '') + '>' + t('month') + ' ' + m + '</option>').join('');
-    const catOpts = '<option value="">' + t('allCats') + '</option>' + CATS.map((c) => '<option value="' + c + '"' + (c === filterCategory ? ' selected' : '') + '>' + c + '</option>').join('');
+    const catOpts = '<option value="">' + t('allCats') + '</option>' + CATS.map((c) => '<option value="' + c + '"' + (c === filterCategory ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
     const typeOpts = '<option value="">' + t('allTypes') + '</option><option value="expense"' + (filterType === 'expense' ? ' selected' : '') + '>' + t('expense') + '</option><option value="income"' + (filterType === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
 
     let body = '';
@@ -543,7 +571,7 @@
 
   function viewSettings() {
     const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
-      '<div class="budget-edit-row"><label>' + catIcon(c) + esc(c) + '</label>' +
+      '<div class="budget-edit-row"><label>' + catIcon(c) + esc(catLabel(c)) + '</label>' +
       '<input type="number" inputmode="numeric" data-budget="' + c + '" value="' + (DATA.budgets[c] || 0) + '"/></div>').join('');
     const C = window.CONFIG;
     const hh = DATA.household || { id: '', name: '' };
@@ -604,7 +632,7 @@
   /* ============== Edit modal ============== */
   function openEdit(id) {
     const tx = DATA.transactions.find((x) => x.id === id); if (!tx) return;
-    const catOpts = CATS.map((c) => '<option value="' + c + '"' + (c === tx.category ? ' selected' : '') + '>' + c + '</option>').join('');
+    const catOpts = CATS.map((c) => '<option value="' + c + '"' + (c === tx.category ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
     const wrap = document.createElement('div');
     wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
       '<div class="card-title">' + icon('edit') + ' ' + t('edit') + '</div>' +
