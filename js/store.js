@@ -217,6 +217,15 @@
       .eq('household_id', household.id)
       .eq('user_id', userId);
     if (error) throw new Error(error.message);
+    // If we removed ourselves (left the household), drop the cached selection so the
+    // next loadData() re-picks another household (or creates a fresh one). Without this,
+    // `household` still points to the household we just left and loadData would try to
+    // read/insert into it — which RLS now blocks, causing an error.
+    const user = await getUser();
+    if (user && user.id === userId) {
+      household = null;
+      setActiveId('');
+    }
   }
 
   // Switch to another household (for users who belong to multiple)
