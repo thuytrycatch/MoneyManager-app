@@ -7,9 +7,7 @@
 
   /* ============== Settings (localStorage) ============== */
   window.CONFIG = window.CONFIG || {
-    GITHUB_TOKEN: '', GITHUB_OWNER: '', GITHUB_REPO: '',
-    GITHUB_BRANCH: 'main', DATA_FILE_PATH: 'data/transactions.json',
-    ANTHROPIC_API_KEY: '',
+    SUPABASE_URL: '', SUPABASE_ANON_KEY: '', ANTHROPIC_API_KEY: '',
   };
   const SETTINGS_KEY = 'mm_settings';
   function loadSettings() {
@@ -78,10 +76,21 @@
       save: 'Lưu', cancel: 'Hủy', delete: 'Xóa', edit: 'Sửa', category: 'Danh mục', note: 'Ghi chú', amount: 'Số tiền',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
       saveBudget: 'Lưu ngân sách', budgetSaved: 'Đã lưu ngân sách', language: 'Ngôn ngữ', theme: 'Giao diện',
-      connTitle: 'Kết nối GitHub', ghToken: 'GitHub Token', ghOwner: 'GitHub Owner (username)', ghRepo: 'Tên repo dữ liệu',
-      ghBranch: 'Nhánh', anthropicKey: 'Claude API Key (tùy chọn)', saveConnect: 'Lưu & kết nối',
-      connSaved: 'Đã lưu, đang kết nối…', connOk: 'Đã kết nối', configMissing: 'Chưa cấu hình — dữ liệu lưu cục bộ.',
-      tokenHint: '🔒 Token chỉ lưu trên trình duyệt này (localStorage), không gửi đi đâu ngoài GitHub. Cần token quyền "repo".',
+      connTitle: 'Kết nối Supabase', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
+      anthropicKey: 'Claude API Key (tùy chọn)', saveConnect: 'Lưu & kết nối',
+      connSaved: 'Đã lưu, đang kết nối…', connOk: 'Đã kết nối', configMissing: 'Chưa cấu hình Supabase.',
+      tokenHint: '🔒 Thông tin lưu trên trình duyệt này (localStorage). anon key là khóa công khai, dữ liệu được bảo vệ bằng Row Level Security.',
+      // Auth
+      signIn: 'Đăng nhập', signUp: 'Tạo tài khoản', signOut: 'Đăng xuất', email: 'Email', password: 'Mật khẩu',
+      authWelcome: 'Đăng nhập để quản lý thu chi gia đình', haveAccount: 'Đã có tài khoản? Đăng nhập',
+      needAccount: 'Chưa có tài khoản? Tạo mới', editConfig: 'Đổi cấu hình Supabase',
+      signedUp: 'Đã tạo tài khoản. Kiểm tra email nếu cần xác nhận, rồi đăng nhập.',
+      authError: 'Lỗi đăng nhập', fillEmailPass: 'Nhập email và mật khẩu.',
+      configIntro: 'Nhập thông tin Supabase (Settings → API) để bắt đầu.',
+      // Household
+      household: 'Hộ gia đình', householdName: 'Tên hộ', inviteCode: 'Mã mời (chia sẻ để người thân cùng dùng)',
+      copyCode: 'Sao chép mã', copied: 'Đã sao chép', joinHousehold: 'Tham gia hộ khác', joinCodePh: 'Dán mã mời vào đây',
+      join: 'Tham gia', joined: 'Đã tham gia hộ', renameOk: 'Đã đổi tên hộ', account: 'Tài khoản',
       added: 'Đã thêm', deleted: 'Đã xóa', confirmDelete: 'Xóa giao dịch này?',
       emptyInput: 'Vui lòng nhập nội dung.', cantParse: 'Không nhận diện được số tiền.',
       warn80: 'Sắp vượt ngân sách', warn100: 'Vượt ngân sách', parsing: 'Đang phân tích…',
@@ -102,10 +111,21 @@
       save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', category: 'Category', note: 'Note', amount: 'Amount',
       allCats: 'All categories', allTypes: 'Income & expense',
       saveBudget: 'Save budget', budgetSaved: 'Budget saved', language: 'Language', theme: 'Theme',
-      connTitle: 'GitHub connection', ghToken: 'GitHub Token', ghOwner: 'GitHub Owner (username)', ghRepo: 'Data repo name',
-      ghBranch: 'Branch', anthropicKey: 'Claude API Key (optional)', saveConnect: 'Save & connect',
-      connSaved: 'Saved, connecting…', connOk: 'Connected', configMissing: 'Not configured — data stored locally.',
-      tokenHint: '🔒 The token is stored only in this browser (localStorage). Needs a token with "repo" scope.',
+      connTitle: 'Supabase connection', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
+      anthropicKey: 'Claude API Key (optional)', saveConnect: 'Save & connect',
+      connSaved: 'Saved, connecting…', connOk: 'Connected', configMissing: 'Supabase not configured.',
+      tokenHint: '🔒 Stored only in this browser (localStorage). The anon key is public; data is protected by Row Level Security.',
+      // Auth
+      signIn: 'Sign in', signUp: 'Sign up', signOut: 'Sign out', email: 'Email', password: 'Password',
+      authWelcome: 'Sign in to manage your family budget', haveAccount: 'Have an account? Sign in',
+      needAccount: 'No account? Create one', editConfig: 'Change Supabase config',
+      signedUp: 'Account created. Confirm via email if required, then sign in.',
+      authError: 'Auth error', fillEmailPass: 'Enter email and password.',
+      configIntro: 'Enter your Supabase info (Settings → API) to start.',
+      // Household
+      household: 'Household', householdName: 'Household name', inviteCode: 'Invite code (share with family)',
+      copyCode: 'Copy code', copied: 'Copied', joinHousehold: 'Join another household', joinCodePh: 'Paste invite code here',
+      join: 'Join', joined: 'Joined household', renameOk: 'Household renamed', account: 'Account',
       added: 'Added', deleted: 'Deleted', confirmDelete: 'Delete this transaction?',
       emptyInput: 'Please enter something.', cantParse: 'Could not detect amount.',
       warn80: 'Near budget limit', warn100: 'Over budget', parsing: 'Parsing…',
@@ -119,7 +139,10 @@
   function t(k) { return (I18N[lang] && I18N[lang][k]) || k; }
 
   /* ============== State ============== */
-  let DATA = { version: '1.0', budgets: {}, transactions: [] };
+  let DATA = { household: null, budgets: {}, transactions: [] };
+  let authMode = 'login'; // 'config' | 'login'
+  let authIsSignup = false;
+  let currentUserEmail = '';
   let currentTab = 'overview';
   const CATS = window.Parser.CATEGORIES;
   // Filters (transactions tab)
@@ -170,11 +193,7 @@
     toastTimer = setTimeout(() => { el.className = 'toast'; }, 3200);
   }
 
-  /* ============== Persist ============== */
-  function persist() {
-    window.GitHubSync.writeDataFile(DATA);
-    if (window.GitHubSync.isConfigured() && navigator.onLine) setStatus(t('saving'));
-  }
+  /* ============== Status ============== */
   function setStatus(text, kind) {
     const el = document.getElementById('syncStatus');
     if (!el) return; el.textContent = text || ''; el.className = 'sync-status ' + (kind || '');
@@ -189,18 +208,30 @@
     let parsed;
     try { parsed = await window.Parser.parseTransaction(raw); }
     catch (e) { parsed = window.Parser.parseWithRegex(raw); }
-    if (btn) { btn.disabled = false; btn.innerHTML = old; }
-    if (!parsed.amount) { toast(t('cantParse'), 'warn'); return; }
+    if (!parsed.amount) {
+      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+      toast(t('cantParse'), 'warn'); return;
+    }
     const now = new Date();
-    DATA.transactions.unshift({
-      id: uuid(), date: ymd(now), time: now.toTimeString().slice(0, 5),
+    const draft = {
+      date: ymd(now), time: now.toTimeString().slice(0, 5),
       rawInput: raw, amount: parsed.amount, type: parsed.type,
-      category: parsed.category, note: parsed.note, createdAt: now.toISOString(),
-    });
-    persist();
-    toast(t('added') + ': ' + parsed.note + ' · ' + fmtVND(parsed.amount), 'success');
-    if (parsed.type === 'expense') checkBudgetWarning(parsed.category);
-    render();
+      category: parsed.category, note: parsed.note,
+    };
+    setStatus(t('saving'));
+    try {
+      const saved = await window.Store.addTransaction(draft);
+      DATA.transactions.unshift(saved);
+      setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 2500);
+      toast(t('added') + ': ' + parsed.note + ' · ' + fmtVND(parsed.amount), 'success');
+      if (parsed.type === 'expense') checkBudgetWarning(parsed.category);
+      render();
+    } catch (err) {
+      setStatus(t('syncError'), 'err'); setTimeout(() => setStatus(''), 4000);
+      toast(t('syncError') + ': ' + err.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+    }
   }
   function checkBudgetWarning(cat) {
     const limit = DATA.budgets[cat]; if (!limit) return;
@@ -209,10 +240,15 @@
     if (pct >= 100) toast('🚨 ' + t('warn100') + ': ' + cat + ' (' + Math.round(pct) + '%)', 'error');
     else if (pct >= 80) toast('⚠️ ' + t('warn80') + ': ' + cat + ' (' + Math.round(pct) + '%)', 'warn');
   }
-  function deleteTx(id) {
+  async function deleteTx(id) {
     if (!confirm(t('confirmDelete'))) return;
-    DATA.transactions = DATA.transactions.filter((x) => x.id !== id);
-    persist(); toast(t('deleted'), 'info'); render();
+    try {
+      await window.Store.deleteTransaction(id);
+      DATA.transactions = DATA.transactions.filter((x) => x.id !== id);
+      toast(t('deleted'), 'info'); render();
+    } catch (err) {
+      toast(t('syncError') + ': ' + err.message, 'error');
+    }
   }
 
   /* ============== Escape ============== */
@@ -478,8 +514,8 @@
     const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
       '<div class="budget-edit-row"><label>' + catIcon(c) + esc(c) + '</label>' +
       '<input type="number" inputmode="numeric" data-budget="' + c + '" value="' + (DATA.budgets[c] || 0) + '"/></div>').join('');
-    const configured = window.GitHubSync.isConfigured();
     const C = window.CONFIG;
+    const hh = DATA.household || { id: '', name: '' };
     const f = (id, label, val, type) => '<div class="conn-row"><label>' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val || '') + '" autocomplete="off" autocapitalize="off" spellcheck="false"/></div>';
 
     return (
@@ -487,20 +523,42 @@
       '<div class="budget-edit">' + budgetInputs + '</div>' +
       '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>' +
 
+      // Hộ gia đình
+      '<div class="section-title">' + t('household') + '</div>' +
+      '<div class="conn-form">' +
+      '<div class="conn-row"><label>' + t('householdName') + '</label><input id="hhName" type="text" value="' + esc(hh.name) + '"/></div>' +
+      '</div>' +
+      '<button id="renameHhBtn" class="ghost-btn">' + icon('edit') + ' ' + t('save') + '</button>' +
+      '<div class="conn-row" style="margin-top:12px"><label>' + t('inviteCode') + '</label>' +
+      '<input id="inviteCodeBox" type="text" value="' + esc(hh.id) + '" readonly/></div>' +
+      '<button id="copyCodeBtn" class="ghost-btn">' + icon('file') + ' ' + t('copyCode') + '</button>' +
+      '<div class="conn-row" style="margin-top:12px"><label>' + t('joinHousehold') + '</label>' +
+      '<input id="joinCode" type="text" placeholder="' + t('joinCodePh') + '"/></div>' +
+      '<button id="joinHhBtn" class="ghost-btn">' + icon('check') + ' ' + t('join') + '</button>' +
+
+      // Ngôn ngữ / giao diện
       '<div class="section-title">' + t('language') + ' · ' + t('theme') + '</div>' +
       '<div class="settings-row"><div class="seg">' +
       '<button class="seg-btn ' + (lang === 'vi' ? 'active' : '') + '" data-lang="vi">🇻🇳 VI</button>' +
       '<button class="seg-btn ' + (lang === 'en' ? 'active' : '') + '" data-lang="en">🇬🇧 EN</button></div>' +
       '<button id="themeToggle2" class="ghost-btn">' + icon('moon') + ' ' + t('theme') + '</button></div>' +
 
+      // Tài khoản
+      '<div class="section-title">' + t('account') + '</div>' +
+      '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + '</div>' +
+      '<button id="signOutBtn" class="ghost-btn">' + icon('right') + ' ' + t('signOut') + '</button>' +
+
+      // Claude API key (tùy chọn)
+      '<div class="section-title">' + t('anthropicKey') + '</div>' +
+      '<div class="conn-form">' + f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
+      '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>' +
+
+      // Cấu hình Supabase
       '<div class="section-title">' + t('connTitle') + '</div>' +
-      '<div class="config-status ' + (configured ? 'ok' : 'warn') + '">' +
-      (configured ? '✅ ' + (C.GITHUB_OWNER || '') + '/' + (C.GITHUB_REPO || '') + ' @ ' + (C.GITHUB_BRANCH || 'main') : '⚠️ ' + t('configMissing')) + '</div>' +
       '<div class="conn-form">' +
-      f('cfgOwner', t('ghOwner'), C.GITHUB_OWNER) + f('cfgRepo', t('ghRepo'), C.GITHUB_REPO) +
-      f('cfgBranch', t('ghBranch'), C.GITHUB_BRANCH || 'main') + f('cfgToken', t('ghToken'), C.GITHUB_TOKEN, 'password') +
-      f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
-      '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('saveConnect') + '</button>' +
+      f('cfgSupaUrl', t('supaUrl'), C.SUPABASE_URL) +
+      f('cfgSupaKey', t('supaKey'), C.SUPABASE_ANON_KEY, 'password') + '</div>' +
+      '<button id="saveSupaBtn" class="ghost-btn">' + icon('settings') + ' ' + t('saveConnect') + '</button>' +
       '<div class="hint">' + t('tokenHint') + '</div>'
     );
   }
@@ -528,12 +586,20 @@
     const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
     document.getElementById('eCancel').addEventListener('click', close);
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
-    document.getElementById('eSave').addEventListener('click', () => {
-      tx.amount = Math.round(Number(document.getElementById('eAmount').value) || 0);
-      tx.category = document.getElementById('eCat').value;
-      tx.note = document.getElementById('eNote').value.trim();
-      tx.type = newType;
-      persist(); close(); toast(t('save') + ' ✓', 'success'); render();
+    document.getElementById('eSave').addEventListener('click', async () => {
+      const fields = {
+        amount: Math.round(Number(document.getElementById('eAmount').value) || 0),
+        category: document.getElementById('eCat').value,
+        note: document.getElementById('eNote').value.trim(),
+        type: newType,
+      };
+      try {
+        await window.Store.updateTransaction(tx.id, fields);
+        Object.assign(tx, fields);
+        close(); toast(t('save') + ' ✓', 'success'); render();
+      } catch (err) {
+        toast(t('syncError') + ': ' + err.message, 'error');
+      }
     });
   }
 
@@ -583,24 +649,68 @@
     document.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', () => shiftReport(parseInt(b.dataset.shift, 10))));
     // budgets
     const sb = document.getElementById('saveBudgetBtn');
-    if (sb) sb.addEventListener('click', () => { document.querySelectorAll('[data-budget]').forEach((i) => { DATA.budgets[i.dataset.budget] = Math.round(Number(i.value) || 0); }); persist(); toast(t('budgetSaved'), 'success'); });
+    if (sb) sb.addEventListener('click', async () => {
+      const obj = {};
+      document.querySelectorAll('[data-budget]').forEach((i) => { obj[i.dataset.budget] = Math.round(Number(i.value) || 0); });
+      try {
+        await window.Store.saveBudgets(obj);
+        Object.assign(DATA.budgets, obj);
+        toast(t('budgetSaved'), 'success');
+      } catch (err) {
+        toast(t('syncError') + ': ' + err.message, 'error');
+      }
+    });
     // lang
     document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { lang = b.dataset.lang; localStorage.setItem('lang', lang); document.getElementById('langToggle').textContent = lang.toUpperCase(); render(); }));
     const tt2 = document.getElementById('themeToggle2'); if (tt2) tt2.addEventListener('click', toggleTheme);
-    // connection
+    // Lưu Anthropic key (parser)
     const sc = document.getElementById('saveConfigBtn');
-    if (sc) sc.addEventListener('click', async () => {
+    if (sc) sc.addEventListener('click', () => {
+      saveSettings({ ANTHROPIC_API_KEY: document.getElementById('cfgAnthropic').value.trim() });
+      toast(t('save') + ' ✓', 'success');
+    });
+    // Đổi cấu hình Supabase (URL/key) → cần tải lại trang để áp dụng
+    const sca = document.getElementById('saveSupaBtn');
+    if (sca) sca.addEventListener('click', () => {
       saveSettings({
-        GITHUB_OWNER: document.getElementById('cfgOwner').value.trim(),
-        GITHUB_REPO: document.getElementById('cfgRepo').value.trim(),
-        GITHUB_BRANCH: document.getElementById('cfgBranch').value.trim() || 'main',
-        GITHUB_TOKEN: document.getElementById('cfgToken').value.trim(),
-        ANTHROPIC_API_KEY: document.getElementById('cfgAnthropic').value.trim(),
+        SUPABASE_URL: document.getElementById('cfgSupaUrl').value.trim(),
+        SUPABASE_ANON_KEY: document.getElementById('cfgSupaKey').value.trim(),
       });
       toast(t('connSaved'), 'info');
-      try { DATA = await window.GitHubSync.initRepo(); if (!DATA.budgets) DATA.budgets = {}; if (!DATA.transactions) DATA.transactions = []; toast(t('connOk') + ' ✓', 'success'); }
+      setTimeout(() => location.reload(), 600);
+    });
+    // Đổi tên hộ
+    const rh = document.getElementById('renameHhBtn');
+    if (rh) rh.addEventListener('click', async () => {
+      const name = document.getElementById('hhName').value.trim();
+      if (!name) return;
+      try { await window.Store.renameHousehold(name); if (DATA.household) DATA.household.name = name; toast(t('renameOk'), 'success'); render(); }
       catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
-      render();
+    });
+    // Sao chép mã mời
+    const cc = document.getElementById('copyCodeBtn');
+    if (cc) cc.addEventListener('click', () => {
+      const code = DATA.household ? DATA.household.id : '';
+      if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => toast(t('copied'), 'success'));
+      else toast(code, 'info');
+    });
+    // Tham gia hộ khác
+    const jb = document.getElementById('joinHhBtn');
+    if (jb) jb.addEventListener('click', async () => {
+      const code = document.getElementById('joinCode').value.trim();
+      if (!code) return;
+      try {
+        await window.Store.joinHousehold(code);
+        toast(t('joined'), 'success');
+        await enterApp();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+    // Đăng xuất
+    const so = document.getElementById('signOutBtn');
+    if (so) so.addEventListener('click', async () => {
+      await window.Store.signOut();
+      DATA = { household: null, budgets: {}, transactions: [] };
+      showAuth('login');
     });
   }
 
@@ -620,29 +730,117 @@
   }
 
   /* ============== Sync events ============== */
-  window.addEventListener('gh-sync', (e) => {
-    if (e.detail.ok) setStatus(t('synced'), 'ok');
-    else if (e.detail.error === 'offline') setStatus(t('offline'), 'warn');
-    else setStatus(t('syncError') + ': ' + e.detail.error, 'err');
-    setTimeout(() => setStatus(''), 4000);
-  });
   window.addEventListener('offline', () => setStatus(t('offline'), 'warn'));
   window.addEventListener('online', () => setStatus(''));
+
+  /* ============== Auth screen ============== */
+  function showAuth(mode) {
+    authMode = mode || (window.Store.isConfigured() ? 'login' : 'config');
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('appShell').classList.add('hidden');
+    const el = document.getElementById('authScreen');
+    el.classList.remove('hidden');
+    el.innerHTML = renderAuth();
+    wireAuth();
+  }
+  function hideAuth() { document.getElementById('authScreen').classList.add('hidden'); }
+
+  function renderAuth() {
+    const C = window.CONFIG;
+    if (authMode === 'config') {
+      return '<div class="auth-card">' +
+        '<div class="auth-brand">' + icon('wallet') + ' ' + t('appName') + '</div>' +
+        '<div class="auth-sub">' + t('configIntro') + '</div>' +
+        '<label>' + t('supaUrl') + '</label><input id="aSupaUrl" type="text" value="' + esc(C.SUPABASE_URL || '') + '" placeholder="https://xxxx.supabase.co" autocomplete="off" autocapitalize="off" spellcheck="false"/>' +
+        '<label>' + t('supaKey') + '</label><input id="aSupaKey" type="password" value="' + esc(C.SUPABASE_ANON_KEY || '') + '" placeholder="anon public key" autocomplete="off"/>' +
+        '<button id="aSaveCfg" class="primary-btn">' + icon('check') + ' ' + t('saveConnect') + '</button>' +
+        '<div class="hint">' + t('tokenHint') + '</div>' +
+        '</div>';
+    }
+    return '<div class="auth-card">' +
+      '<div class="auth-brand">' + icon('wallet') + ' ' + t('appName') + '</div>' +
+      '<div class="auth-sub">' + t('authWelcome') + '</div>' +
+      '<label>' + t('email') + '</label><input id="aEmail" type="email" autocomplete="username" placeholder="you@example.com"/>' +
+      '<label>' + t('password') + '</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••"/>' +
+      '<button id="aPrimary" class="primary-btn">' + (authIsSignup ? icon('plus') + ' ' + t('signUp') : icon('check') + ' ' + t('signIn')) + '</button>' +
+      '<button id="aToggle" class="link-btn">' + (authIsSignup ? t('haveAccount') : t('needAccount')) + '</button>' +
+      '<button id="aEditCfg" class="link-btn subtle">' + t('editConfig') + '</button>' +
+      '</div>';
+  }
+
+  function wireAuth() {
+    const sc = document.getElementById('aSaveCfg');
+    if (sc) sc.addEventListener('click', () => {
+      const url = document.getElementById('aSupaUrl').value.trim();
+      const key = document.getElementById('aSupaKey').value.trim();
+      if (!url || !key) { toast(t('configMissing'), 'warn'); return; }
+      saveSettings({ SUPABASE_URL: url, SUPABASE_ANON_KEY: key });
+      location.reload();
+    });
+    const tg = document.getElementById('aToggle');
+    if (tg) tg.addEventListener('click', () => { authIsSignup = !authIsSignup; showAuth('login'); });
+    const ec = document.getElementById('aEditCfg');
+    if (ec) ec.addEventListener('click', () => showAuth('config'));
+    const pr = document.getElementById('aPrimary');
+    if (pr) pr.addEventListener('click', doAuth);
+    const pass = document.getElementById('aPass');
+    if (pass) pass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAuth(); });
+  }
+
+  async function doAuth() {
+    const email = (document.getElementById('aEmail').value || '').trim();
+    const password = document.getElementById('aPass').value || '';
+    if (!email || !password) { toast(t('fillEmailPass'), 'warn'); return; }
+    const btn = document.getElementById('aPrimary');
+    const old = btn.innerHTML; btn.disabled = true; btn.textContent = '…';
+    try {
+      if (authIsSignup) {
+        await window.Store.signUp(email, password);
+        const user = await window.Store.getUser();
+        if (!user) { toast(t('signedUp'), 'success'); authIsSignup = false; showAuth('login'); return; }
+      } else {
+        await window.Store.signIn(email, password);
+      }
+      await enterApp();
+    } catch (err) {
+      toast(t('authError') + ': ' + err.message, 'error');
+      btn.disabled = false; btn.innerHTML = old;
+    }
+  }
+
+  /* ============== Enter app (load data) ============== */
+  async function enterApp() {
+    const user = await window.Store.getUser();
+    if (!user) { showAuth('login'); return; }
+    currentUserEmail = user.email || '';
+    hideAuth();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('appShell').classList.remove('hidden');
+    setStatus(t('saving'));
+    try {
+      DATA = await window.Store.loadData();
+      setStatus('');
+    } catch (err) {
+      const cached = await window.Store.getCachedData().catch(() => null);
+      DATA = cached || { household: null, budgets: {}, transactions: [] };
+      setStatus(t('syncError'), 'err');
+      toast(t('syncError') + ': ' + err.message, 'error');
+    }
+    if (!DATA.budgets) DATA.budgets = {};
+    if (!DATA.transactions) DATA.transactions = [];
+    currentTab = 'overview';
+    render();
+  }
 
   /* ============== Init ============== */
   async function init() {
     applyTheme(localStorage.getItem('theme') || 'light');
     loadSettings();
     wireHeader();
-    try { DATA = await window.GitHubSync.initRepo(); }
-    catch (err) { DATA = JSON.parse(JSON.stringify(window.GitHubSync.DEFAULT_DATA)); toast(t('syncError') + ': ' + err.message, 'error'); }
-    if (!DATA.budgets) DATA.budgets = {};
-    if (!DATA.transactions) DATA.transactions = [];
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('appShell').classList.remove('hidden');
-    if (!window.GitHubSync.isConfigured()) toast(t('configMissing'), 'warn');
-    render();
-    window.GitHubSync.syncIfDirty();
+    if (!window.Store.isConfigured()) { showAuth('config'); return; }
+    const user = await window.Store.getUser().catch(() => null);
+    if (!user) { showAuth('login'); return; }
+    await enterApp();
   }
   document.addEventListener('DOMContentLoaded', init);
 })();

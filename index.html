@@ -18,14 +18,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
   <div id="loading" class="loading">
     <div class="spinner"></div>
-    <div class="loading-text">Đang kết nối GitHub…</div>
+    <div class="loading-text">Đang khởi động…</div>
   </div>
+
+  <!-- Màn hình kết nối / đăng nhập (do app.js render) -->
+  <div id="authScreen" class="auth-screen hidden"></div>
 
   <div id="appShell" class="app-shell hidden">
     <header class="header">
@@ -44,10 +48,10 @@
   <div id="toast" class="toast"></div>
 
   <!-- config.js (tùy chọn, dùng cho chạy cục bộ). Trên GitHub Pages không có file
-       này — app lấy cấu hình từ tab Cài đặt (localStorage). -->
+       này — app lấy cấu hình từ màn hình "Kết nối Supabase" (localStorage). -->
   <script src="config.js" onerror="window.__noConfig=1"></script>
   <script src="js/parser.js"></script>
-  <script src="js/github.js"></script>
+  <script src="js/store.js"></script>
   <script src="js/charts.js"></script>
   <script src="js/app.js"></script>
 </body>

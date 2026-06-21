@@ -1,9 +1,9 @@
-# 💰 Chi Tiêu Việt — Quản lý chi tiêu cá nhân
+# 💰 Sổ Thu Chi — Quản lý thu chi gia đình (nhiều hộ)
 
-Web app quản lý chi tiêu cá nhân chạy trên **GitHub Pages** (miễn phí), nhập
-liệu bằng **tiếng Việt tự nhiên**, dữ liệu tự động lưu lên **GitHub repo** dưới
-dạng JSON. Hỗ trợ biểu đồ thống kê, cảnh báo ngân sách, song ngữ VI/EN, dark
-mode, và hoạt động cả khi offline (cache IndexedDB).
+Web app quản lý thu chi chạy trên **GitHub Pages** (miễn phí), nhập liệu bằng
+**tiếng Việt tự nhiên**, dữ liệu lưu trong **database PostgreSQL của Supabase**.
+Hỗ trợ **nhiều hộ gia đình** (mỗi người đăng nhập riêng, dữ liệu tách biệt bằng
+Row Level Security), biểu đồ thống kê, cảnh báo ngân sách, song ngữ VI/EN, dark mode.
 
 > Ví dụ nhập: `ăn sáng 35k` · `lương 15 triệu` · `đổ xăng 80k` · `cafe 2 triệu rưỡi` · `grab 1tr2`
 
@@ -11,115 +11,105 @@ mode, và hoạt động cả khi offline (cache IndexedDB).
 
 ## ✨ Tính năng
 
-- 📝 Nhập giao dịch bằng tiếng Việt tự nhiên (Claude API hoặc regex dự phòng)
-- 📊 Biểu đồ: donut theo danh mục, cột thu/chi theo ngày, thanh tiến độ ngân sách
-- 🔔 Cảnh báo khi vượt 80% và 100% ngân sách
-- 💾 Lưu tự động lên GitHub (debounce 2s tránh spam commit)
-- 📱 Mobile-first, bottom navigation, dark mode
-- 🌐 Song ngữ Việt / Anh
-- ✈️ Offline-first: dữ liệu lưu IndexedDB, tự sync khi có mạng
+- 👨‍👩‍👧 **Nhiều hộ gia đình**: mỗi hộ có dữ liệu riêng; mời người thân bằng mã hộ.
+- 🔐 **Đăng nhập** bằng email/mật khẩu (Supabase Auth).
+- 🛡️ **Bảo mật** bằng Row Level Security — hộ này không đọc/ghi được dữ liệu hộ khác.
+- 📝 Nhập giao dịch bằng tiếng Việt tự nhiên (Claude API hoặc regex dự phòng).
+- 📊 Biểu đồ: donut theo danh mục, cột thu/chi, thanh tiến độ ngân sách.
+- 🔔 Cảnh báo khi vượt 80% và 100% ngân sách.
+- 📱 Mobile-first, bottom navigation, dark mode, song ngữ Việt / Anh.
 
 ---
 
 ## 🚀 Hướng dẫn triển khai
 
-### 1. Fork / tạo repo
+### 1. Tạo dự án Supabase (miễn phí)
 
-Fork repo này hoặc tạo repo mới (vd: `chi-tieu-viet`) trên tài khoản GitHub của bạn.
+1. Đăng ký tại <https://supabase.com> → **New project**.
+2. Chọn **Region** gần Việt Nam (vd: *Southeast Asia — Singapore*).
+3. Đặt mật khẩu database (lưu lại, không cần cho app).
 
-### 2. Tạo GitHub Personal Access Token
+### 2. Tạo bảng + bảo mật
+
+Mở **SQL Editor → New query**, dán toàn bộ nội dung file
+[`supabase-schema.sql`](supabase-schema.sql), bấm **Run**. (Chạy 1 lần là đủ.)
+
+Việc này tạo các bảng `households`, `household_members`, `transactions`,
+`budgets` và bật **RLS** để mỗi hộ chỉ thấy dữ liệu của mình.
+
+### 3. Lấy thông tin kết nối
+
+**Supabase → Settings → API**:
 
 ```
-GitHub → Settings → Developer settings
-   → Personal access tokens → Fine-grained tokens
-   → Generate new token
-       ┌─────────────────────────────────────────┐
-       │ Repository access:  Only select repos    │
-       │   ▸ chọn repo lưu dữ liệu (chi-tieu-viet) │
-       │ Permissions → Repository permissions:     │
-       │   ▸ Contents:  Read and write   ✅         │
-       └─────────────────────────────────────────┘
-   → Generate token → SAO CHÉP (github_pat_...)
+Project URL                     → SUPABASE_URL       (https://xxxx.supabase.co)
+Project API keys → anon public  → SUPABASE_ANON_KEY  (eyJhbGciOi...)
 ```
 
-### 3. Điền thông tin vào `config.js`
+> ✅ `anon key` là **khóa công khai**, an toàn để đặt trong trình duyệt — dữ liệu
+> được bảo vệ bởi RLS. Đây là khác biệt lớn so với token GitHub trước đây.
 
-```js
-const CONFIG = {
-  GITHUB_TOKEN: 'github_pat_xxxxxxxxxxxx',
-  GITHUB_OWNER: 'tendangnhap',
-  GITHUB_REPO:  'chi-tieu-viet',
-  GITHUB_BRANCH: 'main',
-  DATA_FILE_PATH: 'data/transactions.json',
-  ANTHROPIC_API_KEY: '',   // tùy chọn — để trống vẫn chạy được
-};
-```
+### 4. Bật xác thực email
 
-> ⚠️ `config.js` đã nằm trong `.gitignore` nên **không** bị commit lên repo công khai.
-> Khi deploy lên GitHub Pages, bạn cần đẩy `config.js` lên (xem lưu ý bảo mật bên dưới).
+**Supabase → Authentication → Providers → Email**: bật **Email**.
+- Để dùng nhanh, có thể tắt *"Confirm email"* (Authentication → Providers → Email →
+  *Confirm email* = off) để đăng ký xong đăng nhập được ngay.
 
-### 4. Bật GitHub Pages
+### 5. Triển khai lên GitHub Pages
 
 ```
 Repo → Settings → Pages
    → Source: Deploy from a branch
-   → Branch: main   /(root)
-   → Save
+   → Branch: main   /(root)  → Save
 ```
 
-### 5. Truy cập
+Truy cập `https://{username}.github.io/{repo-name}`, app sẽ hiện màn hình
+**Kết nối Supabase** → nhập URL + anon key (lưu vào localStorage trình duyệt) →
+**Đăng ký / Đăng nhập**.
 
-```
-https://{username}.github.io/{repo-name}
-```
+> Nếu chạy cục bộ, có thể điền sẵn vào `config.js` (đã gitignore) cho tiện.
+
+---
+
+## 👨‍👩‍👧 Dùng cho nhiều hộ gia đình
+
+- Mỗi người **đăng ký tài khoản** → tự động được tạo một **hộ** riêng.
+- Muốn người thân cùng quản lý chung một hộ: vào **Cài đặt → Hộ gia đình →
+  Sao chép mã**, gửi mã đó cho họ. Họ vào **Cài đặt → Tham gia hộ khác**, dán mã.
+- Từ đó mọi thành viên trong hộ thấy chung giao dịch & ngân sách của hộ.
 
 ---
 
 ## 🤖 Tích hợp Claude API (tùy chọn)
 
-Điền `ANTHROPIC_API_KEY` để hiểu câu nhập tiếng Việt chính xác hơn (vd: phân
-loại danh mục thông minh, hiểu "2 triệu rưỡi", "1tr2", "tiền điện tháng này").
+Điền `ANTHROPIC_API_KEY` (Cài đặt → Claude API Key) để hiểu câu nhập tiếng Việt
+chính xác hơn. Model dùng: **`claude-haiku-4-5`**. Không có key → tự động dùng bộ
+phân tích **regex** (vẫn nhận diện `35k`, `80 nghìn`, `1.5tr`, `2 triệu rưỡi`...).
 
-- Model dùng: **`claude-haiku-4-5`** (nhanh, rẻ).
-  > Lưu ý: prompt gốc ghi `claude-haiku-3-5` nhưng model đó **đã ngừng phục vụ**,
-  > nên app dùng bản hiện hành `claude-haiku-4-5`.
-- Gọi trực tiếp từ trình duyệt qua header `anthropic-dangerous-direct-browser-access: true`.
-- Nếu không có key hoặc gọi lỗi → tự động dùng bộ phân tích **regex** (vẫn nhận
-  diện được `35k`, `80 nghìn`, `1.5tr`, `2 triệu rưỡi`, `35.000`...).
-
----
-
-## 🔒 Lưu ý bảo mật
-
-- Token GitHub và API key đặt trong `config.js` ở **phía trình duyệt** → bất kỳ
-  ai mở DevTools trên trang đã deploy đều có thể đọc được.
-- ✅ Phù hợp cho **ứng dụng cá nhân riêng tư** (repo private, hoặc Pages chỉ mình bạn dùng).
-- 🚫 Không dùng cho trang công khai nhiều người truy cập.
-- Nên giới hạn quyền token (chỉ `Contents` của đúng 1 repo) và đặt **giới hạn chi tiêu** cho API key.
+> ⚠️ API key Anthropic đặt trong trình duyệt có thể bị lộ — nên đặt **giới hạn
+> chi tiêu** cho key và chỉ dùng cho app của riêng bạn/gia đình.
 
 ---
 
 ## 📁 Cấu trúc dự án
 
 ```
-chi-tieu-viet/
-├── index.html          # Shell + nạp CDN, scripts
-├── config.js           # Cấu hình cá nhân (gitignored)
-├── css/style.css       # Giao diện, dark mode, responsive
-├── js/
-│   ├── app.js          # Logic chính, i18n, điều hướng, CRUD
-│   ├── github.js       # GitHub API + cache IndexedDB
-│   ├── parser.js       # Phân tích tiếng Việt (Claude + regex)
-│   └── charts.js       # Biểu đồ Chart.js
-└── data/
-    └── transactions.json   # Dữ liệu mẫu / schema
+.
+├── index.html              # Shell + nạp CDN (Chart.js, Supabase), scripts
+├── supabase-schema.sql     # Lược đồ CSDL + RLS (chạy trong Supabase SQL Editor)
+├── config.js               # Cấu hình cá nhân (gitignored, tùy chọn)
+├── config.example.js       # Mẫu cấu hình
+├── css/style.css           # Giao diện, dark mode, responsive, màn hình đăng nhập
+└── js/
+    ├── app.js              # Logic chính, i18n, điều hướng, đăng nhập, CRUD
+    ├── store.js            # Lớp dữ liệu Supabase (Auth + hộ + giao dịch + ngân sách)
+    ├── parser.js           # Phân tích tiếng Việt (Claude + regex)
+    └── charts.js           # Biểu đồ Chart.js
 ```
 
 ---
 
 ## 🛠️ Chạy thử cục bộ
-
-Vì dùng `fetch` và module qua `<script>`, chỉ cần một static server:
 
 ```bash
 # Python
@@ -128,3 +118,12 @@ python -m http.server 8080
 ```
 
 Không cần build step, không cần npm install.
+
+---
+
+## ℹ️ Ghi chú
+
+- Ứng dụng cần **kết nối mạng** để đọc/ghi dữ liệu (Supabase). Khi mất mạng vẫn
+  hiển thị được dữ liệu đã tải lần gần nhất (cache IndexedDB) nhưng không ghi mới.
+- Phiên bản trước lưu dữ liệu vào file JSON trên GitHub (`data/transactions.json`)
+  và chỉ dùng cho 1 người — nay đã thay bằng Supabase.

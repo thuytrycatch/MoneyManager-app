@@ -267,3 +267,16 @@ main { padding: 4px 16px 110px; }
 @media (min-width: 600px) {
   main { padding: 4px 20px 110px; }
 }
+
+/* ---------- Auth screen ---------- */
+.auth-screen { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--bg-secondary); overflow-y: auto; }
+.auth-screen.hidden { display: none; }
+.auth-card { width: 100%; max-width: 400px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px 22px; box-shadow: var(--shadow-lg); }
+.auth-brand { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 22px; font-weight: 800; color: var(--text-primary); }
+.auth-brand .ic { width: 26px; height: 26px; color: var(--accent); }
+.auth-sub { text-align: center; color: var(--text-secondary); font-size: 14px; margin: 6px 0 20px; line-height: 1.5; }
+.auth-card label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 14px 0 5px; }
+.auth-card input { width: 100%; min-height: 48px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 0 14px; color: var(--text-primary); }
+.auth-card input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.auth-card .link-btn { width: 100%; justify-content: center; margin-top: 14px; }
+.auth-card .link-btn.subtle { color: var(--text-secondary); font-weight: 600; margin-top: 8px; }
