@@ -112,7 +112,7 @@
       noAlerts: 'Mọi thứ ổn định. Tiếp tục duy trì nhé! 👍',
     },
     en: {
-      appName: 'Sổ Thu Chi', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
+      appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
       income: 'Income', expense: 'Expense', balance: 'Current balance', savings: 'Savings', savingsRate: 'Savings rate',
       thisMonth: 'This month', remaining: 'Remaining', budget: 'Budget', spentToday: 'Spent today', avgPerDay: 'Avg / day',
       weekReview: 'This week review', vsLastWeek: 'vs last week', alerts: 'Alerts & control',
