@@ -1,43 +1,44 @@
-# 💰 Sổ Thu Chi — Quản lý thu chi gia đình (nhiều hộ)
+# 💰 Sổ Thu Chi — Family budget manager (multi-household)
 
-Web app quản lý thu chi chạy trên **GitHub Pages** (miễn phí), nhập liệu bằng
-**tiếng Việt tự nhiên**, dữ liệu lưu trong **database PostgreSQL của Supabase**.
-Hỗ trợ **nhiều hộ gia đình** (mỗi người đăng nhập riêng, dữ liệu tách biệt bằng
-Row Level Security), biểu đồ thống kê, cảnh báo ngân sách, song ngữ VI/EN, dark mode.
+A budget web app that runs on **GitHub Pages** (free), accepts input in
+**natural Vietnamese**, and stores data in a **Supabase PostgreSQL database**.
+It supports **multiple households** (each person signs in separately, data is
+isolated via Row Level Security), statistic charts, budget alerts, VI/EN
+bilingual UI, and dark mode.
 
-> Ví dụ nhập: `ăn sáng 35k` · `lương 15 triệu` · `đổ xăng 80k` · `cafe 2 triệu rưỡi` · `grab 1tr2`
-
----
-
-## ✨ Tính năng
-
-- 👨‍👩‍👧 **Nhiều hộ gia đình**: mỗi hộ có dữ liệu riêng; mời người thân bằng mã hộ.
-- 🔐 **Đăng nhập** bằng email/mật khẩu (Supabase Auth).
-- 🛡️ **Bảo mật** bằng Row Level Security — hộ này không đọc/ghi được dữ liệu hộ khác.
-- 📝 Nhập giao dịch bằng tiếng Việt tự nhiên (Claude API hoặc regex dự phòng).
-- 📊 Biểu đồ: donut theo danh mục, cột thu/chi, thanh tiến độ ngân sách.
-- 🔔 Cảnh báo khi vượt 80% và 100% ngân sách.
-- 📱 Mobile-first, bottom navigation, dark mode, song ngữ Việt / Anh.
+> Input examples: `ăn sáng 35k` · `lương 15 triệu` · `đổ xăng 80k` · `cafe 2 triệu rưỡi` · `grab 1tr2`
 
 ---
 
-## 🚀 Hướng dẫn triển khai
+## ✨ Features
 
-### 1. Tạo dự án Supabase (miễn phí)
+- 👨‍👩‍👧 **Multiple households**: each household has its own data; invite family with a household code.
+- 🔐 **Sign in** with email/password (Supabase Auth).
+- 🛡️ **Security** via Row Level Security — one household cannot read/write another's data.
+- 📝 Enter transactions in natural Vietnamese (Claude API, with a regex fallback).
+- 📊 Charts: category donut, income/expense bars, budget progress bars.
+- 🔔 Alerts when a budget passes 80% and 100%.
+- 📱 Mobile-first, bottom navigation, dark mode, Vietnamese / English UI.
 
-1. Đăng ký tại <https://supabase.com> → **New project**.
-2. Chọn **Region** gần Việt Nam (vd: *Southeast Asia — Singapore*).
-3. Đặt mật khẩu database (lưu lại, không cần cho app).
+---
 
-### 2. Tạo bảng + bảo mật
+## 🚀 Deployment guide
 
-Mở **SQL Editor → New query**, dán toàn bộ nội dung file
-[`supabase-schema.sql`](supabase-schema.sql), bấm **Run**. (Chạy 1 lần là đủ.)
+### 1. Create a Supabase project (free)
 
-Việc này tạo các bảng `households`, `household_members`, `transactions`,
-`budgets` và bật **RLS** để mỗi hộ chỉ thấy dữ liệu của mình.
+1. Sign up at <https://supabase.com> → **New project**.
+2. Pick a **Region** close to your users (e.g. *Southeast Asia — Singapore*).
+3. Set a database password (save it; the app does not need it).
 
-### 3. Lấy thông tin kết nối
+### 2. Create tables + security
+
+Open **SQL Editor → New query**, paste the entire contents of
+[`supabase-schema.sql`](supabase-schema.sql), then click **Run**. (Running it once is enough.)
+
+This creates the `households`, `household_members`, `transactions`, and
+`budgets` tables and enables **RLS** so each household only sees its own data.
+
+### 3. Get the connection info
 
 **Supabase → Settings → API**:
 
@@ -46,16 +47,16 @@ Project URL                     → SUPABASE_URL       (https://xxxx.supabase.co
 Project API keys → anon public  → SUPABASE_ANON_KEY  (eyJhbGciOi...)
 ```
 
-> ✅ `anon key` là **khóa công khai**, an toàn để đặt trong trình duyệt — dữ liệu
-> được bảo vệ bởi RLS. Đây là khác biệt lớn so với token GitHub trước đây.
+> ✅ The `anon key` is a **public key**, safe to put in the browser — data is
+> protected by RLS. This is a big difference from the previous GitHub token.
 
-### 4. Bật xác thực email
+### 4. Enable email authentication
 
-**Supabase → Authentication → Providers → Email**: bật **Email**.
-- Để dùng nhanh, có thể tắt *"Confirm email"* (Authentication → Providers → Email →
-  *Confirm email* = off) để đăng ký xong đăng nhập được ngay.
+**Supabase → Authentication → Providers → Email**: enable **Email**.
+- For quick use, you can turn off *"Confirm email"* (Authentication → Providers →
+  Email → *Confirm email* = off) so you can sign in right after signing up.
 
-### 5. Triển khai lên GitHub Pages
+### 5. Deploy to GitHub Pages
 
 ```
 Repo → Settings → Pages
@@ -63,67 +64,70 @@ Repo → Settings → Pages
    → Branch: main   /(root)  → Save
 ```
 
-Truy cập `https://{username}.github.io/{repo-name}`, app sẽ hiện màn hình
-**Kết nối Supabase** → nhập URL + anon key (lưu vào localStorage trình duyệt) →
-**Đăng ký / Đăng nhập**.
+Open `https://{username}.github.io/{repo-name}`. The app shows the
+**Connect to Supabase** screen → enter the URL + anon key (stored in the
+browser's localStorage) → **Sign up / Sign in**.
 
-> Nếu chạy cục bộ, có thể điền sẵn vào `config.js` (đã gitignore) cho tiện.
-
----
-
-## 👨‍👩‍👧 Dùng cho nhiều hộ gia đình
-
-- Mỗi người **đăng ký tài khoản** → tự động được tạo một **hộ** riêng.
-- Muốn người thân cùng quản lý chung một hộ: vào **Cài đặt → Hộ gia đình →
-  Sao chép mã**, gửi mã đó cho họ. Họ vào **Cài đặt → Tham gia hộ khác**, dán mã.
-- Từ đó mọi thành viên trong hộ thấy chung giao dịch & ngân sách của hộ.
+> When running locally, you can pre-fill `config.js` (gitignored) for convenience.
 
 ---
 
-## 🤖 Tích hợp Claude API (tùy chọn)
+## 👨‍👩‍👧 Using it with multiple households
 
-Điền `ANTHROPIC_API_KEY` (Cài đặt → Claude API Key) để hiểu câu nhập tiếng Việt
-chính xác hơn. Model dùng: **`claude-haiku-4-5`**. Không có key → tự động dùng bộ
-phân tích **regex** (vẫn nhận diện `35k`, `80 nghìn`, `1.5tr`, `2 triệu rưỡi`...).
-
-> ⚠️ API key Anthropic đặt trong trình duyệt có thể bị lộ — nên đặt **giới hạn
-> chi tiêu** cho key và chỉ dùng cho app của riêng bạn/gia đình.
+- Each person **signs up** → a separate **household** is created automatically.
+- To let family manage one household together: go to **Settings → Household →
+  Copy code** and send the code to them. They open **Settings → Join another
+  household** and paste the code.
+- From then on, every member of the household shares its transactions & budgets.
 
 ---
 
-## 📁 Cấu trúc dự án
+## 🤖 Claude API integration (optional)
+
+Set `ANTHROPIC_API_KEY` (Settings → Claude API Key) to better understand
+Vietnamese input. Model used: **`claude-haiku-4-5`**. With no key, the app falls
+back to a **regex** parser (still recognizes `35k`, `80 nghìn`, `1.5tr`,
+`2 triệu rưỡi`, ...).
+
+> ⚠️ An Anthropic API key placed in the browser can be exposed — set a
+> **spending limit** on the key and use it only for your own/family app.
+
+---
+
+## 📁 Project structure
 
 ```
 .
-├── index.html              # Shell + nạp CDN (Chart.js, Supabase), scripts
-├── supabase-schema.sql     # Lược đồ CSDL + RLS (chạy trong Supabase SQL Editor)
-├── config.js               # Cấu hình cá nhân (gitignored, tùy chọn)
-├── config.example.js       # Mẫu cấu hình
-├── css/style.css           # Giao diện, dark mode, responsive, màn hình đăng nhập
+├── index.html              # Shell + CDN loading (Chart.js, Supabase), scripts
+├── supabase-schema.sql     # DB schema + RLS (run in the Supabase SQL Editor)
+├── config.js               # Personal config (gitignored, optional)
+├── config.example.js       # Config template
+├── css/style.css           # UI, dark mode, responsive, sign-in screen
 └── js/
-    ├── app.js              # Logic chính, i18n, điều hướng, đăng nhập, CRUD
-    ├── store.js            # Lớp dữ liệu Supabase (Auth + hộ + giao dịch + ngân sách)
-    ├── parser.js           # Phân tích tiếng Việt (Claude + regex)
-    └── charts.js           # Biểu đồ Chart.js
+    ├── app.js              # Main logic, i18n, navigation, auth, CRUD
+    ├── store.js            # Supabase data layer (Auth + households + transactions + budgets)
+    ├── parser.js           # Vietnamese parsing (Claude + regex)
+    └── charts.js           # Chart.js charts
 ```
 
 ---
 
-## 🛠️ Chạy thử cục bộ
+## 🛠️ Run locally
 
 ```bash
 # Python
 python -m http.server 8080
-# rồi mở http://localhost:8080
+# then open http://localhost:8080
 ```
 
-Không cần build step, không cần npm install.
+No build step, no npm install required.
 
 ---
 
-## ℹ️ Ghi chú
+## ℹ️ Notes
 
-- Ứng dụng cần **kết nối mạng** để đọc/ghi dữ liệu (Supabase). Khi mất mạng vẫn
-  hiển thị được dữ liệu đã tải lần gần nhất (cache IndexedDB) nhưng không ghi mới.
-- Phiên bản trước lưu dữ liệu vào file JSON trên GitHub (`data/transactions.json`)
-  và chỉ dùng cho 1 người — nay đã thay bằng Supabase.
+- The app needs an **internet connection** to read/write data (Supabase). When
+  offline it still shows the most recently loaded data (IndexedDB cache) but
+  cannot write new entries.
+- The previous version stored data in a JSON file on GitHub
+  (`data/transactions.json`) and was single-user only — now replaced by Supabase.
