@@ -56,6 +56,8 @@
     phone: '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
     transfer: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
     refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+    eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+    eyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -88,6 +90,7 @@
       transfer: 'Chuyển khoản', transferBetween: 'Chuyển tiền giữa ví', fromWallet: 'Từ ví', toWallet: 'Đến ví',
       transferDone: 'Đã chuyển khoản', needTwoWallets: 'Cần ít nhất 2 ví để chuyển khoản.',
       sameWallet: 'Ví nguồn và ví đích phải khác nhau.', needAmount: 'Nhập số tiền.',
+      showBalance: 'Hiện số dư', hideBalance: 'Ẩn số dư',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
       budgetNotSet: 'Chưa thiết lập ngân sách.', noExpenseData: 'Chưa có dữ liệu chi tiêu.',
       weekLabel: 'Tuần', moPrefix: 'T', dows: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
@@ -145,6 +148,7 @@
       transfer: 'Transfer', transferBetween: 'Transfer between wallets', fromWallet: 'From wallet', toWallet: 'To wallet',
       transferDone: 'Transfer done', needTwoWallets: 'You need at least 2 wallets to transfer.',
       sameWallet: 'Source and destination must differ.', needAmount: 'Enter an amount.',
+      showBalance: 'Show balances', hideBalance: 'Hide balances',
       allCats: 'All categories', allTypes: 'Income & expense',
       budgetNotSet: 'No budget set yet.', noExpenseData: 'No expense data yet.',
       weekLabel: 'Week', moPrefix: 'M', dows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -218,6 +222,10 @@
 
   const fmtVND = window.Charts.fmtVND;
   const fmtShort = window.Charts.fmtShort;
+
+  // Privacy: hide balances/amounts behind dots until the user taps the eye icon. Default: hidden.
+  let hideAmounts = (localStorage.getItem('hideAmounts') || '1') === '1';
+  function mask(str) { return hideAmounts ? '••••••' : str; }
 
   /* ============== Date helpers ============== */
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -390,7 +398,7 @@
   function statTile(label, value, kind, ic) {
     return '<div class="tile ' + (kind || '') + '">' +
       '<div class="tile-top">' + (ic ? icon(ic) : '') + '<span>' + label + '</span></div>' +
-      '<div class="tile-val">' + fmtShort(Math.abs(value)) + '₫</div></div>';
+      '<div class="tile-val">' + mask(fmtShort(Math.abs(value)) + '₫') + '</div></div>';
   }
   function txRow(tx) {
     if (tx.type === 'transfer') {
@@ -457,7 +465,7 @@
       const b = accountBalance(a.id);
       return '<div class="wallet-card">' +
         '<div class="wallet-top">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
-        '<div class="wallet-bal ' + (b < 0 ? 'neg' : '') + '">' + fmtShort(b) + '₫</div></div>';
+        '<div class="wallet-bal ' + (b < 0 ? 'neg' : '') + '">' + mask(fmtShort(b) + '₫') + '</div></div>';
     }).join('');
     return '<div class="section-title">' + t('wallets') + '</div>' +
       '<div class="wallet-strip">' + cards + '</div>';
@@ -496,11 +504,12 @@
       '</div>' +
 
       '<div class="hero">' +
-      '<div class="hero-label">' + icon('wallet') + ' ' + t('balance') + '</div>' +
-      '<div class="hero-balance">' + fmtVND(bal) + '</div>' +
+      '<div class="hero-label">' + icon('wallet') + ' ' + t('balance') +
+      '<button id="eyeToggle" class="eye-btn" title="' + (hideAmounts ? t('showBalance') : t('hideBalance')) + '">' + icon(hideAmounts ? 'eyeOff' : 'eye') + '</button></div>' +
+      '<div class="hero-balance">' + mask(fmtVND(bal)) + '</div>' +
       '<div class="hero-chips">' +
-      '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + fmtShort(mt.income) + '₫</b></div>' +
-      '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + fmtShort(mt.expense) + '₫</b></div>' +
+      '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + mask(fmtShort(mt.income) + '₫') + '</b></div>' +
+      '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + mask(fmtShort(mt.expense) + '₫') + '</b></div>' +
       '</div></div>' +
 
       '<div class="tiles">' +
@@ -954,6 +963,13 @@
     document.querySelectorAll('.tx-actions .icon-btn').forEach((b) => b.addEventListener('click', () => { b.dataset.act === 'del' ? deleteTx(b.dataset.id) : openEdit(b.dataset.id); }));
     // goto links
     document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => { currentTab = b.dataset.goto; render(); }));
+    // privacy: toggle balance visibility (eye icon on the hero)
+    const eye = document.getElementById('eyeToggle');
+    if (eye) eye.addEventListener('click', () => {
+      hideAmounts = !hideAmounts;
+      try { localStorage.setItem('hideAmounts', hideAmounts ? '1' : '0'); } catch (e) { /* ignore */ }
+      render();
+    });
     // manual refresh (Overview): pull the latest data without reloading the page
     const rf = document.getElementById('refreshBtn');
     if (rf) rf.addEventListener('click', async () => {
