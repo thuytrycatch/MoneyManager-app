@@ -1,5 +1,5 @@
 /* =====================================================================
- *  charts.js — Biểu đồ Chart.js (donut, cột thu/chi, đường, sparkline)
+ *  charts.js — Chart.js charts (donut, income/expense bars, line, sparkline)
  * ===================================================================== */
 (function () {
   'use strict';
@@ -69,7 +69,7 @@
     return total;
   }
 
-  /* Cột nhiều dataset (thu/chi) */
+  /* Multi-dataset bars (income/expense) */
   function bars(canvasId, labels, datasets) {
     const ctx = document.getElementById(canvasId); if (!ctx) return;
     destroy(canvasId); const c = colors();
@@ -90,7 +90,7 @@
     });
   }
 
-  /* Đường xu hướng */
+  /* Trend line */
   function line(canvasId, labels, data, color) {
     const ctx = document.getElementById(canvasId); if (!ctx) return;
     destroy(canvasId); const c = colors();
@@ -108,7 +108,7 @@
     });
   }
 
-  /* Sparkline nhỏ (7 ngày) */
+  /* Small sparkline (7 days) */
   function sparkline(canvasId, data, color) {
     const ctx = document.getElementById(canvasId); if (!ctx) return;
     destroy(canvasId);

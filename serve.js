@@ -1,4 +1,4 @@
-// Static server tối giản để chạy thử app cục bộ.
+// Minimal static server for testing the app locally.
 //   node serve.js   →   http://localhost:8080
 const http = require('http');
 const fs = require('fs');

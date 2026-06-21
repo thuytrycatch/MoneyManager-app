@@ -1,19 +1,19 @@
 /* =====================================================================
- *  store.js — Lớp dữ liệu Supabase: Auth + Hộ gia đình + Giao dịch + Ngân sách
+ *  store.js — Supabase data layer: Auth + Household + Transactions + Budgets
  * ---------------------------------------------------------------------
- *  Thay cho github.js cũ. Dữ liệu lưu trong PostgreSQL của Supabase, bảo vệ
- *  bằng Row Level Security (mỗi hộ chỉ thấy dữ liệu của mình — xem
- *  supabase-schema.sql).
+ *  Replaces the old github.js. Data is stored in Supabase's PostgreSQL,
+ *  protected by Row Level Security (each household only sees its own data —
+ *  see supabase-schema.sql).
  *
  *  API (window.Store):
- *    isConfigured()                       - đã có URL + anon key chưa
- *    signUp/signIn/signOut                - xác thực email/mật khẩu
- *    getUser()                            - user đang đăng nhập (hoặc null)
+ *    isConfigured()                       - whether URL + anon key are set
+ *    signUp/signIn/signOut                - email/password authentication
+ *    getUser()                            - currently logged-in user (or null)
  *    loadData()                           - {household, budgets, transactions}
  *    addTransaction / updateTransaction / deleteTransaction
- *    saveBudgets(obj)                     - upsert ngân sách
+ *    saveBudgets(obj)                     - upsert budgets
  *    getHousehold() / renameHousehold / joinHousehold(code)
- *    getCachedData()                      - dữ liệu cache (hiển thị khi offline)
+ *    getCachedData()                      - cached data (shown when offline)
  * ===================================================================== */
 
 (function () {
@@ -32,7 +32,7 @@
   let client = null;
   let household = null; // { id, name }
 
-  /* ---------------- Cấu hình & client ---------------- */
+  /* ---------------- Configuration & client ---------------- */
   function cfg() { return window.CONFIG || {}; }
 
   function isConfigured() {
@@ -40,11 +40,11 @@
     return !!(c.SUPABASE_URL && c.SUPABASE_ANON_KEY);
   }
 
-  // Chuẩn hóa URL: bỏ khoảng trắng, bỏ dấu "/" thừa, bỏ phần "/rest/v1" nếu dán nhầm.
+  // Normalize the URL: trim whitespace, strip trailing "/", drop a "/rest/v1" suffix if pasted by mistake.
   function normalizeUrl(raw) {
     let u = (raw || '').trim();
-    u = u.replace(/\/+$/, '');           // bỏ dấu / ở cuối
-    u = u.replace(/\/rest\/v1$/i, '');   // lỡ dán kèm /rest/v1
+    u = u.replace(/\/+$/, '');           // strip trailing /
+    u = u.replace(/\/rest\/v1$/i, '');   // in case /rest/v1 was pasted along with it
     return u;
   }
 
@@ -60,7 +60,7 @@
     return client;
   }
 
-  /* ---------------- IndexedDB cache (hiển thị offline) ---------------- */
+  /* ---------------- IndexedDB cache (offline display) ---------------- */
   const DB_NAME = 'chitieuviet';
   const STORE = 'kv';
 
@@ -117,12 +117,12 @@
     household = null;
   }
 
-  /* ---------------- Hộ gia đình ---------------- */
+  /* ---------------- Household ---------------- */
   const ACTIVE_KEY = 'mm_active_household';
   function getActiveId() { try { return localStorage.getItem(ACTIVE_KEY) || ''; } catch (e) { return ''; } }
   function setActiveId(id) { try { localStorage.setItem(ACTIVE_KEY, id || ''); } catch (e) { /* ignore */ } }
 
-  // Trả về TẤT CẢ các hộ mà người dùng tham gia: [{id, name, createdBy}]
+  // Returns ALL households the user belongs to: [{id, name, createdBy}]
   async function listHouseholds() {
     const user = await getUser();
     if (!user) return [];
@@ -141,14 +141,14 @@
     const sb = getClient();
     const list = await listHouseholds();
     if (list.length) {
-      // Ưu tiên hộ đang chọn (lưu ở localStorage) nếu vẫn còn là thành viên
+      // Prefer the currently selected household (saved in localStorage) if still a member
       const active = getActiveId();
       const found = list.find((h) => h.id === active);
       household = found || list[0];
       setActiveId(household.id);
       return household;
     }
-    // Chưa có → tạo hộ mới + thêm chính mình làm thành viên
+    // None yet → create a new household + add self as a member
     const baseName = user.email ? user.email.split('@')[0] : 'tôi';
     const { data: h, error: e1 } = await sb
       .from('households')
@@ -162,8 +162,8 @@
     if (e2) throw new Error(e2.message);
     household = { id: h.id, name: h.name, createdBy: h.created_by };
     setActiveId(household.id);
-    // Seed ngân sách mặc định
-    try { await saveBudgetsInternal(h.id, DEFAULT_BUDGETS); } catch (e) { /* không chặn */ }
+    // Seed default budgets
+    try { await saveBudgetsInternal(h.id, DEFAULT_BUDGETS); } catch (e) { /* non-blocking */ }
     return household;
   }
 
@@ -173,14 +173,14 @@
     const sb = getClient();
     const id = (code || '').trim();
     if (!id) throw new Error('Vui lòng nhập mã hộ.');
-    // Tự thêm mình vào hộ (FK sẽ chặn nếu mã hộ không tồn tại)
+    // Add self to the household (the FK constraint blocks it if the household code does not exist)
     const { error } = await sb
       .from('household_members')
       .insert({ household_id: id, user_id: user.id, role: 'member', email: user.email });
     if (error && !/duplicate key/i.test(error.message)) {
       throw new Error('Mã hộ không hợp lệ hoặc không tồn tại.');
     }
-    // Giờ đã là thành viên → đọc được tên hộ
+    // Now a member → can read the household name
     const { data: h, error: e2 } = await sb
       .from('households').select('id,name,created_by').eq('id', id).single();
     if (e2 || !h) throw new Error('Không đọc được thông tin hộ.');
@@ -189,7 +189,7 @@
     return household;
   }
 
-  /* ---------------- Thành viên ---------------- */
+  /* ---------------- Members ---------------- */
   async function listMembers() {
     if (!household) return [];
     const sb = getClient();
@@ -213,7 +213,7 @@
     if (error) throw new Error(error.message);
   }
 
-  // Chuyển sang hộ khác (cho người ở nhiều hộ)
+  // Switch to another household (for users who belong to multiple)
   async function switchHousehold(id) {
     const list = await listHouseholds();
     const found = list.find((h) => h.id === id);
@@ -234,7 +234,7 @@
 
   function getHousehold() { return household; }
 
-  /* ---------------- Map row DB → tx ứng dụng ---------------- */
+  /* ---------------- Map DB row → app tx ---------------- */
   function mapRow(r) {
     return {
       id: r.id,
@@ -249,7 +249,7 @@
     };
   }
 
-  /* ---------------- Đọc toàn bộ dữ liệu của hộ ---------------- */
+  /* ---------------- Read all of the household's data ---------------- */
   async function loadData() {
     const user = await getUser();
     if (!user) throw new Error('Chưa đăng nhập.');
@@ -257,7 +257,7 @@
     const sb = getClient();
     const hid = household.id;
 
-    // Tự điền email cho dòng thành viên của mình (nếu còn trống) để hiển thị danh sách thành viên.
+    // Auto-fill the email for our own member row (if still empty) so the member list can be displayed.
     if (user.email) {
       sb.from('household_members').update({ email: user.email })
         .eq('user_id', user.id).is('email', null).then(() => {}, () => {});
@@ -282,7 +282,7 @@
     return data;
   }
 
-  /* ---------------- CRUD giao dịch ---------------- */
+  /* ---------------- Transaction CRUD ---------------- */
   async function addTransaction(tx) {
     if (!household) throw new Error('Chưa có hộ.');
     const user = await getUser();
@@ -320,7 +320,7 @@
     if (error) throw new Error(error.message);
   }
 
-  /* ---------------- Ngân sách ---------------- */
+  /* ---------------- Budgets ---------------- */
   async function saveBudgetsInternal(hid, obj) {
     const sb = getClient();
     const rows = Object.keys(obj).map((c) => ({
@@ -335,7 +335,7 @@
     return saveBudgetsInternal(household.id, obj);
   }
 
-  /* ---------------- Đồng bộ thời gian thực (Realtime) ---------------- */
+  /* ---------------- Realtime sync ---------------- */
   let channel = null;
   function subscribeChanges(onChange) {
     if (!household) return;
@@ -352,7 +352,7 @@
     if (channel) { try { getClient().removeChannel(channel); } catch (e) { /* ignore */ } channel = null; }
   }
 
-  /* ---------------- Xuất global ---------------- */
+  /* ---------------- Global export ---------------- */
   window.Store = {
     isConfigured,
     getClient,

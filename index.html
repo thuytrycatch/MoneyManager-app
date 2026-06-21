@@ -28,7 +28,7 @@
     <div class="loading-text">Đang khởi động…</div>
   </div>
 
-  <!-- Màn hình kết nối / đăng nhập (do app.js render) -->
+  <!-- Connect / login screen (rendered by app.js) -->
   <div id="authScreen" class="auth-screen hidden"></div>
 
   <div id="appShell" class="app-shell hidden">
@@ -47,8 +47,8 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- config.js (tùy chọn, dùng cho chạy cục bộ). Trên GitHub Pages không có file
-       này — app lấy cấu hình từ màn hình "Kết nối Supabase" (localStorage). -->
+  <!-- config.js (optional, used for local runs). On GitHub Pages this file is
+       absent — the app reads config from the "Kết nối Supabase" screen (localStorage). -->
   <script src="config.js" onerror="window.__noConfig=1"></script>
   <script src="js/parser.js"></script>
   <script src="js/store.js"></script>

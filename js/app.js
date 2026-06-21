@@ -1,6 +1,6 @@
 /* =====================================================================
- *  app.js — Quản lý Thu Chi Gia Đình
- *  Tổng quan · Báo cáo (Tuần/Tháng/Năm) · Giao dịch · Cài đặt
+ *  app.js — Family Income & Expense Manager
+ *  Overview · Reports (Week/Month/Year) · Transactions · Settings
  * ===================================================================== */
 (function () {
   'use strict';
@@ -152,8 +152,8 @@
   let authIsSignup = false;
   let currentUserEmail = '';
   let currentUserId = '';
-  let myHouseholds = []; // [{id, name}] các hộ người dùng tham gia
-  let householdMembers = []; // [{userId, email, role}] thành viên hộ đang xem
+  let myHouseholds = []; // [{id, name}] households the user belongs to
+  let householdMembers = []; // [{userId, email, role}] members of the household being viewed
   let currentTab = 'overview';
   const CATS = window.Parser.CATEGORIES;
   // Filters (transactions tab)
@@ -315,7 +315,7 @@
     const lastWk = new Date(now); lastWk.setDate(lastWk.getDate() - 7);
     const lastWkExp = totals(inRange(startOfWeek(lastWk), endOfWeek(lastWk))).expense;
     const diffPct = lastWkExp ? Math.round((wkExp - lastWkExp) / lastWkExp * 100) : (wkExp ? 100 : 0);
-    // sparkline 7 ngày
+    // 7-day sparkline
     const spark = [];
     for (let i = 6; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); spark.push(totals(DATA.transactions.filter((x) => x.date === ymd(d) && x.type === 'expense')).expense); }
     setTimeout(() => window.Charts.sparkline('weekSpark', spark, getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444'), 0);
@@ -554,7 +554,7 @@
       '<div class="budget-edit">' + budgetInputs + '</div>' +
       '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>' +
 
-      // Hộ gia đình
+      // Household
       '<div class="section-title">' + t('household') + '</div>' +
       (myHouseholds.length > 1 ?
         '<div class="conn-row" style="margin-bottom:12px"><label>' + t('switchHousehold') + '</label><select id="switchHh">' +
@@ -571,27 +571,27 @@
       '<input id="joinCode" type="text" placeholder="' + t('joinCodePh') + '"/></div>' +
       '<button id="joinHhBtn" class="ghost-btn">' + icon('check') + ' ' + t('join') + '</button>' +
 
-      // Thành viên
+      // Members
       membersHtml() +
 
-      // Ngôn ngữ / giao diện
+      // Language / theme
       '<div class="section-title">' + t('language') + ' · ' + t('theme') + '</div>' +
       '<div class="settings-row"><div class="seg">' +
       '<button class="seg-btn ' + (lang === 'vi' ? 'active' : '') + '" data-lang="vi">🇻🇳 VI</button>' +
       '<button class="seg-btn ' + (lang === 'en' ? 'active' : '') + '" data-lang="en">🇬🇧 EN</button></div>' +
       '<button id="themeToggle2" class="ghost-btn">' + icon('moon') + ' ' + t('theme') + '</button></div>' +
 
-      // Tài khoản
+      // Account
       '<div class="section-title">' + t('account') + '</div>' +
       '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + '</div>' +
       '<button id="signOutBtn" class="ghost-btn">' + icon('right') + ' ' + t('signOut') + '</button>' +
 
-      // Claude API key (tùy chọn)
+      // Claude API key (optional)
       '<div class="section-title">' + t('anthropicKey') + '</div>' +
       '<div class="conn-form">' + f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
       '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>' +
 
-      // Cấu hình Supabase
+      // Supabase configuration
       '<div class="section-title">' + t('connTitle') + '</div>' +
       '<div class="conn-form">' +
       f('cfgSupaUrl', t('supaUrl'), C.SUPABASE_URL) +
@@ -701,13 +701,13 @@
     // lang
     document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { lang = b.dataset.lang; localStorage.setItem('lang', lang); document.getElementById('langToggle').textContent = lang.toUpperCase(); render(); }));
     const tt2 = document.getElementById('themeToggle2'); if (tt2) tt2.addEventListener('click', toggleTheme);
-    // Lưu Anthropic key (parser)
+    // Save Anthropic key (parser)
     const sc = document.getElementById('saveConfigBtn');
     if (sc) sc.addEventListener('click', () => {
       saveSettings({ ANTHROPIC_API_KEY: document.getElementById('cfgAnthropic').value.trim() });
       toast(t('save') + ' ✓', 'success');
     });
-    // Đổi cấu hình Supabase (URL/key) → cần tải lại trang để áp dụng
+    // Change Supabase config (URL/key) -> page reload required to apply
     const sca = document.getElementById('saveSupaBtn');
     if (sca) sca.addEventListener('click', () => {
       saveSettings({
@@ -717,7 +717,7 @@
       toast(t('connSaved'), 'info');
       setTimeout(() => location.reload(), 600);
     });
-    // Đổi tên hộ
+    // Rename household
     const rh = document.getElementById('renameHhBtn');
     if (rh) rh.addEventListener('click', async () => {
       const name = document.getElementById('hhName').value.trim();
@@ -725,14 +725,14 @@
       try { await window.Store.renameHousehold(name); if (DATA.household) DATA.household.name = name; toast(t('renameOk'), 'success'); render(); }
       catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     });
-    // Sao chép mã mời
+    // Copy invite code
     const cc = document.getElementById('copyCodeBtn');
     if (cc) cc.addEventListener('click', () => {
       const code = DATA.household ? DATA.household.id : '';
       if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => toast(t('copied'), 'success'));
       else toast(code, 'info');
     });
-    // Tham gia hộ khác
+    // Join another household
     const jb = document.getElementById('joinHhBtn');
     if (jb) jb.addEventListener('click', async () => {
       const code = document.getElementById('joinCode').value.trim();
@@ -743,7 +743,7 @@
         await enterApp();
       } catch (err) { toast(err.message, 'error'); }
     });
-    // Xóa thành viên (chủ hộ xóa người khác)
+    // Remove member (owner removes another member)
     document.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', async () => {
       if (!confirm(t('confirmRemoveMember'))) return;
       try {
@@ -752,7 +752,7 @@
         toast(t('memberRemoved'), 'success'); render();
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     }));
-    // Rời hộ (tự xóa mình)
+    // Leave household (remove yourself)
     const lv = document.querySelector('[data-leave]');
     if (lv) lv.addEventListener('click', async () => {
       if (!confirm(t('confirmLeave'))) return;
@@ -763,13 +763,13 @@
         await enterApp();
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     });
-    // Chuyển hộ (khi ở nhiều hộ)
+    // Switch household (when in multiple households)
     const hs = document.getElementById('switchHh');
     if (hs) hs.addEventListener('change', async () => {
       try { await window.Store.switchHousehold(hs.value); await enterApp(); }
       catch (err) { toast(err.message, 'error'); }
     });
-    // Đăng xuất
+    // Sign out
     const so = document.getElementById('signOutBtn');
     if (so) so.addEventListener('click', async () => {
       try { window.Store.unsubscribeChanges(); } catch (e) { /* ignore */ }
@@ -901,7 +901,7 @@
     startAutoSync();
   }
 
-  /* ============== Auto-sync (realtime + khi quay lại app) ============== */
+  /* ============== Auto-sync (realtime + when returning to the app) ============== */
   let refreshTimer = null;
   let autoSyncWired = false;
   async function refreshData(silent) {
@@ -912,18 +912,18 @@
       if (!DATA.transactions) DATA.transactions = [];
       render();
       if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
-    } catch (e) { /* giữ dữ liệu hiện có */ }
+    } catch (e) { /* keep existing data */ }
   }
   function scheduleRefresh() {
     if (refreshTimer) clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => refreshData(true), 400); // gộp nhiều thay đổi liên tiếp
+    refreshTimer = setTimeout(() => refreshData(true), 400); // batch several consecutive changes
   }
   function startAutoSync() {
-    // Realtime: có người trong hộ thêm/sửa/xóa → tự cập nhật
+    // Realtime: when someone in the household adds/edits/deletes -> auto-update
     try { window.Store.subscribeChanges(scheduleRefresh); } catch (e) { /* ignore */ }
     if (autoSyncWired) return;
     autoSyncWired = true;
-    // Dự phòng: tải lại khi quay lại tab / có mạng lại
+    // Fallback: reload when returning to the tab / when back online
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshData(true); });
     window.addEventListener('focus', () => refreshData(true));
     window.addEventListener('online', () => refreshData(true));

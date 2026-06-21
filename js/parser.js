@@ -1,9 +1,9 @@
 /* =====================================================================
- *  parser.js — Phân tích câu nhập tiếng Việt thành giao dịch
+ *  parser.js — Parse Vietnamese input sentences into transactions
  * ---------------------------------------------------------------------
- *  - Ưu tiên dùng Claude API (model claude-haiku-4-5) nếu có API key.
- *  - Nếu không có key hoặc gọi lỗi → fallback sang regex thuần.
- *  Kết quả luôn có dạng:
+ *  - Prefers the Claude API (model claude-haiku-4-5) when an API key is set.
+ *  - If there is no key or the call fails → fall back to plain regex.
+ *  The result always has the shape:
  *    { amount: number, type: 'expense'|'income', category: string, note: string }
  * ===================================================================== */
 
@@ -15,7 +15,7 @@
     'Sức khỏe', 'Hóa đơn', 'Thu nhập', 'Khác',
   ];
 
-  // Từ khóa gợi ý cho fallback regex
+  // Hint keywords for the regex fallback
   const KEYWORDS = {
     'Ăn uống': ['ăn', 'uống', 'cơm', 'phở', 'cafe', 'cà phê', 'trà', 'bún', 'bánh', 'nhậu', 'beer', 'bia', 'lẩu', 'gà', 'pizza', 'trà sữa'],
     'Di chuyển': ['xăng', 'xe', 'grab', 'taxi', 'bus', 'xe ôm', 'parking', 'đỗ xe', 'gửi xe', 'vé', 'tàu', 'máy bay'],
@@ -39,43 +39,43 @@
     'Chỉ trả về JSON, không giải thích thêm.';
 
   /* ---------------------------------------------------------------
-   *  Bộ phân tích số tiền (dùng cho fallback)
+   *  Amount parser (used for the fallback)
    * --------------------------------------------------------------- */
   function parseAmount(raw) {
     let text = ' ' + raw.toLowerCase() + ' ';
 
-    // "X triệu rưỡi" / "X tr rưỡi" → X.5 triệu
+    // "X triệu rưỡi" / "X tr rưỡi" (X and a half million) → X.5 million
     text = text.replace(/(\d+(?:[.,]\d+)?)\s*(tr(?:iệu)?|củ)\s*rưỡi/g, (_, n) => {
       return (parseFloat(n.replace(',', '.')) + 0.5) + 'tr';
     });
-    // "X nghìn rưỡi" → X.5 nghìn (hiếm) — bỏ qua, ít gặp
+    // "X nghìn rưỡi" → X.5 thousand (rare) — skipped, uncommon
 
-    // "XtrY" hoặc "X triệu Y" (Y là số trăm nghìn): 1tr2 = 1.2tr, 1 triệu 5 = 1.5tr
+    // "XtrY" or "X triệu Y" (Y is the hundred-thousands digit): 1tr2 = 1.2tr, 1 triệu 5 = 1.5tr
     text = text.replace(/(\d+)\s*(tr(?:iệu)?|củ)\s*(\d)\b/g, (_, a, _u, b) => {
       return (parseFloat(a) + parseFloat(b) / 10) + 'tr';
     });
 
-    // triệu/tr/củ
+    // million (triệu/tr/củ)
     let m = text.match(/(\d+(?:[.,]\d+)?)\s*(tr(?:iệu)?|củ)\b/);
     if (m) return Math.round(parseFloat(m[1].replace(',', '.')) * 1000000);
 
-    // nghìn/ngàn/k
+    // thousand (nghìn/ngàn/k)
     m = text.match(/(\d+(?:[.,]\d+)?)\s*(nghìn|ngàn|k)\b/);
     if (m) return Math.round(parseFloat(m[1].replace(',', '.')) * 1000);
 
-    // số có dấu phân cách hàng nghìn: 35.000 / 35,000 / 1.200.000
+    // number with thousands separators: 35.000 / 35,000 / 1.200.000
     m = text.match(/(\d{1,3}(?:[.,]\d{3})+)/);
     if (m) return parseInt(m[1].replace(/[.,]/g, ''), 10);
 
-    // số trần (vd "50000")
+    // bare number (e.g. "50000")
     m = text.match(/(\d+)/);
     if (m) return parseInt(m[1], 10);
 
     return 0;
   }
 
-  // Khớp từ khóa: cụm nhiều từ → so khớp chuỗi con; một từ → so khớp nguyên từ
-  // (tránh lỗi "ăn" lọt vào "xăng", "thu" lọt vào "thuốc"/"thuê").
+  // Keyword matching: multi-word phrase → substring match; single word → whole-word match
+  // (avoids "ăn" leaking into "xăng", or "thu" leaking into "thuốc"/"thuê").
   function tokenize(text) {
     return text.toLowerCase().split(/[\s,.;:!?()/-]+/).filter(Boolean);
   }
@@ -101,7 +101,7 @@
   }
 
   function cleanNote(raw) {
-    // Bỏ phần số tiền và đơn vị để lấy ghi chú gọn
+    // Strip the amount and unit to get a concise note
     let note = raw
       .replace(/(\d+(?:[.,]\d+)?)\s*(tr(?:iệu)?|củ|nghìn|ngàn|k)\s*(\d)?\s*(rưỡi)?/gi, '')
       .replace(/\d{1,3}([.,]\d{3})+/g, '')
@@ -120,7 +120,7 @@
   }
 
   /* ---------------------------------------------------------------
-   *  Gọi Claude API (chạy trực tiếp từ trình duyệt)
+   *  Call the Claude API (runs directly from the browser)
    * --------------------------------------------------------------- */
   async function parseWithClaude(raw, apiKey) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -129,7 +129,7 @@
         'content-type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
-        // Bắt buộc khi gọi API trực tiếp từ trình duyệt (bỏ qua chặn CORS)
+        // Required when calling the API directly from the browser (bypasses the CORS block)
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
@@ -149,12 +149,12 @@
     const textBlock = (data.content || []).find((b) => b.type === 'text');
     const text = textBlock ? textBlock.text : '';
 
-    // Bóc tách JSON (phòng trường hợp model bọc trong ```json)
+    // Extract the JSON (in case the model wraps it in ```json)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Không tìm thấy JSON trong phản hồi Claude');
     const parsed = JSON.parse(jsonMatch[0]);
 
-    // Chuẩn hóa
+    // Normalize
     const amount = Math.round(Number(parsed.amount) || 0);
     const type = parsed.type === 'income' ? 'income' : 'expense';
     let category = String(parsed.category || '').trim();
@@ -166,14 +166,14 @@
   }
 
   /* ---------------------------------------------------------------
-   *  Hàm chính: tự chọn Claude hoặc regex
+   *  Main function: automatically picks Claude or regex
    * --------------------------------------------------------------- */
   async function parseTransaction(raw) {
     const apiKey = (window.CONFIG && window.CONFIG.ANTHROPIC_API_KEY) || '';
     if (apiKey) {
       try {
         const result = await parseWithClaude(raw, apiKey);
-        // Nếu Claude trả về amount 0, thử regex cứu vớt
+        // If Claude returns amount 0, try regex as a rescue
         if (!result.amount) {
           const fb = parseWithRegex(raw);
           if (fb.amount) result.amount = fb.amount;
@@ -187,7 +187,7 @@
     return { ...parseWithRegex(raw), source: 'regex' };
   }
 
-  // Xuất ra global
+  // Export to global
   window.Parser = {
     parseTransaction,
     parseWithRegex,

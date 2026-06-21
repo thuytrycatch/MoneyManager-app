@@ -1,25 +1,25 @@
 -- =====================================================================
---  supabase-schema.sql — Lược đồ CSDL cho "Sổ Thu Chi" (nhiều hộ gia đình)
+--  supabase-schema.sql — Database schema for "Sổ Thu Chi" (multiple households)
 -- ---------------------------------------------------------------------
---  CÁCH DÙNG:
---    1. Vào Supabase → dự án của bạn → SQL Editor → New query.
---    2. Dán TOÀN BỘ nội dung file này vào, bấm RUN.
---    3. Chạy 1 lần là đủ. (Các lệnh đều an toàn khi chạy lại.)
+--  HOW TO USE:
+--    1. Go to Supabase → your project → SQL Editor → New query.
+--    2. Paste the ENTIRE contents of this file in, then click RUN.
+--    3. Running it once is enough. (All statements are safe to re-run.)
 --
---  MÔ HÌNH:
---    households          : mỗi hộ gia đình
---    household_members   : ai thuộc hộ nào (1 user có thể ở nhiều hộ)
---    transactions        : giao dịch, gắn household_id
---    budgets             : ngân sách theo danh mục, gắn household_id
+--  MODEL:
+--    households          : each household
+--    household_members   : who belongs to which household (1 user can be in multiple households)
+--    transactions        : transactions, tied to household_id
+--    budgets             : budgets by category, tied to household_id
 --
---  BẢO MẬT (RLS): mỗi người chỉ đọc/ghi được dữ liệu của hộ mình tham gia.
+--  SECURITY (RLS): each person can only read/write data for households they belong to.
 -- =====================================================================
 
--- pgcrypto cho gen_random_uuid() (Supabase thường bật sẵn)
+-- pgcrypto for gen_random_uuid() (Supabase usually has it enabled by default)
 create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------
--- Bảng
+-- Tables
 -- ---------------------------------------------------------------------
 create table if not exists public.households (
   id          uuid primary key default gen_random_uuid(),
@@ -37,7 +37,7 @@ create table if not exists public.household_members (
   primary key (household_id, user_id)
 );
 
--- (nếu bảng đã tạo từ trước, thêm cột email)
+-- (if the table was created previously, add the email column)
 alter table public.household_members add column if not exists email text;
 
 create table if not exists public.transactions (
@@ -65,8 +65,8 @@ create index if not exists idx_tx_household_date on public.transactions (househo
 create index if not exists idx_members_user on public.household_members (user_id);
 
 -- ---------------------------------------------------------------------
--- Hàm trợ giúp: danh sách hộ mà người dùng hiện tại tham gia.
--- SECURITY DEFINER để không bị đệ quy khi viết policy cho household_members.
+-- Helper function: list of households the current user belongs to.
+-- SECURITY DEFINER to avoid recursion when writing the policy for household_members.
 -- ---------------------------------------------------------------------
 create or replace function public.user_households()
 returns setof uuid
@@ -79,7 +79,7 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------
--- Bật RLS
+-- Enable RLS
 -- ---------------------------------------------------------------------
 alter table public.households        enable row level security;
 alter table public.household_members enable row level security;
@@ -87,7 +87,7 @@ alter table public.transactions      enable row level security;
 alter table public.budgets           enable row level security;
 
 -- ---------------------------------------------------------------------
--- Policies (drop trước để chạy lại không lỗi)
+-- Policies (drop first so re-running doesn't error)
 -- ---------------------------------------------------------------------
 
 -- households -----------------------------------------------------------
@@ -113,18 +113,18 @@ drop policy if exists members_select on public.household_members;
 create policy members_select on public.household_members for select
   using (user_id = auth.uid() or household_id in (select public.user_households()));
 
--- Mỗi người chỉ tự thêm CHÍNH MÌNH vào hộ (dùng để tham gia bằng mã hộ).
+-- Each person can only add THEMSELVES to a household (used for joining via a household code).
 drop policy if exists members_insert on public.household_members;
 create policy members_insert on public.household_members for insert
   with check (user_id = auth.uid());
 
--- Tự cập nhật dòng của chính mình (để điền email hiển thị).
+-- Update one's own row (to fill in the display email).
 drop policy if exists members_update on public.household_members;
 create policy members_update on public.household_members for update
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
--- Xóa thành viên: tự rời hộ, HOẶC chủ hộ (created_by) xóa thành viên khác.
+-- Delete a member: leave the household yourself, OR the household owner (created_by) removes another member.
 drop policy if exists members_delete on public.household_members;
 create policy members_delete on public.household_members for delete
   using (
@@ -145,8 +145,8 @@ create policy budgets_all on public.budgets for all
   with check (household_id in (select public.user_households()));
 
 -- ---------------------------------------------------------------------
--- Realtime: cho phép app nhận thay đổi tức thời (đồng bộ giữa các thành viên).
--- An toàn khi chạy lại (bỏ qua nếu bảng đã có trong publication).
+-- Realtime: allow the app to receive instant changes (synced across members).
+-- Safe to re-run (skips if the table is already in the publication).
 -- ---------------------------------------------------------------------
 do $$
 begin

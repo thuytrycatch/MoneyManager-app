@@ -1,24 +1,24 @@
 /* =====================================================================
- *  config.example.js — MẪU cấu hình (Supabase)
+ *  config.example.js — Configuration TEMPLATE (Supabase)
  * ---------------------------------------------------------------------
- *  Bạn KHÔNG bắt buộc dùng file này. Trên bản chạy GitHub Pages, hãy nhập
- *  thông tin ngay trên màn hình "Kết nối Supabase" của app (lưu vào
- *  localStorage của trình duyệt).
+ *  You are NOT required to use this file. On the GitHub Pages build, enter
+ *  your information directly on the app's "Kết nối Supabase" (Connect to
+ *  Supabase) screen (saved to the browser's localStorage).
  *
- *  Nếu muốn chạy CỤC BỘ tiện hơn: copy file này thành config.js rồi điền.
- *  (config.js đã nằm trong .gitignore nên không bị đẩy lên GitHub.)
+ *  If you prefer running LOCALLY: copy this file to config.js and fill it in.
+ *  (config.js is in .gitignore, so it won't be pushed to GitHub.)
  *
- *  LẤY THÔNG TIN Ở ĐÂU:
+ *  WHERE TO GET THE INFO:
  *    Supabase → Project → Settings → API
  *      - Project URL            → SUPABASE_URL
  *      - Project API keys → anon public → SUPABASE_ANON_KEY
  *
- *  ⚠️ anon key là khóa CÔNG KHAI, an toàn để đặt trong trình duyệt — dữ liệu
- *     được bảo vệ bởi Row Level Security (xem supabase-schema.sql).
+ *  ⚠️ The anon key is a PUBLIC key, safe to put in the browser — data is
+ *     protected by Row Level Security (see supabase-schema.sql).
  * ===================================================================== */
 const CONFIG = {
   SUPABASE_URL: '',          // https://xxxxxxxx.supabase.co
   SUPABASE_ANON_KEY: '',     // eyJhbGciOi... (anon public key)
-  ANTHROPIC_API_KEY: '',     // (tùy chọn) sk-ant-... để parse tiếng Việt bằng Claude
+  ANTHROPIC_API_KEY: '',     // (optional) sk-ant-... to parse Vietnamese with Claude
 };
 window.CONFIG = CONFIG;
