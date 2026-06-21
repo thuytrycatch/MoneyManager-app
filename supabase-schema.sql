@@ -76,6 +76,11 @@ create table if not exists public.accounts (
 -- Link each transaction to a wallet (null = not yet assigned). on delete set null keeps the transaction.
 alter table public.transactions add column if not exists account_id uuid references public.accounts(id) on delete set null;
 
+-- Transfers between wallets: type='transfer', account_id = source, to_account_id = destination.
+alter table public.transactions add column if not exists to_account_id uuid references public.accounts(id) on delete set null;
+alter table public.transactions drop constraint if exists transactions_type_check;
+alter table public.transactions add constraint transactions_type_check check (type in ('income','expense','transfer'));
+
 create index if not exists idx_tx_household_date on public.transactions (household_id, date desc);
 create index if not exists idx_members_user on public.household_members (user_id);
 create index if not exists idx_accounts_hh on public.accounts (household_id);

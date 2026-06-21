@@ -54,6 +54,7 @@
     globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
     bank: '<line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
     phone: '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
+    transfer: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -83,6 +84,9 @@
       totalBalance: 'Tổng số dư', walletSaved: 'Đã lưu ví', walletDeleted: 'Đã xóa ví',
       confirmDeleteWallet: 'Xóa ví này? Giao dịch cũ vẫn giữ nhưng sẽ không còn gắn ví.',
       noWallets: 'Chưa có ví nào.', unassignedWallet: 'Chưa gán ví', needWalletName: 'Nhập tên ví.',
+      transfer: 'Chuyển khoản', transferBetween: 'Chuyển tiền giữa ví', fromWallet: 'Từ ví', toWallet: 'Đến ví',
+      transferDone: 'Đã chuyển khoản', needTwoWallets: 'Cần ít nhất 2 ví để chuyển khoản.',
+      sameWallet: 'Ví nguồn và ví đích phải khác nhau.', needAmount: 'Nhập số tiền.',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
       budgetNotSet: 'Chưa thiết lập ngân sách.', noExpenseData: 'Chưa có dữ liệu chi tiêu.',
       weekLabel: 'Tuần', moPrefix: 'T', dows: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
@@ -137,6 +141,9 @@
       totalBalance: 'Total balance', walletSaved: 'Wallet saved', walletDeleted: 'Wallet deleted',
       confirmDeleteWallet: 'Delete this wallet? Past transactions are kept but will no longer be linked to a wallet.',
       noWallets: 'No wallets yet.', unassignedWallet: 'No wallet', needWalletName: 'Enter a wallet name.',
+      transfer: 'Transfer', transferBetween: 'Transfer between wallets', fromWallet: 'From wallet', toWallet: 'To wallet',
+      transferDone: 'Transfer done', needTwoWallets: 'You need at least 2 wallets to transfer.',
+      sameWallet: 'Source and destination must differ.', needAmount: 'Enter an amount.',
       allCats: 'All categories', allTypes: 'Income & expense',
       budgetNotSet: 'No budget set yet.', noExpenseData: 'No expense data yet.',
       weekLabel: 'Week', moPrefix: 'M', dows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -229,7 +236,11 @@
   function inRange(s, e) { const a = ymd(s), b = ymd(e); return DATA.transactions.filter((tx) => tx.date >= a && tx.date <= b); }
   function totals(txs) {
     let income = 0, expense = 0;
-    txs.forEach((tx) => { tx.type === 'income' ? income += tx.amount : expense += tx.amount; });
+    txs.forEach((tx) => {
+      if (tx.type === 'income') income += tx.amount;
+      else if (tx.type === 'expense') expense += tx.amount;
+      // transfers move money between wallets — neither income nor expense
+    });
     return { income, expense, net: income - expense };
   }
   function byCategory(txs) {
@@ -257,6 +268,11 @@
     const acc = accountById(id); if (!acc) return 0;
     let bal = acc.openingBalance || 0;
     DATA.transactions.forEach((tx) => {
+      if (tx.type === 'transfer') {
+        if (tx.accountId === id) bal -= tx.amount;       // money left this wallet
+        if (tx.toAccountId === id) bal += tx.amount;     // money arrived in this wallet
+        return;
+      }
       if (tx.accountId !== id) return;
       bal += tx.type === 'income' ? tx.amount : -tx.amount;
     });
@@ -376,6 +392,19 @@
       '<div class="tile-val">' + fmtShort(Math.abs(value)) + '₫</div></div>';
   }
   function txRow(tx) {
+    if (tx.type === 'transfer') {
+      const from = accountById(tx.accountId);
+      const to = accountById(tx.toAccountId);
+      const fromN = from ? from.name : t('unassignedWallet');
+      const toN = to ? to.name : t('unassignedWallet');
+      return '<div class="tx-row" data-id="' + tx.id + '">' +
+        '<div class="tx-ic transfer">' + icon('transfer') + '</div>' +
+        '<div class="tx-main"><div class="tx-note">' + esc(tx.note || t('transfer')) + '</div>' +
+        '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + '</div></div>' +
+        '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '₫</div>' +
+        '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
+        '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div></div></div>';
+    }
     const sign = tx.type === 'income' ? '+' : '−';
     return '<div class="tx-row" data-id="' + tx.id + '">' +
       '<div class="tx-ic ' + tx.type + '">' + catIcon(tx.category) + '</div>' +
@@ -659,6 +688,7 @@
       dateBar('txDateBig') +
       (accountSelect('txAccountBig') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccountBig') + '</div>' : '') +
       '<button id="addBtnBig" class="primary-btn">' + icon('plus') + ' ' + t('add') + '</button>' +
+      (activeAccounts().length >= 2 ? '<button id="transferBtn" class="ghost-btn transfer-btn">' + icon('transfer') + ' ' + t('transferBetween') + '</button>' : '') +
       '<div class="examples">' +
       ['ăn sáng 35k', 'lương 15 triệu', 'đổ xăng 80k', 'cafe 2 triệu rưỡi', 'grab 1tr2', 'tiền điện 500 nghìn', 'mua giày 800k', 'khám bệnh 250k']
         .map((ex) => '<button class="chip" data-ex="' + ex + '">' + ex + '</button>').join('') +
@@ -775,9 +805,60 @@
     );
   }
 
+  /* ============== Transfer modal ============== */
+  function openTransfer(existing) {
+    const accs = activeAccounts();
+    if (accs.length < 2) { toast(t('needTwoWallets'), 'warn'); return; }
+    const ex = existing || null;
+    const fromSel = ex ? ex.accountId : defaultAccountId();
+    const toSel = ex ? ex.toAccountId : (accs.find((a) => a.id !== fromSel) || accs[0]).id;
+    const today = ymd(new Date());
+    const opt = (a, sel) => '<option value="' + esc(a.id) + '"' + (a.id === sel ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+    const fromOpts = accs.map((a) => opt(a, fromSel)).join('');
+    const toOpts = accs.map((a) => opt(a, toSel)).join('');
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
+      '<div class="card-title">' + icon('transfer') + ' ' + t('transferBetween') + '</div>' +
+      '<label>' + t('fromWallet') + '</label><select id="tFrom">' + fromOpts + '</select>' +
+      '<label>' + t('toWallet') + '</label><select id="tTo">' + toOpts + '</select>' +
+      '<label>' + t('amount') + '</label><input id="tAmount" type="number" inputmode="numeric" value="' + (ex ? ex.amount : '') + '"/>' +
+      '<label>' + t('date') + '</label><input id="tDate" type="date" value="' + (ex ? esc(ex.date) : today) + '" max="' + today + '"/>' +
+      '<label>' + t('note') + '</label><input id="tNote" type="text" value="' + (ex ? esc(ex.note) : '') + '"/>' +
+      '<div class="modal-actions"><button class="ghost-btn" id="tCancel">' + t('cancel') + '</button>' +
+      '<button class="primary-btn" id="tSave">' + t('save') + '</button></div></div></div>';
+    document.body.appendChild(wrap.firstChild);
+    const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
+    document.getElementById('tCancel').addEventListener('click', close);
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
+    document.getElementById('tSave').addEventListener('click', async () => {
+      const from = document.getElementById('tFrom').value;
+      const to = document.getElementById('tTo').value;
+      const amount = Math.round(Number(document.getElementById('tAmount').value) || 0);
+      const date = document.getElementById('tDate').value || today;
+      const note = document.getElementById('tNote').value.trim();
+      if (!amount) { toast(t('needAmount'), 'warn'); return; }
+      if (from === to) { toast(t('sameWallet'), 'warn'); return; }
+      const time = date === today ? new Date().toTimeString().slice(0, 5) : '';
+      try {
+        if (ex) {
+          await window.Store.updateTransaction(ex.id, { amount: amount, date: date, time: time, note: note, accountId: from, toAccountId: to });
+          Object.assign(ex, { amount: amount, date: date, time: time, note: note, accountId: from, toAccountId: to });
+        } else {
+          const saved = await window.Store.addTransaction({
+            date: date, time: time, type: 'transfer', category: 'Chuyển khoản',
+            note: note, amount: amount, accountId: from, toAccountId: to, rawInput: '',
+          });
+          DATA.transactions.unshift(saved);
+        }
+        close(); toast(t('transferDone'), 'success'); render();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
+  }
+
   /* ============== Edit modal ============== */
   function openEdit(id) {
     const tx = DATA.transactions.find((x) => x.id === id); if (!tx) return;
+    if (tx.type === 'transfer') { openTransfer(tx); return; }
     const catOpts = CATS.map((c) => '<option value="' + c + '"' + (c === tx.category ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
     const wrap = document.createElement('div');
     wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
@@ -855,6 +936,9 @@
     const tib = document.getElementById('txInputBig');
     if (tib) document.getElementById('addBtnBig').addEventListener('click', () => addFromInput(tib.value, 'addBtnBig', 'txDateBig', 'txAccountBig'));
     document.querySelectorAll('.chip[data-ex]').forEach((c) => c.addEventListener('click', () => { if (tib) { tib.value = c.dataset.ex; tib.focus(); } }));
+    // transfer between wallets
+    const trBtn = document.getElementById('transferBtn');
+    if (trBtn) trBtn.addEventListener('click', () => openTransfer(null));
     // date bar: "Hôm nay" / "Hôm qua" chips set the date input; manual change clears chip highlight
     wireDateBar();
     // filters

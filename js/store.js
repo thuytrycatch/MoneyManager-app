@@ -252,6 +252,7 @@
       note: r.note || '',
       rawInput: r.raw_input || '',
       accountId: r.account_id || null,
+      toAccountId: r.to_account_id || null,
       createdAt: r.created_at,
     };
   }
@@ -338,6 +339,7 @@
       note: tx.note || null,
       raw_input: tx.rawInput || null,
       account_id: tx.accountId || null,
+      to_account_id: tx.toAccountId || null,
     };
     const { data, error } = await sb.from('transactions').insert(row).select().single();
     if (error) throw new Error(error.message);
@@ -354,6 +356,7 @@
     if ('date' in fields) patch.date = fields.date;
     if ('time' in fields) patch.time = fields.time || null;
     if ('accountId' in fields) patch.account_id = fields.accountId || null;
+    if ('toAccountId' in fields) patch.to_account_id = fields.toAccountId || null;
     const { error } = await sb.from('transactions').update(patch).eq('id', id);
     if (error) throw new Error(error.message);
   }
