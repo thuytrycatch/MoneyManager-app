@@ -55,6 +55,7 @@
     bank: '<line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
     phone: '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
     transfer: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+    refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -72,7 +73,7 @@
       income: 'Thu nhập', expense: 'Chi tiêu', balance: 'Số dư hiện tại', savings: 'Tiết kiệm', savingsRate: 'Tỷ lệ tiết kiệm',
       thisMonth: 'Tháng này', remaining: 'Còn lại', budget: 'Ngân sách', spentToday: 'Chi hôm nay', avgPerDay: 'TB mỗi ngày',
       weekReview: 'Đánh giá tuần này', vsLastWeek: 'so với tuần trước', alerts: 'Cảnh báo & kiểm soát',
-      recent: 'Giao dịch gần đây', seeAll: 'Xem tất cả', noTx: 'Chưa có giao dịch nào.',
+      recent: 'Giao dịch gần đây', seeAll: 'Xem tất cả', noTx: 'Chưa có giao dịch nào.', refresh: 'Làm mới',
       addTx: 'Thêm giao dịch', placeholder: 'ăn sáng 35k, lương 15 triệu, đổ xăng 80k…',
       week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', trend: 'Diễn biến thu chi',
       budgetProgress: 'Tiến độ ngân sách', topSpending: 'Khoản chi lớn nhất', summary: 'Tổng kết',
@@ -129,7 +130,7 @@
       income: 'Income', expense: 'Expense', balance: 'Current balance', savings: 'Savings', savingsRate: 'Savings rate',
       thisMonth: 'This month', remaining: 'Remaining', budget: 'Budget', spentToday: 'Spent today', avgPerDay: 'Avg / day',
       weekReview: 'This week review', vsLastWeek: 'vs last week', alerts: 'Alerts & control',
-      recent: 'Recent transactions', seeAll: 'See all', noTx: 'No transactions yet.',
+      recent: 'Recent transactions', seeAll: 'See all', noTx: 'No transactions yet.', refresh: 'Refresh',
       addTx: 'Add transaction', placeholder: 'breakfast 35k, salary 15 million, gas 80k…',
       week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', trend: 'Income & expense trend',
       budgetProgress: 'Budget progress', topSpending: 'Top spending', summary: 'Summary',
@@ -490,6 +491,10 @@
     const recent = DATA.transactions.slice().sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || ''))).slice(0, 5);
 
     return (
+      '<div class="overview-toolbar">' +
+      '<button id="refreshBtn" class="refresh-btn" title="' + t('refresh') + '">' + icon('refresh') + '<span>' + t('refresh') + '</span></button>' +
+      '</div>' +
+
       '<div class="hero">' +
       '<div class="hero-label">' + icon('wallet') + ' ' + t('balance') + '</div>' +
       '<div class="hero-balance">' + fmtVND(bal) + '</div>' +
@@ -949,6 +954,13 @@
     document.querySelectorAll('.tx-actions .icon-btn').forEach((b) => b.addEventListener('click', () => { b.dataset.act === 'del' ? deleteTx(b.dataset.id) : openEdit(b.dataset.id); }));
     // goto links
     document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => { currentTab = b.dataset.goto; render(); }));
+    // manual refresh (Overview): pull the latest data without reloading the page
+    const rf = document.getElementById('refreshBtn');
+    if (rf) rf.addEventListener('click', async () => {
+      rf.classList.add('spinning'); rf.disabled = true;
+      try { await refreshData(false); }
+      finally { rf.classList.remove('spinning'); rf.disabled = false; }
+    });
     // reports period + nav
     document.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => { reportPeriod = b.dataset.period; render(); }));
     document.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', () => shiftReport(parseInt(b.dataset.shift, 10))));
