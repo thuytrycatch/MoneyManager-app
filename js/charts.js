@@ -110,6 +110,42 @@
     });
   }
 
+  /* Multi-line chart (trend + forecast). datasets: [{label,data,color,dashed,fill}] */
+  function lines(canvasId, labels, datasets) {
+    const ctx = document.getElementById(canvasId); if (!ctx) return;
+    destroy(canvasId); const c = colors();
+    reg[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: datasets.map((d) => ({
+          label: d.label,
+          data: d.data,
+          borderColor: d.color,
+          backgroundColor: d.fill ? d.color + '22' : 'transparent',
+          fill: !!d.fill,
+          tension: 0.35,
+          borderDash: d.dashed ? [6, 5] : [],
+          pointRadius: d.dashed ? 3 : 2,
+          pointHoverRadius: 5,
+          borderWidth: 2,
+          spanGaps: true,
+        })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: c.text, boxWidth: 9, boxHeight: 9, usePointStyle: true, pointStyle: 'line', font: { size: 11, family: FONT } } },
+          tooltip: { callbacks: { label: (it) => it.parsed.y == null ? '' : ' ' + it.dataset.label + ': ' + fmtVND(it.parsed.y) } },
+        },
+        scales: {
+          x: { ticks: { color: c.text, font: { size: 10, family: FONT } }, grid: { display: false }, border: { display: false } },
+          y: { ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtShort(v) }, grid: { color: c.grid }, border: { display: false } },
+        },
+      },
+    });
+  }
+
   /* Small sparkline (7 days) */
   function sparkline(canvasId, data, color) {
     const ctx = document.getElementById(canvasId); if (!ctx) return;
@@ -121,5 +157,5 @@
     });
   }
 
-  window.Charts = { donut, bars, line, sparkline, fmtVND, fmtShort, PALETTE };
+  window.Charts = { donut, bars, line, lines, sparkline, fmtVND, fmtShort, PALETTE };
 })();

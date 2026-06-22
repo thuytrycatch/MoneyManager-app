@@ -81,9 +81,21 @@ alter table public.transactions add column if not exists to_account_id uuid refe
 alter table public.transactions drop constraint if exists transactions_type_check;
 alter table public.transactions add constraint transactions_type_check check (type in ('income','expense','transfer'));
 
+-- Wealth/asset reporting: classify each account as an asset or a liability, plus
+-- optional credit-card / loan cycle metadata. Safe to re-run.
+alter table public.accounts add column if not exists class text not null default 'asset';
+alter table public.accounts drop constraint if exists accounts_class_check;
+alter table public.accounts add constraint accounts_class_check check (class in ('asset','liability'));
+alter table public.accounts add column if not exists credit_limit    bigint;       -- card limit / loan principal
+alter table public.accounts add column if not exists statement_day   int;          -- cycle close day (1–31)
+alter table public.accounts add column if not exists due_day         int;          -- payment due day (1–31)
+alter table public.accounts add column if not exists min_payment_pct numeric(5,2); -- % of statement balance
+
 create index if not exists idx_tx_household_date on public.transactions (household_id, date desc);
 create index if not exists idx_members_user on public.household_members (user_id);
 create index if not exists idx_accounts_hh on public.accounts (household_id);
+-- Faster per-wallet balance/cash-flow scans for the reporting module.
+create index if not exists idx_tx_account_date on public.transactions (account_id, date);
 
 -- ---------------------------------------------------------------------
 -- Helper function: list of households the current user belongs to.

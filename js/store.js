@@ -270,7 +270,12 @@
       id: a.id,
       name: a.name,
       type: a.type || 'cash',
+      class: a.class || 'asset',
       openingBalance: Number(a.opening_balance || 0),
+      creditLimit: a.credit_limit != null ? Number(a.credit_limit) : null,
+      statementDay: a.statement_day != null ? Number(a.statement_day) : null,
+      dueDay: a.due_day != null ? Number(a.due_day) : null,
+      minPaymentPct: a.min_payment_pct != null ? Number(a.min_payment_pct) : null,
       archived: !!a.archived,
       sortOrder: a.sort_order || 0,
     };
@@ -399,7 +404,12 @@
       household_id: household.id,
       name: acc.name,
       type: acc.type || 'cash',
+      class: acc.class || 'asset',
       opening_balance: Math.round(acc.openingBalance || 0),
+      credit_limit: acc.creditLimit != null ? Math.round(acc.creditLimit) : null,
+      statement_day: acc.statementDay || null,
+      due_day: acc.dueDay || null,
+      min_payment_pct: acc.minPaymentPct != null ? acc.minPaymentPct : null,
       sort_order: acc.sortOrder || 0,
     }).select().single();
     if (error) throw new Error(error.message);
@@ -411,7 +421,12 @@
     const patch = {};
     if ('name' in fields) patch.name = fields.name;
     if ('type' in fields) patch.type = fields.type;
+    if ('class' in fields) patch.class = fields.class;
     if ('openingBalance' in fields) patch.opening_balance = Math.round(fields.openingBalance || 0);
+    if ('creditLimit' in fields) patch.credit_limit = fields.creditLimit != null ? Math.round(fields.creditLimit) : null;
+    if ('statementDay' in fields) patch.statement_day = fields.statementDay || null;
+    if ('dueDay' in fields) patch.due_day = fields.dueDay || null;
+    if ('minPaymentPct' in fields) patch.min_payment_pct = fields.minPaymentPct != null ? fields.minPaymentPct : null;
     if ('sortOrder' in fields) patch.sort_order = fields.sortOrder || 0;
     if ('archived' in fields) patch.archived = !!fields.archived;
     const { error } = await sb.from('accounts').update(patch).eq('id', id);

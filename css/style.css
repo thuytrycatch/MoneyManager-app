@@ -261,6 +261,38 @@ main { padding: 4px 16px 110px; }
 .budget-fill { height: 100%; border-radius: 6px; transition: width .4s; background: var(--income); }
 .budget-fill.warn { background: var(--warning); }
 .budget-fill.danger { background: var(--expense); }
+.budget-proj { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--warning); }
+.budget-proj .ic { width: 14px; height: 14px; }
+
+/* ---------- Trends & forecast ---------- */
+.forecast-extras { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.forecast-pill { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .35); color: var(--warning); border-radius: 12px; padding: 9px 14px; font-size: 13.5px; font-weight: 600; }
+.forecast-pill .ic { width: 16px; height: 16px; }
+.forecast-pill b { font-weight: 800; }
+
+/* ---------- Net worth (assets vs liabilities) ---------- */
+.nw-hero { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow-lg); }
+.nw-hero-label { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; opacity: .92; }
+.nw-hero-label .ic { width: 17px; height: 17px; }
+.nw-hero-val { font-size: 27px; font-weight: 800; margin-top: 6px; letter-spacing: -.4px; }
+.nw-hero-val.neg { color: #fde68a; }
+.summary-grid + .nw-group-title { margin-top: 16px; }
+.nw-group-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); margin: 14px 4px 8px; }
+.nw-list { display: flex; flex-direction: column; gap: 8px; }
+.nw-acc { display: grid; grid-template-columns: 1fr auto; align-items: center; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
+.nw-acc-main { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 14px; }
+.nw-acc-main .ic { width: 17px; height: 17px; color: var(--text-secondary); }
+.nw-acc-val { font-weight: 800; font-size: 15px; }
+.nw-acc-val.neg { color: var(--expense); }
+.nw-acc-sub { grid-column: 1 / -1; margin-top: 7px; font-size: 12px; color: var(--text-secondary); }
+
+/* ---------- Wallet editor: credit-card / loan fields ---------- */
+.wallet-credit-fields { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.wallet-credit-fields.hidden { display: none; }
+.wc-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.wc-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.wc-grid input { width: 100%; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 14px; color: var(--text-primary); }
+.wc-hint { margin-top: 8px; font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; }
 
 /* ---------- Add page ---------- */
 .add-page textarea { width: 100%; min-height: 100px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 14px; resize: vertical; box-shadow: var(--shadow); }

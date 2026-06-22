@@ -58,6 +58,8 @@
     refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
     eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
     eyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>',
+    card: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
+    scale: '<path d="M16 16l3-8 3 8c-2 1.5-4 1.5-6 0Z"/><path d="M2 16l3-8 3 8c-2 1.5-4 1.5-6 0Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -129,6 +131,18 @@
       paceFast: 'Chi nhanh hơn kế hoạch', paceOk: 'Chi tiêu trong tầm kiểm soát', overspentWeek: 'Tuần này chi nhiều hơn tuần trước',
       savedWell: 'Tuần này tiết kiệm tốt!', daysLeft: 'ngày còn lại trong tháng', biggestWeek: 'Khoản chi lớn nhất tuần',
       noAlerts: 'Mọi thứ ổn định. Tiếp tục duy trì nhé! 👍',
+      // Trends & forecast
+      trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
+      forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
+      needMoreData: 'Cần ít nhất 4 tháng dữ liệu để dự báo.', spikeMonth: 'Chi tiêu cao bất thường',
+      projectedOverspend: 'Dự kiến vượt ngân sách', perMonth: '/tháng',
+      // Net worth / assets & liabilities
+      netWorth: 'Tài sản ròng', netWorthNow: 'Hiện tại', totalAssets: 'Tổng tài sản', totalLiabilities: 'Tổng nợ',
+      assets: 'Tài sản', liabilities: 'Nợ', noAccountsNw: 'Thêm ví / tài khoản để xem tài sản ròng.',
+      typeSavings: 'Tiết kiệm', typeCredit: 'Thẻ tín dụng', typeLoan: 'Khoản vay',
+      creditLimit: 'Hạn mức', statementDay: 'Ngày sao kê', dueDay: 'Ngày đến hạn',
+      utilization: 'Đã dùng hạn mức', minPayment: 'Trả tối thiểu', dueDate: 'Đến hạn', owed: 'Đang nợ',
+      liabilityHint: 'Với thẻ tín dụng / khoản vay: nhập số dư âm nếu đang nợ (vd −4.500.000). Hạn mức và ngày sao kê/đến hạn là tùy chọn.',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -189,6 +203,18 @@
       paceFast: 'Spending faster than planned', paceOk: 'Spending under control', overspentWeek: 'Spent more than last week',
       savedWell: 'Great saving this week!', daysLeft: 'days left this month', biggestWeek: 'Biggest expense this week',
       noAlerts: 'All good. Keep it up! 👍',
+      // Trends & forecast
+      trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
+      forecastNote: '🔮 Estimate based on recent months — for reference only.',
+      needMoreData: 'Need at least 4 months of data to forecast.', spikeMonth: 'Unusual spending spike',
+      projectedOverspend: 'Projected to overspend', perMonth: '/mo',
+      // Net worth / assets & liabilities
+      netWorth: 'Net Worth', netWorthNow: 'Current', totalAssets: 'Total assets', totalLiabilities: 'Total liabilities',
+      assets: 'Assets', liabilities: 'Liabilities', noAccountsNw: 'Add a wallet / account to see your net worth.',
+      typeSavings: 'Savings', typeCredit: 'Credit card', typeLoan: 'Loan',
+      creditLimit: 'Credit limit', statementDay: 'Statement day', dueDay: 'Due day',
+      utilization: 'Utilization', minPayment: 'Min. payment', dueDate: 'Due', owed: 'Owed',
+      liabilityHint: 'For credit cards / loans: enter a negative balance if you owe (e.g. −4,500,000). Limit and statement/due days are optional.',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -265,15 +291,22 @@
   function totalBudget() { return Object.values(DATA.budgets).reduce((a, b) => a + (b || 0), 0); }
 
   /* ============== Accounts (wallets) ============== */
-  const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'other'];
+  const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'savings', 'credit_card', 'loan', 'other'];
+  // Credit card & loan accounts are liabilities (money you owe); everything else is an asset.
+  const LIABILITY_TYPES = ['credit_card', 'loan'];
   const ACCOUNT_TYPE_META = {
     cash: { icon: 'wallet', key: 'typeCash' },
     bank: { icon: 'bank', key: 'typeBank' },
     ewallet: { icon: 'phone', key: 'typeEwallet' },
+    savings: { icon: 'piggy', key: 'typeSavings' },
+    credit_card: { icon: 'card', key: 'typeCredit' },
+    loan: { icon: 'file', key: 'typeLoan' },
     other: { icon: 'more', key: 'typeOther' },
   };
   function accountTypeIcon(type) { return icon((ACCOUNT_TYPE_META[type] || ACCOUNT_TYPE_META.other).icon); }
   function accountTypeLabel(type) { return t((ACCOUNT_TYPE_META[type] || ACCOUNT_TYPE_META.other).key); }
+  // An account's class: explicit `class` if set, else inferred from its type.
+  function accountClass(acc) { return acc.class || (LIABILITY_TYPES.includes(acc.type) ? 'liability' : 'asset'); }
   function activeAccounts() { return (DATA.accounts || []).filter((a) => !a.archived); }
   function accountById(id) { return (DATA.accounts || []).find((a) => a.id === id) || null; }
   // Balance of one wallet = opening balance + incomes − expenses recorded against it.
@@ -295,6 +328,42 @@
   function totalBalance() {
     const opening = (DATA.accounts || []).reduce((s, a) => s + (a.openingBalance || 0), 0);
     return opening + allTimeBalance();
+  }
+  // Net worth = total assets − total liabilities. Balances are kept in the "money held" frame,
+  // so a liability you owe shows up as a negative balance; amount owed = −balance.
+  function netWorth() {
+    let assets = 0, liabilities = 0;
+    activeAccounts().forEach((a) => {
+      const b = accountBalance(a.id);
+      if (accountClass(a) === 'liability') liabilities += Math.max(0, -b);
+      else assets += b;
+    });
+    return { assets: assets, liabilities: liabilities, net: assets - liabilities };
+  }
+  // Next occurrence of a 1–31 "due day" on/after `from` (clamped to each month's last day).
+  function nextDueDate(dueDay, from) {
+    if (!dueDay) return null;
+    const lastOfMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+    let y = from.getFullYear(), m = from.getMonth();
+    let d = new Date(y, m, Math.min(dueDay, lastOfMonth(y, m)));
+    if (d < new Date(from.getFullYear(), from.getMonth(), from.getDate())) {
+      m += 1; if (m > 11) { m = 0; y += 1; }
+      d = new Date(y, m, Math.min(dueDay, lastOfMonth(y, m)));
+    }
+    return d;
+  }
+  // Credit-card snapshot: amount owed, utilization, minimum payment, next due date.
+  function cardCycle(acc) {
+    const owed = Math.max(0, -accountBalance(acc.id));
+    const limit = acc.creditLimit || 0;
+    const minPct = acc.minPaymentPct != null ? acc.minPaymentPct : 5;
+    const due = nextDueDate(acc.dueDay, new Date());
+    return {
+      owed: owed,
+      utilization: limit > 0 ? Math.round(owed / limit * 100) : null,
+      minPayment: owed > 0 ? Math.ceil(owed * minPct / 100) : 0,
+      dueDate: due ? ymd(due) : null,
+    };
   }
   // Remember the last wallet used for quick entry, scoped per household.
   function lastAccountKey() { return 'mm_last_account_' + (DATA.household ? DATA.household.id : ''); }
@@ -427,17 +496,38 @@
       '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
       '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div></div></div>';
   }
-  function budgetBarsHtml(byCat, budgets) {
+  // Fraction of the anchored month already elapsed (1 for past months — they're fully done).
+  function monthElapsedFraction(anchor) {
+    const now = new Date();
+    if (anchor.getFullYear() === now.getFullYear() && anchor.getMonth() === now.getMonth()) {
+      return now.getDate() / endOfMonth(anchor).getDate();
+    }
+    return 1;
+  }
+  // Budget vs actual bars. Threshold logic: ok < 80% ≤ warning < 100% ≤ critical.
+  // When `elapsedFrac` (0–1) is given, pace-adjust to flag categories projected to overspend.
+  function budgetBarsHtml(byCat, budgets, elapsedFrac) {
     const cats = Object.keys(budgets).filter((c) => budgets[c] > 0);
     if (!cats.length) return '<div class="empty">' + t('budgetNotSet') + '</div>';
     return cats.map((cat) => {
       const limit = budgets[cat], used = byCat[cat] || 0;
       const raw = limit ? used / limit * 100 : 0, pct = Math.min(100, Math.round(raw));
-      let cls = 'ok'; if (raw >= 90) cls = 'danger'; else if (raw >= 70) cls = 'warn';
+      let cls = 'ok'; if (raw >= 100) cls = 'danger'; else if (raw >= 80) cls = 'warn';
+      // Projected overspend: extrapolate current pace to the end of the period.
+      let projBadge = '';
+      if (elapsedFrac && elapsedFrac > 0 && elapsedFrac < 1 && raw < 100) {
+        const projected = used / elapsedFrac;
+        if (projected >= limit) {
+          if (cls === 'ok') cls = 'warn';
+          projBadge = '<div class="budget-proj">' + icon('trendUp') + ' ' + t('projectedOverspend') +
+            ' · ~' + fmtShort(projected) + '₫</div>';
+        }
+      }
       return '<div class="budget-row">' +
         '<div class="budget-top"><span class="budget-cat">' + catIcon(cat) + esc(catLabel(cat)) + '</span>' +
         '<span class="budget-nums ' + (used > limit ? 'over' : '') + '">' + fmtShort(used) + ' / ' + fmtShort(limit) + '₫</span></div>' +
-        '<div class="budget-track"><div class="budget-fill ' + cls + '" style="width:' + pct + '%"></div></div></div>';
+        '<div class="budget-track"><div class="budget-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
+        projBadge + '</div>';
     }).join('');
   }
 
@@ -607,6 +697,151 @@
     }
     return { labels, inc, exp };
   }
+
+  /* ============== Trend analysis & forecast ============== */
+  // Monthly expense totals for the `months` months ending at the anchored month.
+  function monthlyExpenseSeries(months, anchor) {
+    const out = [];
+    const base = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      const ym = d.getFullYear() + '-' + pad(d.getMonth() + 1);
+      const expense = DATA.transactions
+        .filter((x) => x.type === 'expense' && x.date.slice(0, 7) === ym)
+        .reduce((a, b) => a + b.amount, 0);
+      out.push({ ym: ym, label: t('moPrefix') + (d.getMonth() + 1), expense: expense });
+    }
+    return out;
+  }
+  // Centered moving average (window must be odd, e.g. 3) — the smoothed trend line.
+  function movingAvg(vals, win) {
+    const half = Math.floor(win / 2);
+    return vals.map((_, i) => {
+      let s = 0, c = 0;
+      for (let j = Math.max(0, i - half); j <= Math.min(vals.length - 1, i + half); j++) { s += vals[j]; c++; }
+      return c ? Math.round(s / c) : 0;
+    });
+  }
+  // Flag months whose spend exceeds the trailing mean by ≥2 standard deviations (z-score).
+  function detectSpikes(series) {
+    const out = [];
+    for (let i = 0; i < series.length; i++) {
+      const window = series.slice(Math.max(0, i - 6), i).map((s) => s.expense);
+      if (window.length < 3) continue;
+      const mean = window.reduce((a, b) => a + b, 0) / window.length;
+      const sd = Math.sqrt(window.reduce((a, b) => a + (b - mean) * (b - mean), 0) / window.length);
+      if (sd > 0 && mean > 0) {
+        const z = (series[i].expense - mean) / sd;
+        // Require both a high z-score AND a meaningful (≥25%) jump, so tiny wiggles on
+        // near-flat months don't register as false spikes.
+        if (z >= 2 && series[i].expense >= mean * 1.25) {
+          out.push({ ym: series[i].ym, label: series[i].label, expense: series[i].expense, z: Math.round(z * 10) / 10 });
+        }
+      }
+    }
+    return out;
+  }
+  // Ordinary least-squares projection of the next month (needs ≥4 data points).
+  function linRegForecast(vals) {
+    const n = vals.length;
+    if (n < 4) return null;
+    let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (let i = 0; i < n; i++) { const x = i + 1, y = vals[i]; sx += x; sy += y; sxx += x * x; sxy += x * y; }
+    const denom = n * sxx - sx * sx;
+    if (!denom) return null;
+    const slope = (n * sxy - sx * sy) / denom;
+    const intercept = (sy - slope * sx) / n;
+    return Math.max(0, Math.round(slope * (n + 1) + intercept));
+  }
+  function trendsForecastHtml() {
+    const series = monthlyExpenseSeries(12, reportAnchor).filter((_, i, arr) => {
+      // drop leading all-zero months before the first real transaction so the trend isn't skewed
+      return arr.slice(0, i + 1).some((s) => s.expense > 0);
+    });
+    if (series.length < 2) return '';
+    const expenses = series.map((s) => s.expense);
+    const trend = movingAvg(expenses, 3);
+    const spikes = detectSpikes(series);
+    const forecast = linRegForecast(expenses);
+
+    const labels = series.map((s) => s.label).concat(forecast != null ? ['→ ' + t('forecastLabel')] : []);
+    const actualData = expenses.concat(forecast != null ? [null] : []);
+    const trendData2 = trend.concat(forecast != null ? [null] : []);
+    // forecast dataset: bridge from the last actual point into the projected month
+    const forecastData = forecast != null
+      ? series.map(() => null).slice(0, -1).concat([expenses[expenses.length - 1], forecast])
+      : null;
+
+    const expColor = getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444';
+    const accentColor = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#6366f1';
+    const warnColor = getComputedStyle(document.body).getPropertyValue('--warning').trim() || '#f59e0b';
+
+    setTimeout(() => {
+      const ds = [
+        { label: t('actualLabel'), data: actualData, color: expColor, fill: true },
+        { label: t('trendLabel'), data: trendData2, color: accentColor },
+      ];
+      if (forecastData) ds.push({ label: t('forecastLabel'), data: forecastData, color: warnColor, dashed: true });
+      window.Charts.lines('repTrendLine', labels, ds);
+    }, 0);
+
+    let extras = '';
+    if (forecast != null) {
+      extras += '<div class="forecast-pill">' + icon('target') + ' ' + t('forecastLabel') + ': <b>' +
+        fmtShort(forecast) + '₫</b>' + t('perMonth') + '</div>';
+    } else {
+      extras += '<div class="hint">' + t('needMoreData') + '</div>';
+    }
+    if (spikes.length) {
+      extras += spikes.map((s) => alertItem('warn', 'trendUp',
+        '<b>' + s.label + '</b>: ' + t('spikeMonth') + ' · ' + fmtShort(s.expense) + '₫')).join('');
+    }
+    if (forecast != null) extras += '<div class="hint">' + t('forecastNote') + '</div>';
+
+    return '<div class="section-title">' + t('trendForecast') + '</div>' +
+      '<div class="card"><div class="chart-box tall"><canvas id="repTrendLine"></canvas></div></div>' +
+      '<div class="forecast-extras">' + extras + '</div>';
+  }
+
+  /* ============== Net worth (assets vs liabilities) ============== */
+  function netWorthHtml() {
+    const accs = activeAccounts();
+    if (!accs.length) return '<div class="section-title">' + t('netWorth') + '</div>' +
+      '<div class="empty">' + t('noAccountsNw') + '</div>';
+    const nw = netWorth();
+    const assetAccs = accs.filter((a) => accountClass(a) !== 'liability');
+    const liabAccs = accs.filter((a) => accountClass(a) === 'liability');
+
+    const accRow = (a) => {
+      const isLia = accountClass(a) === 'liability';
+      const b = accountBalance(a.id);
+      const shown = isLia ? Math.max(0, -b) : b;
+      let sub = '';
+      if (a.type === 'credit_card') {
+        const cyc = cardCycle(a);
+        const bits = [];
+        if (cyc.utilization != null) bits.push(t('utilization') + ' ' + cyc.utilization + '%');
+        if (cyc.minPayment > 0) bits.push(t('minPayment') + ' ' + fmtShort(cyc.minPayment) + '₫');
+        if (cyc.dueDate) bits.push(t('dueDate') + ' ' + cyc.dueDate);
+        if (bits.length) sub = '<div class="nw-acc-sub">' + bits.join(' · ') + '</div>';
+      }
+      return '<div class="nw-acc">' +
+        '<div class="nw-acc-main">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
+        '<div class="nw-acc-val ' + (isLia ? 'neg' : '') + '">' + mask((isLia ? '−' : '') + fmtShort(shown) + '₫') + '</div>' +
+        sub + '</div>';
+    };
+
+    return '<div class="section-title">' + t('netWorth') + ' · ' + t('netWorthNow') + '</div>' +
+      '<div class="nw-hero"><div class="nw-hero-label">' + icon('scale') + ' ' + t('netWorth') + '</div>' +
+      '<div class="nw-hero-val ' + (nw.net < 0 ? 'neg' : '') + '">' + mask(fmtVND(nw.net)) + '</div></div>' +
+      '<div class="summary-grid">' +
+      '<div class="sum-cell income"><span>' + t('totalAssets') + '</span><b>' + mask(fmtShort(nw.assets) + '₫') + '</b></div>' +
+      '<div class="sum-cell expense"><span>' + t('totalLiabilities') + '</span><b>' + mask(fmtShort(nw.liabilities) + '₫') + '</b></div>' +
+      '</div>' +
+      (assetAccs.length ? '<div class="nw-group-title">' + t('assets') + '</div><div class="nw-list">' + assetAccs.map(accRow).join('') + '</div>' : '') +
+      (liabAccs.length ? '<div class="nw-group-title">' + t('liabilities') + '</div><div class="nw-list">' + liabAccs.map(accRow).join('') + '</div>' : '');
+  }
+
   function viewReports() {
     const { s, e } = reportRange();
     const txs = inRange(s, e);
@@ -648,7 +883,14 @@
       '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div>' +
 
       (reportPeriod === 'month' ?
-        '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' + budgetBarsHtml(byCat, DATA.budgets) + '</div>' : '') +
+        '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' +
+        budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : '') +
+
+      // Trend analysis & forecast (rolling monthly window, independent of the period selector)
+      trendsForecastHtml() +
+
+      // Net worth: assets vs liabilities (current snapshot)
+      netWorthHtml() +
 
       '<div class="section-title">' + t('topSpending') + '</div>' +
       '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>'
@@ -735,6 +977,7 @@
     const a = acc || { id: '', name: '', type: 'cash', openingBalance: 0 };
     const typeOpts = ACCOUNT_TYPES.map((ty) => '<option value="' + ty + '"' + (ty === a.type ? ' selected' : '') + '>' + accountTypeLabel(ty) + '</option>').join('');
     const balHtml = acc ? '<span class="w-bal">= ' + fmtShort(accountBalance(a.id)) + '₫</span>' : '';
+    const isLia = LIABILITY_TYPES.includes(a.type);
     return '<div class="wallet-edit-row" data-acc="' + esc(a.id) + '">' +
       '<div class="wallet-edit-main">' +
       '<input type="text" class="w-name" value="' + esc(a.name) + '" placeholder="' + t('walletName') + '"/>' +
@@ -743,6 +986,14 @@
       '</div>' +
       '<div class="wallet-edit-sub"><label>' + t('openingBalance') + '</label>' +
       '<input type="number" inputmode="numeric" class="w-open" value="' + (a.openingBalance || 0) + '"/>' + balHtml +
+      '</div>' +
+      '<div class="wallet-credit-fields' + (isLia ? '' : ' hidden') + '">' +
+      '<div class="wc-grid">' +
+      '<label>' + t('creditLimit') + '<input type="number" inputmode="numeric" class="w-limit" value="' + (a.creditLimit != null ? a.creditLimit : '') + '"/></label>' +
+      '<label>' + t('statementDay') + '<input type="number" min="1" max="31" class="w-stmt" value="' + (a.statementDay || '') + '"/></label>' +
+      '<label>' + t('dueDay') + '<input type="number" min="1" max="31" class="w-due" value="' + (a.dueDay || '') + '"/></label>' +
+      '</div>' +
+      '<div class="wc-hint">' + t('liabilityHint') + '</div>' +
       '</div></div>';
   }
   function walletsEditorHtml() {
@@ -989,6 +1240,15 @@
         toast(t('syncError') + ': ' + err.message, 'error');
       }
     });
+    // wallets: show/hide credit-card fields when a row's type changes (delegated → covers new rows)
+    const weBox = document.getElementById('walletEdit');
+    if (weBox) weBox.addEventListener('change', (e) => {
+      if (e.target && e.target.classList.contains('w-type')) {
+        const row = e.target.closest('.wallet-edit-row');
+        const cf = row && row.querySelector('.wallet-credit-fields');
+        if (cf) cf.classList.toggle('hidden', !LIABILITY_TYPES.includes(e.target.value));
+      }
+    });
     // wallets: add a blank editable row
     const aw = document.getElementById('addWalletBtn');
     if (aw) aw.addEventListener('click', () => {
@@ -1008,8 +1268,14 @@
           const name = (row.querySelector('.w-name').value || '').trim();
           const type = row.querySelector('.w-type').value;
           const openingBalance = Math.round(Number(row.querySelector('.w-open').value) || 0);
-          if (id) await window.Store.updateAccount(id, { name: name || t('wallet'), type: type, openingBalance: openingBalance });
-          else if (name) await window.Store.addAccount({ name: name, type: type, openingBalance: openingBalance, sortOrder: rows.indexOf(row) });
+          const cls = LIABILITY_TYPES.includes(type) ? 'liability' : 'asset';
+          const numOrNull = (sel) => { const v = row.querySelector(sel); const n = v && v.value !== '' ? Number(v.value) : null; return n != null && !isNaN(n) ? n : null; };
+          // Credit/loan metadata only applies to liabilities; clear it otherwise.
+          const extra = cls === 'liability'
+            ? { class: cls, creditLimit: numOrNull('.w-limit'), statementDay: numOrNull('.w-stmt'), dueDay: numOrNull('.w-due') }
+            : { class: cls, creditLimit: null, statementDay: null, dueDay: null };
+          if (id) await window.Store.updateAccount(id, Object.assign({ name: name || t('wallet'), type: type, openingBalance: openingBalance }, extra));
+          else if (name) await window.Store.addAccount(Object.assign({ name: name, type: type, openingBalance: openingBalance, sortOrder: rows.indexOf(row) }, extra));
         }
         await refreshData(true);
         toast(t('walletSaved'), 'success');
@@ -1251,6 +1517,7 @@
       DATA = fresh;
       if (!DATA.budgets) DATA.budgets = {};
       if (!DATA.transactions) DATA.transactions = [];
+      if (!DATA.accounts) DATA.accounts = [];
       render();
       if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
     } catch (e) { /* keep existing data */ }
