@@ -37,6 +37,7 @@
     '- note: mô tả ngắn gọn bằng tiếng Việt (không chứa cụm chỉ ngày)\n' +
     '- date: ngày giao dịch dạng "YYYY-MM-DD" nếu câu có nhắc ngày ("hôm qua", "hôm kia", "20/6"…); nếu không nhắc ngày thì để null\n' +
     'Quy đổi tiền: k/nghìn/ngàn = nghìn, tr/triệu/củ = triệu, "rưỡi" = thêm một nửa đơn vị (vd "2 triệu rưỡi" = 2500000, "1tr2" = 1200000).\n' +
+    'QUAN TRỌNG: input có thể viết KHÔNG DẤU (telex/gõ nhanh). Hãy tự suy ra nghĩa có dấu rồi phân loại. Ví dụ: "an sang"=ăn sáng→Ăn uống, "an trua"=ăn trưa→Ăn uống, "ca phe"=cà phê→Ăn uống, "do xang"/"xang xe"=đổ xăng→Di chuyển, "tien dien"=tiền điện→Hóa đơn, "luong"=lương→Thu nhập, "mua sam"=mua sắm→Mua sắm.\n' +
     'Chỉ trả về JSON, không giải thích thêm.';
 
   // Validate a "YYYY-MM-DD" string; return it normalized or null.

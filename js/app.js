@@ -1050,6 +1050,16 @@
   }
 
   // Root grouped menu (the Settings landing screen).
+  // App version = the ?v= cache-bust on app.js, which the Release workflow keeps
+  // in sync with the SemVer tag on every release. Falls back to '' if absent.
+  const APP_VERSION = (function () {
+    try {
+      const s = document.querySelector('script[src*="js/app.js"]');
+      const m = s && s.src.match(/[?&]v=([^&"]+)/);
+      return m ? m[1] : '';
+    } catch (e) { return ''; }
+  })();
+
   function settingsRoot() {
     const hh = DATA.household || { name: '' };
     const accs = activeAccounts();
@@ -1075,7 +1085,8 @@
       ], t('grpAdvanced')) +
       iosGroup([
         iosRow({ ic: 'right', tint: 'red', label: t('signOut'), action: 'signout', danger: true, noChevron: true }),
-      ]);
+      ]) +
+      (APP_VERSION ? '<p class="ios-version">' + esc(t('appName')) + ' v' + esc(APP_VERSION) + '</p>' : '');
   }
 
   // A single Settings sub-page (reuses the existing form markup + element IDs).

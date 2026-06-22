@@ -453,6 +453,7 @@ main { padding: 4px 12px 92px; }
 .ios-settings.is-sub { animation: iosSlide .26s cubic-bezier(.32,.72,0,1); }
 @keyframes iosSlide { from { transform: translateX(28px); opacity: .2; } to { transform: translateX(0); opacity: 1; } }
 .ios-page-body .conn-form { margin-top: 4px; }
+.ios-version { text-align: center; color: var(--text-secondary); font-size: 12px; margin: 24px 0 8px; }
 .ios-card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
 .ios-card.budget-edit { gap: 4px; }
 .ios-card.budget-edit .budget-edit-row { padding: 5px 0; }
