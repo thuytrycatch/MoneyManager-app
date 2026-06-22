@@ -19,6 +19,7 @@
 const CONFIG = {
   SUPABASE_URL: '',          // https://xxxxxxxx.supabase.co
   SUPABASE_ANON_KEY: '',     // eyJhbGciOi... (anon public key)
-  ANTHROPIC_API_KEY: '',     // (optional) sk-ant-... to parse Vietnamese with Claude
+  GEMINI_API_KEY: '',        // (optional, FREE tier) AIza... from aistudio.google.com/app/apikey — AI auto-categorization
+  ANTHROPIC_API_KEY: '',     // (optional, paid) sk-ant-... Claude fallback for parsing
 };
 window.CONFIG = CONFIG;

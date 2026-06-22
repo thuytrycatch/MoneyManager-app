@@ -7,7 +7,7 @@
 
   /* ============== Settings (localStorage) ============== */
   window.CONFIG = window.CONFIG || {
-    SUPABASE_URL: '', SUPABASE_ANON_KEY: '', ANTHROPIC_API_KEY: '',
+    SUPABASE_URL: '', SUPABASE_ANON_KEY: '', ANTHROPIC_API_KEY: '', GEMINI_API_KEY: '',
   };
   const SETTINGS_KEY = 'mm_settings';
   function loadSettings() {
@@ -103,6 +103,8 @@
       saveBudget: 'Lưu ngân sách', budgetSaved: 'Đã lưu ngân sách', language: 'Ngôn ngữ', theme: 'Giao diện',
       connTitle: 'Kết nối Supabase', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
       anthropicKey: 'Claude API Key (tùy chọn)', saveConnect: 'Lưu & kết nối',
+      geminiKey: 'Gemini API Key (miễn phí)', aiCategorize: 'AI tự phân loại chi tiêu',
+      aiHint: '🤖 Nhập key để AI tự đoán danh mục từ câu bạn gõ. Gemini có gói miễn phí — lấy key tại aistudio.google.com/app/apikey. Bỏ trống thì app vẫn tự phân loại bằng từ khóa. Key lưu trên trình duyệt này.',
       connSaved: 'Đã lưu, đang kết nối…', connOk: 'Đã kết nối', configMissing: 'Chưa cấu hình Supabase.',
       tokenHint: '🔒 Thông tin lưu trên trình duyệt này (localStorage). anon key là khóa công khai, dữ liệu được bảo vệ bằng Row Level Security.',
       // Auth
@@ -161,6 +163,8 @@
       saveBudget: 'Save budget', budgetSaved: 'Budget saved', language: 'Language', theme: 'Theme',
       connTitle: 'Supabase connection', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
       anthropicKey: 'Claude API Key (optional)', saveConnect: 'Save & connect',
+      geminiKey: 'Gemini API Key (free)', aiCategorize: 'AI auto-categorization',
+      aiHint: '🤖 Add a key so AI infers the category from what you type. Gemini has a free tier — get a key at aistudio.google.com/app/apikey. Leave blank and the app still categorizes by keywords. Keys are stored in this browser.',
       connSaved: 'Saved, connecting…', connOk: 'Connected', configMissing: 'Supabase not configured.',
       tokenHint: '🔒 Stored only in this browser (localStorage). The anon key is public; data is protected by Row Level Security.',
       // Auth
@@ -800,9 +804,12 @@
       '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + '</div>' +
       '<button id="signOutBtn" class="ghost-btn">' + icon('right') + ' ' + t('signOut') + '</button>' +
 
-      // Claude API key (optional)
-      '<div class="section-title">' + t('anthropicKey') + '</div>' +
-      '<div class="conn-form">' + f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
+      // AI auto-categorization keys (optional). Gemini has a free tier; Claude is a paid fallback.
+      '<div class="section-title">' + t('aiCategorize') + '</div>' +
+      '<div class="hint">' + t('aiHint') + '</div>' +
+      '<div class="conn-form">' +
+      f('cfgGemini', t('geminiKey'), C.GEMINI_API_KEY, 'password') +
+      f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
       '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>' +
 
       // Supabase configuration
@@ -1020,10 +1027,13 @@
     // lang
     document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { lang = b.dataset.lang; localStorage.setItem('lang', lang); document.getElementById('langToggle').textContent = lang.toUpperCase(); render(); }));
     const tt2 = document.getElementById('themeToggle2'); if (tt2) tt2.addEventListener('click', toggleTheme);
-    // Save Anthropic key (parser)
+    // Save AI keys (parser): Gemini (free) + Claude (paid fallback)
     const sc = document.getElementById('saveConfigBtn');
     if (sc) sc.addEventListener('click', () => {
-      saveSettings({ ANTHROPIC_API_KEY: document.getElementById('cfgAnthropic').value.trim() });
+      saveSettings({
+        GEMINI_API_KEY: document.getElementById('cfgGemini').value.trim(),
+        ANTHROPIC_API_KEY: document.getElementById('cfgAnthropic').value.trim(),
+      });
       toast(t('save') + ' ✓', 'success');
     });
     // Change Supabase config (URL/key) -> page reload required to apply

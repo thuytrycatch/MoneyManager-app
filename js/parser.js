@@ -176,6 +176,24 @@
     return { amount, type, category, note, date };
   }
 
+  // Normalize a model's raw JSON into the app's transaction shape (shared by Claude & Gemini).
+  function normalizeParsed(parsed, raw) {
+    const amount = Math.round(Number(parsed.amount) || 0);
+    const type = parsed.type === 'income' ? 'income' : 'expense';
+    let category = String(parsed.category || '').trim();
+    if (!CATEGORIES.includes(category)) category = type === 'income' ? 'Thu nhập' : 'Khác';
+    const note = String(parsed.note || raw).trim();
+    const date = normDate(parsed.date);
+    return { amount, type, category, note, date };
+  }
+
+  // Pull the first JSON object out of a model's text reply (handles ```json fences etc.).
+  function extractJson(text, who) {
+    const m = (text || '').match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('Không tìm thấy JSON trong phản hồi ' + who);
+    return JSON.parse(m[0]);
+  }
+
   /* ---------------------------------------------------------------
    *  Call the Claude API (runs directly from the browser)
    * --------------------------------------------------------------- */
@@ -205,42 +223,55 @@
     const data = await resp.json();
     const textBlock = (data.content || []).find((b) => b.type === 'text');
     const text = textBlock ? textBlock.text : '';
+    return normalizeParsed(extractJson(text, 'Claude'), raw);
+  }
 
-    // Extract the JSON (in case the model wraps it in ```json)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Không tìm thấy JSON trong phản hồi Claude');
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    // Normalize
-    const amount = Math.round(Number(parsed.amount) || 0);
-    const type = parsed.type === 'income' ? 'income' : 'expense';
-    let category = String(parsed.category || '').trim();
-    if (!CATEGORIES.includes(category)) {
-      category = type === 'income' ? 'Thu nhập' : 'Khác';
+  /* ---------------------------------------------------------------
+   *  Call the Google Gemini API (free tier; runs directly from the browser).
+   *  Get a key at https://aistudio.google.com/app/apikey
+   * --------------------------------------------------------------- */
+  async function parseWithGemini(raw, apiKey) {
+    const model = 'gemini-2.0-flash';
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT + '\nHôm nay là ' + ymdOf(new Date()) + '.' }] },
+        contents: [{ role: 'user', parts: [{ text: raw }] }],
+        // Force temperature 0 + JSON output so categorization is deterministic and easy to parse.
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+      }),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      throw new Error('Gemini API ' + resp.status + ': ' + errText);
     }
-    const note = String(parsed.note || raw).trim();
-    const date = normDate(parsed.date);
-    return { amount, type, category, note, date };
+    const data = await resp.json();
+    const cand = (data.candidates || [])[0];
+    const parts = cand && cand.content && cand.content.parts ? cand.content.parts : [];
+    const text = parts.map((p) => p.text || '').join('');
+    return normalizeParsed(extractJson(text, 'Gemini'), raw);
   }
 
   /* ---------------------------------------------------------------
    *  Main function: automatically picks Claude or regex
    * --------------------------------------------------------------- */
   async function parseTransaction(raw) {
-    const apiKey = (window.CONFIG && window.CONFIG.ANTHROPIC_API_KEY) || '';
-    if (apiKey) {
-      try {
-        const result = await parseWithClaude(raw, apiKey);
-        // If Claude returns amount 0, try regex as a rescue
-        if (!result.amount) {
-          const fb = parseWithRegex(raw);
-          if (fb.amount) result.amount = fb.amount;
-        }
-        return { ...result, source: 'claude' };
-      } catch (err) {
-        console.warn('Claude API lỗi, dùng regex fallback:', err.message);
-        return { ...parseWithRegex(raw), source: 'regex', warning: err.message };
-      }
+    const cfg = window.CONFIG || {};
+    // Rescue the amount with the offline regex if the model misses it.
+    const withRescue = (result, source) => {
+      if (!result.amount) { const fb = parseWithRegex(raw); if (fb.amount) result.amount = fb.amount; }
+      return { ...result, source: source };
+    };
+    // Priority: Gemini (free tier) → Claude → offline regex. Each falls through on error.
+    if (cfg.GEMINI_API_KEY) {
+      try { return withRescue(await parseWithGemini(raw, cfg.GEMINI_API_KEY), 'gemini'); }
+      catch (err) { console.warn('Gemini lỗi, thử cách khác:', err.message); }
+    }
+    if (cfg.ANTHROPIC_API_KEY) {
+      try { return withRescue(await parseWithClaude(raw, cfg.ANTHROPIC_API_KEY), 'claude'); }
+      catch (err) { console.warn('Claude lỗi, dùng regex:', err.message); }
     }
     return { ...parseWithRegex(raw), source: 'regex' };
   }
