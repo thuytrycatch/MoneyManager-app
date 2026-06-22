@@ -112,6 +112,18 @@ back to a **regex** parser (still recognizes `35k`, `80 nghìn`, `1.5tr`,
 
 ---
 
+## 🏷️ Versioning & releases
+
+Follows **[Semantic Versioning 2.0.0](https://semver.org/)** — **every push to `main` is a release**.
+Versions are derived automatically from **[Conventional Commits](https://www.conventionalcommits.org/)**
+(`fix:` → patch, `feat:` → minor, `feat!:`/`BREAKING CHANGE:` → major) by
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which tags the commit,
+stamps the version into the app, and publishes a [GitHub Release](../../releases).
+
+Full process and commit-message rules: **[docs/RELEASING.md](docs/RELEASING.md)**.
+
+---
+
 ## 🛠️ Run locally
 
 ```bash

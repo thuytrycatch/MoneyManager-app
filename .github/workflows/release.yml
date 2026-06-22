@@ -1,0 +1,81 @@
+name: Release
+
+# Every push to `main` is a release.
+# Versioning follows SemVer 2.0.0, derived automatically from Conventional Commits:
+#   fix:      -> PATCH   (1.0.0 -> 1.0.1)
+#   feat:     -> MINOR   (1.0.0 -> 1.1.0)
+#   feat!: / "BREAKING CHANGE:" in body -> MAJOR (1.0.0 -> 2.0.0)
+#   chore:/docs:/refactor:/... -> no version-worthy change (defaults to PATCH here)
+on:
+  push:
+    branches: [main]
+
+# Allow the workflow to push the version-bump commit + tag and create the Release.
+permissions:
+  contents: write
+
+# Never run two releases at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for version detection)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 1) Work out the next SemVer from the Conventional Commits since the last tag.
+      #    dry_run = true: only compute, we create the tag ourselves after bumping files.
+      - name: Compute next version
+        id: ver
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: v
+          default_bump: patch
+          dry_run: true
+
+      - name: Nothing to release
+        if: steps.ver.outputs.new_version == ''
+        run: echo "No releasable changes since the last tag — skipping."
+
+      # 2) Stamp the version into the app so the served cache-bust always matches the release.
+      - name: Sync version into the app
+        if: steps.ver.outputs.new_version != ''
+        run: |
+          V="${{ steps.ver.outputs.new_version }}"
+          sed -i -E "s/\?v=[^\"']*/?v=${V}/g" index.html
+          printf '{ "version": "%s" }\n' "$V" > version.json
+
+      # 3) Commit the bump back to main. Pushes made with GITHUB_TOKEN do NOT
+      #    re-trigger this workflow, so there is no loop.
+      - name: Commit version bump
+        if: steps.ver.outputs.new_version != ''
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html version.json
+          git commit -m "chore(release): v${{ steps.ver.outputs.new_version }} [skip ci]" || echo "nothing to commit"
+          git push origin HEAD:main
+
+      # 4) Tag the released commit and push the tag.
+      - name: Create and push tag
+        if: steps.ver.outputs.new_version != ''
+        run: |
+          git tag -a "${{ steps.ver.outputs.new_tag }}" -m "Release ${{ steps.ver.outputs.new_tag }}"
+          git push origin "${{ steps.ver.outputs.new_tag }}"
+
+      # 5) Publish a GitHub Release with an auto-generated changelog.
+      - name: Create GitHub Release
+        if: steps.ver.outputs.new_version != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.new_tag }}
+          name: ${{ steps.ver.outputs.new_tag }}
+          body: ${{ steps.ver.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}

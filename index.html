@@ -19,7 +19,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="css/style.css?v=2026.06.23-3" />
+  <link rel="stylesheet" href="css/style.css?v=1.0.0" />
 </head>
 <body>
 
@@ -50,11 +50,12 @@
 
   <!-- config.js (optional, used for local runs). On GitHub Pages this file is
        absent — the app reads config from the "Kết nối Supabase" screen (localStorage). -->
-  <!-- Bump ?v= on every release so browsers fetch fresh JS instead of a cached copy. -->
+  <!-- ?v= is the app version (SemVer). The Release workflow rewrites it on every
+       release so browsers fetch fresh assets instead of a cached copy — do not bump by hand. -->
   <script src="config.js" onerror="window.__noConfig=1"></script>
-  <script src="js/parser.js?v=2026.06.23-3"></script>
-  <script src="js/store.js?v=2026.06.23-3"></script>
-  <script src="js/charts.js?v=2026.06.23-3"></script>
-  <script src="js/app.js?v=2026.06.23-3"></script>
+  <script src="js/parser.js?v=1.0.0"></script>
+  <script src="js/store.js?v=1.0.0"></script>
+  <script src="js/charts.js?v=1.0.0"></script>
+  <script src="js/app.js?v=1.0.0"></script>
 </body>
 </html>
