@@ -114,7 +114,10 @@
       authWelcome: 'Đăng nhập để quản lý thu chi gia đình', haveAccount: 'Đã có tài khoản? Đăng nhập',
       needAccount: 'Chưa có tài khoản? Tạo mới', editConfig: 'Đổi cấu hình Supabase',
       signedUp: 'Đã tạo tài khoản. Kiểm tra email nếu cần xác nhận, rồi đăng nhập.',
-      authError: 'Lỗi đăng nhập', fillEmailPass: 'Nhập email và mật khẩu.',
+      authError: 'Lỗi đăng nhập', fillEmailPass: 'Vui lòng nhập email và mật khẩu.',
+      invalidCreds: 'Email hoặc mật khẩu không đúng.', emailNotConfirmed: 'Email chưa được xác nhận — kiểm tra hộp thư của bạn.',
+      authRateLimit: 'Bạn thử quá nhiều lần. Vui lòng đợi một lát rồi thử lại.', userExists: 'Email này đã được đăng ký. Hãy đăng nhập.',
+      weakPassword: 'Mật khẩu quá ngắn (tối thiểu 6 ký tự).', invalidEmail: 'Email không hợp lệ.',
       configIntro: 'Nhập thông tin Supabase (Settings → API) để bắt đầu.',
       // Household
       household: 'Hộ gia đình', householdName: 'Tên hộ', inviteCode: 'Mã mời (chia sẻ để người thân cùng dùng)',
@@ -186,7 +189,10 @@
       authWelcome: 'Sign in to manage your family budget', haveAccount: 'Have an account? Sign in',
       needAccount: 'No account? Create one', editConfig: 'Change Supabase config',
       signedUp: 'Account created. Confirm via email if required, then sign in.',
-      authError: 'Auth error', fillEmailPass: 'Enter email and password.',
+      authError: 'Auth error', fillEmailPass: 'Please enter email and password.',
+      invalidCreds: 'Incorrect email or password.', emailNotConfirmed: 'Email not confirmed — check your inbox.',
+      authRateLimit: 'Too many attempts. Please wait a moment and try again.', userExists: 'This email is already registered. Please sign in.',
+      weakPassword: 'Password too short (minimum 6 characters).', invalidEmail: 'Invalid email address.',
       configIntro: 'Enter your Supabase info (Settings → API) to start.',
       // Household
       household: 'Household', householdName: 'Household name', inviteCode: 'Invite code (share with family)',
@@ -1433,6 +1439,7 @@
       '<div class="auth-sub">' + t('authWelcome') + '</div>' +
       '<label>' + t('email') + '</label><input id="aEmail" type="email" autocomplete="username" placeholder="you@example.com"/>' +
       '<label>' + t('password') + '</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••"/>' +
+      '<div id="authError" class="auth-error hidden"></div>' +
       '<button id="aPrimary" class="primary-btn">' + (authIsSignup ? icon('plus') + ' ' + t('signUp') : icon('check') + ' ' + t('signIn')) + '</button>' +
       '<button id="aToggle" class="link-btn">' + (authIsSignup ? t('haveAccount') : t('needAccount')) + '</button>' +
       '<button id="aEditCfg" class="link-btn subtle">' + t('editConfig') + '</button>' +
@@ -1458,10 +1465,30 @@
     if (pass) pass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAuth(); });
   }
 
+  // Show / clear the inline error banner inside the auth card.
+  function setAuthError(msg) {
+    const el = document.getElementById('authError');
+    if (!el) return;
+    if (msg) { el.innerHTML = icon('alert') + '<span>' + esc(msg) + '</span>'; el.classList.remove('hidden'); }
+    else { el.innerHTML = ''; el.classList.add('hidden'); }
+  }
+  // Map raw Supabase auth errors to a friendly, localized message.
+  function friendlyAuthError(raw) {
+    const m = (raw || '').toLowerCase();
+    if (m.includes('invalid login') || m.includes('invalid credentials')) return t('invalidCreds');
+    if (m.includes('email not confirmed')) return t('emailNotConfirmed');
+    if (m.includes('rate limit') || m.includes('too many') || m.includes('429')) return t('authRateLimit');
+    if (m.includes('already registered') || m.includes('already exists')) return t('userExists');
+    if (m.includes('password') && (m.includes('6') || m.includes('short') || m.includes('weak'))) return t('weakPassword');
+    if (m.includes('invalid email') || m.includes('unable to validate email')) return t('invalidEmail');
+    return raw || t('authError');
+  }
+
   async function doAuth() {
+    setAuthError('');
     const email = (document.getElementById('aEmail').value || '').trim();
     const password = document.getElementById('aPass').value || '';
-    if (!email || !password) { toast(t('fillEmailPass'), 'warn'); return; }
+    if (!email || !password) { setAuthError(t('fillEmailPass')); toast(t('fillEmailPass'), 'warn'); return; }
     const btn = document.getElementById('aPrimary');
     const old = btn.innerHTML; btn.disabled = true; btn.textContent = '…';
     try {
@@ -1474,7 +1501,9 @@
       }
       await enterApp();
     } catch (err) {
-      toast(t('authError') + ': ' + err.message, 'error');
+      const msg = friendlyAuthError(err.message);
+      setAuthError(msg);
+      toast(msg, 'error');
       btn.disabled = false; btn.innerHTML = old;
     }
   }
