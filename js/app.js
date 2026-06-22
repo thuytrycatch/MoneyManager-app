@@ -124,6 +124,8 @@
       copyCode: 'Sao chép mã', copied: 'Đã sao chép', joinHousehold: 'Tham gia hộ khác', joinCodePh: 'Dán mã mời vào đây',
       join: 'Tham gia', joined: 'Đã tham gia hộ', renameOk: 'Đã đổi tên hộ', account: 'Tài khoản',
       switchHousehold: 'Chọn hộ đang xem',
+      grpAccount: 'Hộ gia đình & Tài khoản', grpMoney: 'Quản lý tiền', grpGeneral: 'Cài đặt chung', grpAdvanced: 'Nâng cao',
+      chooseLanguage: 'Chọn ngôn ngữ', darkMode: 'Chế độ tối',
       members: 'Thành viên', roleOwner: 'Chủ hộ', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
       confirmRemoveMember: 'Xóa thành viên này khỏi hộ?', memberRemoved: 'Đã xóa thành viên',
       leaveHousehold: 'Rời hộ này', confirmLeave: 'Rời khỏi hộ này?', onlyOwnerRemove: 'Chỉ chủ hộ mới xóa được thành viên.',
@@ -200,6 +202,8 @@
       copyCode: 'Copy code', copied: 'Copied', joinHousehold: 'Join another household', joinCodePh: 'Paste invite code here',
       join: 'Join', joined: 'Joined household', renameOk: 'Household renamed', account: 'Account',
       switchHousehold: 'Active household',
+      grpAccount: 'Household & Account', grpMoney: 'Money', grpGeneral: 'General', grpAdvanced: 'Advanced',
+      chooseLanguage: 'Choose language', darkMode: 'Dark mode',
       members: 'Members', roleOwner: 'Owner', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
       confirmRemoveMember: 'Remove this member from the household?', memberRemoved: 'Member removed',
       leaveHousehold: 'Leave this household', confirmLeave: 'Leave this household?', onlyOwnerRemove: 'Only the owner can remove members.',
@@ -249,6 +253,7 @@
   let myHouseholds = []; // [{id, name}] households the user belongs to
   let householdMembers = []; // [{userId, email, role}] members of the household being viewed
   let currentTab = 'overview';
+  let settingsPage = null; // Settings sub-page key (null = root grouped menu)
   const CATS = window.Parser.CATEGORIES;
   // Filters (transactions tab)
   let filterMonth = monthKey(new Date());
@@ -980,8 +985,7 @@
         '<div class="member-info"><div class="member-email">' + label + '</div>' +
         '<div class="member-role ' + (isOwn ? 'owner' : '') + '">' + role + '</div></div>' + act + '</div>';
     }).join('');
-    return '<div class="section-title">' + t('members') + ' (' + householdMembers.length + ')</div>' +
-      '<div class="member-list">' + rows + '</div>';
+    return '<div class="member-list">' + rows + '</div>';
   }
 
   // Editable list of wallets in Settings (name, type, opening balance, delete) + add button.
@@ -1011,78 +1015,165 @@
   function walletsEditorHtml() {
     const accs = activeAccounts();
     const rows = accs.length ? accs.map((a) => walletEditRowHtml(a)).join('') : '<div class="empty">' + t('noWallets') + '</div>';
-    return '<div class="section-title">' + t('wallets') + '</div>' +
-      '<div class="wallet-edit" id="walletEdit">' + rows + '</div>' +
+    return '<div class="wallet-edit" id="walletEdit">' + rows + '</div>' +
       '<div class="wallet-edit-actions">' +
       '<button id="addWalletBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addWallet') + '</button>' +
       '<button id="saveWalletsBtn" class="primary-btn">' + icon('wallet') + ' ' + t('save') + '</button>' +
       '</div>';
   }
 
-  function viewSettings() {
-    const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
-      '<div class="budget-edit-row"><label>' + catIcon(c) + esc(catLabel(c)) + '</label>' +
-      '<input type="number" inputmode="numeric" data-budget="' + c + '" value="' + (DATA.budgets[c] || 0) + '"/></div>').join('');
+  // One tappable row in an iOS-style grouped list.
+  //   o = { ic, tint, label, value, page, action, control, danger, noChevron }
+  function iosRow(o) {
+    const tappable = !!(o.page || o.action);
+    const attrs =
+      (o.page ? ' data-page="' + o.page + '"' : '') +
+      (o.action ? ' data-saction="' + o.action + '"' : '');
+    const val = (o.value != null && o.value !== '') ? '<span class="ios-row-value">' + o.value + '</span>' : '';
+    const right = o.control || ((tappable && !o.noChevron) ? '<span class="ios-row-chev">' + icon('right') + '</span>' : '');
+    const tag = tappable ? 'button' : 'div';
+    const cls = 'ios-row' + (tappable ? ' tappable' : '') + (o.danger ? ' danger' : '');
+    return '<' + tag + ' class="' + cls + '"' + attrs + '>' +
+      (o.ic ? '<span class="ios-ic tint-' + (o.tint || 'gray') + '">' + icon(o.ic) + '</span>' : '') +
+      '<span class="ios-row-label">' + o.label + '</span>' + val + right +
+      '</' + tag + '>';
+  }
+  function iosGroup(rows, header) {
+    return (header ? '<div class="ios-grp-h">' + header + '</div>' : '') +
+      '<div class="ios-group">' + rows.join('') + '</div>';
+  }
+  // Sticky iOS navigation bar + large title for a Settings sub-page.
+  function iosNav(title) {
+    return '<div class="ios-nav"><button class="ios-back" data-back="1">' + icon('left') +
+      '<span>' + t('settings') + '</span></button></div>' +
+      '<h1 class="ios-large-title">' + esc(title) + '</h1>';
+  }
+
+  // Root grouped menu (the Settings landing screen).
+  function settingsRoot() {
+    const hh = DATA.household || { name: '' };
+    const accs = activeAccounts();
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    const themeSwitch = '<span class="ios-switch' + (isDark ? ' on' : '') + '"><span class="ios-knob"></span></span>';
+    return '<h1 class="ios-large-title ios-root-title">' + t('settings') + '</h1>' +
+      iosGroup([
+        iosRow({ ic: 'wallet', tint: 'indigo', label: t('household'), value: esc(hh.name), page: 'household' }),
+        iosRow({ ic: 'more', tint: 'blue', label: t('members'), value: householdMembers.length ? String(householdMembers.length) : '', page: 'members' }),
+        iosRow({ ic: 'check', tint: 'green', label: t('account'), value: esc(currentUserEmail || ''), page: 'account' }),
+      ], t('grpAccount')) +
+      iosGroup([
+        iosRow({ ic: 'target', tint: 'red', label: t('budget'), page: 'budget' }),
+        iosRow({ ic: 'card', tint: 'orange', label: t('wallets'), value: accs.length ? String(accs.length) : '', page: 'wallets' }),
+      ], t('grpMoney')) +
+      iosGroup([
+        iosRow({ ic: 'globe', tint: 'teal', label: t('language'), value: (lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'), action: 'lang' }),
+        iosRow({ ic: 'moon', tint: 'purple', label: t('darkMode'), control: themeSwitch, action: 'theme', noChevron: true }),
+      ], t('grpGeneral')) +
+      iosGroup([
+        iosRow({ ic: 'spark', tint: 'pink', label: t('aiCategorize'), page: 'ai' }),
+        iosRow({ ic: 'settings', tint: 'gray', label: t('connTitle'), page: 'supabase' }),
+      ], t('grpAdvanced')) +
+      iosGroup([
+        iosRow({ ic: 'right', tint: 'red', label: t('signOut'), action: 'signout', danger: true, noChevron: true }),
+      ]);
+  }
+
+  // A single Settings sub-page (reuses the existing form markup + element IDs).
+  function settingsPageView(page) {
     const C = window.CONFIG;
     const hh = DATA.household || { id: '', name: '' };
     const f = (id, label, val, type) => '<div class="conn-row"><label>' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val || '') + '" autocomplete="off" autocapitalize="off" spellcheck="false"/></div>';
+    let title = '';
+    let body = '';
 
-    return (
-      '<div class="section-title">' + t('budget') + ' (' + t('month').toLowerCase() + ')</div>' +
-      '<div class="budget-edit">' + budgetInputs + '</div>' +
-      '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>' +
-
-      // Wallets / Accounts
-      walletsEditorHtml() +
-
-      // Household
-      '<div class="section-title">' + t('household') + '</div>' +
-      (myHouseholds.length > 1 ?
+    if (page === 'budget') {
+      title = t('budget');
+      const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
+        '<div class="budget-edit-row"><label>' + catIcon(c) + esc(catLabel(c)) + '</label>' +
+        '<input type="number" inputmode="numeric" data-budget="' + c + '" value="' + (DATA.budgets[c] || 0) + '"/></div>').join('');
+      body = '<div class="ios-grp-h">' + t('budget') + ' (' + t('month').toLowerCase() + ')</div>' +
+        '<div class="ios-card budget-edit">' + budgetInputs + '</div>' +
+        '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>';
+    } else if (page === 'wallets') {
+      title = t('wallets');
+      body = walletsEditorHtml();
+    } else if (page === 'household') {
+      title = t('household');
+      body = (myHouseholds.length > 1 ?
         '<div class="conn-row" style="margin-bottom:12px"><label>' + t('switchHousehold') + '</label><select id="switchHh">' +
         myHouseholds.map((h) => '<option value="' + esc(h.id) + '"' + (hh.id === h.id ? ' selected' : '') + '>' + esc(h.name) + '</option>').join('') +
         '</select></div>' : '') +
-      '<div class="conn-form">' +
-      '<div class="conn-row"><label>' + t('householdName') + '</label><input id="hhName" type="text" value="' + esc(hh.name) + '"/></div>' +
-      '</div>' +
-      '<button id="renameHhBtn" class="ghost-btn">' + icon('edit') + ' ' + t('save') + '</button>' +
-      '<div class="conn-row" style="margin-top:12px"><label>' + t('inviteCode') + '</label>' +
-      '<input id="inviteCodeBox" type="text" value="' + esc(hh.id) + '" readonly/></div>' +
-      '<button id="copyCodeBtn" class="ghost-btn">' + icon('file') + ' ' + t('copyCode') + '</button>' +
-      '<div class="conn-row" style="margin-top:12px"><label>' + t('joinHousehold') + '</label>' +
-      '<input id="joinCode" type="text" placeholder="' + t('joinCodePh') + '"/></div>' +
-      '<button id="joinHhBtn" class="ghost-btn">' + icon('check') + ' ' + t('join') + '</button>' +
+        '<div class="conn-form">' +
+        '<div class="conn-row"><label>' + t('householdName') + '</label><input id="hhName" type="text" value="' + esc(hh.name) + '"/></div>' +
+        '</div>' +
+        '<button id="renameHhBtn" class="ghost-btn">' + icon('edit') + ' ' + t('save') + '</button>' +
+        '<div class="conn-row" style="margin-top:16px"><label>' + t('inviteCode') + '</label>' +
+        '<input id="inviteCodeBox" type="text" value="' + esc(hh.id) + '" readonly/></div>' +
+        '<button id="copyCodeBtn" class="ghost-btn">' + icon('file') + ' ' + t('copyCode') + '</button>' +
+        '<div class="conn-row" style="margin-top:16px"><label>' + t('joinHousehold') + '</label>' +
+        '<input id="joinCode" type="text" placeholder="' + t('joinCodePh') + '"/></div>' +
+        '<button id="joinHhBtn" class="ghost-btn">' + icon('check') + ' ' + t('join') + '</button>';
+    } else if (page === 'members') {
+      title = t('members');
+      const m = membersHtml();
+      body = m || '<div class="empty">' + t('unknownMember') + '</div>';
+    } else if (page === 'account') {
+      title = t('account');
+      body = '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + '</div>' +
+        iosGroup([iosRow({ ic: 'right', tint: 'red', label: t('signOut'), action: 'signout', danger: true, noChevron: true })]);
+    } else if (page === 'ai') {
+      title = t('aiCategorize');
+      body = '<div class="hint">' + t('aiHint') + '</div>' +
+        '<div class="conn-form">' +
+        f('cfgGemini', t('geminiKey'), C.GEMINI_API_KEY, 'password') +
+        f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
+        '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>';
+    } else if (page === 'supabase') {
+      title = t('connTitle');
+      body = '<div class="conn-form">' +
+        f('cfgSupaUrl', t('supaUrl'), C.SUPABASE_URL) +
+        f('cfgSupaKey', t('supaKey'), C.SUPABASE_ANON_KEY, 'password') + '</div>' +
+        '<button id="saveSupaBtn" class="ghost-btn">' + icon('settings') + ' ' + t('saveConnect') + '</button>' +
+        '<div class="hint">' + t('tokenHint') + '</div>';
+    } else {
+      settingsPage = null;
+      return settingsRoot();
+    }
+    return iosNav(title) + '<div class="ios-page-body">' + body + '</div>';
+  }
 
-      // Members
-      membersHtml() +
+  function viewSettings() {
+    const inner = settingsPage ? settingsPageView(settingsPage) : settingsRoot();
+    return '<div class="ios-settings' + (settingsPage ? ' is-sub' : '') + '">' + inner + '</div>';
+  }
 
-      // Language / theme
-      '<div class="section-title">' + t('language') + ' · ' + t('theme') + '</div>' +
-      '<div class="settings-row"><div class="seg">' +
-      '<button class="seg-btn ' + (lang === 'vi' ? 'active' : '') + '" data-lang="vi">🇻🇳 VI</button>' +
-      '<button class="seg-btn ' + (lang === 'en' ? 'active' : '') + '" data-lang="en">🇬🇧 EN</button></div>' +
-      '<button id="themeToggle2" class="ghost-btn">' + icon('moon') + ' ' + t('theme') + '</button></div>' +
+  // iOS-style popup picker for the app language.
+  function openLangPicker() {
+    const opt = (code, label) => '<button class="ios-pick' + (lang === code ? ' sel' : '') + '" data-pick="' + code + '">' +
+      '<span>' + label + '</span>' + (lang === code ? icon('check') : '') + '</button>';
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
+      '<div class="card-title">' + icon('globe') + ' ' + t('chooseLanguage') + '</div>' +
+      '<div class="ios-picklist">' + opt('vi', '🇻🇳 Tiếng Việt') + opt('en', '🇬🇧 English') + '</div>' +
+      '<div class="modal-actions"><button class="ghost-btn" id="lpCancel">' + t('cancel') + '</button></div>' +
+      '</div></div>';
+    document.body.appendChild(wrap.firstChild);
+    const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
+    document.getElementById('lpCancel').addEventListener('click', close);
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
+    document.querySelectorAll('#modalBackdrop [data-pick]').forEach((b) => b.addEventListener('click', () => {
+      lang = b.dataset.pick; localStorage.setItem('lang', lang);
+      const lt = document.getElementById('langToggle'); if (lt) lt.textContent = lang.toUpperCase();
+      close(); render();
+    }));
+  }
 
-      // Account
-      '<div class="section-title">' + t('account') + '</div>' +
-      '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + '</div>' +
-      '<button id="signOutBtn" class="ghost-btn">' + icon('right') + ' ' + t('signOut') + '</button>' +
-
-      // AI auto-categorization keys (optional). Gemini has a free tier; Claude is a paid fallback.
-      '<div class="section-title">' + t('aiCategorize') + '</div>' +
-      '<div class="hint">' + t('aiHint') + '</div>' +
-      '<div class="conn-form">' +
-      f('cfgGemini', t('geminiKey'), C.GEMINI_API_KEY, 'password') +
-      f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
-      '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>' +
-
-      // Supabase configuration
-      '<div class="section-title">' + t('connTitle') + '</div>' +
-      '<div class="conn-form">' +
-      f('cfgSupaUrl', t('supaUrl'), C.SUPABASE_URL) +
-      f('cfgSupaKey', t('supaKey'), C.SUPABASE_ANON_KEY, 'password') + '</div>' +
-      '<button id="saveSupaBtn" class="ghost-btn">' + icon('settings') + ' ' + t('saveConnect') + '</button>' +
-      '<div class="hint">' + t('tokenHint') + '</div>'
-    );
+  // Shared sign-out routine (used by the root menu and the Account sub-page).
+  async function signOutNow() {
+    try { window.Store.unsubscribeChanges(); } catch (e) { /* ignore */ }
+    await window.Store.signOut();
+    DATA = { household: null, budgets: {}, transactions: [] };
+    showAuth('login');
   }
 
   /* ============== Transfer modal ============== */
@@ -1199,6 +1290,7 @@
 
   /* ============== Render + wire ============== */
   function render() {
+    if (currentTab !== 'settings') settingsPage = null; // leaving Settings resets the sub-page stack
     document.getElementById('appName').textContent = t('appName');
     const view = document.getElementById('view');
     const map = { overview: viewOverview, reports: viewReports, transactions: viewTransactions, add: viewAdd, settings: viewSettings };
@@ -1302,9 +1394,6 @@
         toast(t('walletDeleted'), 'info');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     }));
-    // lang
-    document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { lang = b.dataset.lang; localStorage.setItem('lang', lang); document.getElementById('langToggle').textContent = lang.toUpperCase(); render(); }));
-    const tt2 = document.getElementById('themeToggle2'); if (tt2) tt2.addEventListener('click', toggleTheme);
     // Save AI keys (parser): Gemini (free) + Claude (paid fallback)
     const sc = document.getElementById('saveConfigBtn');
     if (sc) sc.addEventListener('click', () => {
@@ -1376,14 +1465,18 @@
       try { await window.Store.switchHousehold(hs.value); await enterApp(); }
       catch (err) { toast(err.message, 'error'); }
     });
-    // Sign out
-    const so = document.getElementById('signOutBtn');
-    if (so) so.addEventListener('click', async () => {
-      try { window.Store.unsubscribeChanges(); } catch (e) { /* ignore */ }
-      await window.Store.signOut();
-      DATA = { household: null, budgets: {}, transactions: [] };
-      showAuth('login');
-    });
+    // Settings: navigate into a sub-page
+    document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', () => { settingsPage = b.dataset.page; render(); }));
+    // Settings: back from a sub-page to the root menu
+    const back = document.querySelector('[data-back]');
+    if (back) back.addEventListener('click', () => { settingsPage = null; render(); });
+    // Settings: inline actions (language popup, dark-mode toggle, sign out)
+    document.querySelectorAll('[data-saction]').forEach((b) => b.addEventListener('click', () => {
+      const a = b.dataset.saction;
+      if (a === 'lang') openLangPicker();
+      else if (a === 'theme') { toggleTheme(); render(); }
+      else if (a === 'signout') signOutNow();
+    }));
   }
 
   /* ============== Theme + header ============== */

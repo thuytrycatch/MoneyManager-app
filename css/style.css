@@ -406,3 +406,84 @@ main { padding: 4px 12px 92px; }
 .filters select { min-height: 40px; }
 .conn-row input { min-height: 42px; }
 .nav-fab { width: 52px; height: 52px; }
+
+/* =====================================================================
+ *  iOS-style Settings (grouped lists, sub-pages, switches)
+ * ===================================================================== */
+.ios-large-title { font-size: 30px; font-weight: 800; letter-spacing: -.6px; margin: 8px 4px 16px; }
+.ios-root-title { margin-top: 4px; }
+
+/* Group header + inset card */
+.ios-grp-h { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 24px 6px 8px; letter-spacing: .1px; text-transform: none; }
+.ios-group { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
+.ios-group + .ios-grp-h { margin-top: 24px; }
+
+/* Row */
+.ios-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 9px 14px; background: none; border: none; text-align: left; color: var(--text-primary); font-size: 15.5px; position: relative; font-family: inherit; }
+.ios-row + .ios-row::before { content: ''; position: absolute; top: 0; left: 52px; right: 0; height: 1px; background: var(--border); }
+.ios-row.tappable { cursor: pointer; }
+.ios-row.tappable:active { background: var(--bg-secondary); }
+.ios-ic { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; color: #fff; flex-shrink: 0; }
+.ios-ic .ic { width: 18px; height: 18px; }
+.ios-row-label { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ios-row-value { color: var(--text-secondary); font-size: 14.5px; max-width: 48%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ios-row-chev { display: flex; color: var(--text-secondary); opacity: .45; }
+.ios-row-chev .ic { width: 18px; height: 18px; }
+.ios-row.danger { justify-content: center; }
+.ios-row.danger .ios-row-label { flex: 0 0 auto; color: var(--expense); font-weight: 600; }
+
+/* Icon tints (iOS system colors — readable on both light and dark) */
+.tint-indigo { background: #5856d6; } .tint-blue { background: #007aff; }
+.tint-green  { background: #34c759; } .tint-red  { background: #ff3b30; }
+.tint-orange { background: #ff9500; } .tint-teal { background: #30b0c7; }
+.tint-purple { background: #af52de; } .tint-pink { background: #ff2d55; }
+.tint-gray   { background: #8e8e93; }
+
+/* iOS toggle switch */
+.ios-switch { width: 50px; height: 30px; border-radius: 16px; background: var(--border); position: relative; transition: background .22s; flex-shrink: 0; }
+.ios-switch.on { background: #34c759; }
+.ios-knob { position: absolute; top: 2px; left: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .22s; }
+.ios-switch.on .ios-knob { transform: translateX(20px); }
+
+/* Sub-page: sticky nav bar + slide-in */
+.ios-nav { display: flex; align-items: center; height: 44px; margin: -4px -12px 0; padding: 0 6px; position: sticky; top: 0; z-index: 6; background: var(--bg-secondary); }
+.ios-back { display: inline-flex; align-items: center; gap: 0; background: none; border: none; color: var(--accent); font-size: 16px; font-weight: 500; cursor: pointer; padding: 6px 6px 6px 2px; }
+.ios-back .ic { width: 24px; height: 24px; }
+.ios-back:active { opacity: .55; }
+.ios-settings.is-sub { animation: iosSlide .26s cubic-bezier(.32,.72,0,1); }
+@keyframes iosSlide { from { transform: translateX(28px); opacity: .2; } to { transform: translateX(0); opacity: 1; } }
+.ios-page-body .conn-form { margin-top: 4px; }
+.ios-card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
+.ios-card.budget-edit { gap: 4px; }
+.ios-card.budget-edit .budget-edit-row { padding: 5px 0; }
+.ios-card.budget-edit .budget-edit-row input { box-shadow: none; background: var(--bg-secondary); }
+
+/* Language popup picker */
+.ios-picklist { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 4px; }
+.ios-pick { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg-secondary); border: none; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 16px; font-weight: 500; color: var(--text-primary); font-family: inherit; }
+.ios-pick:last-child { border-bottom: none; }
+.ios-pick:active { opacity: .6; }
+.ios-pick.sel { color: var(--accent); font-weight: 600; }
+.ios-pick .ic { width: 20px; height: 20px; color: var(--accent); }
+
+/* =====================================================================
+ *  iPhone device frame (desktop only — mobile stays full-screen)
+ * ===================================================================== */
+@media (min-width: 760px) {
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px 0; }
+  .app-shell {
+    width: 390px; max-width: 390px; min-height: 0;
+    height: min(844px, calc(100vh - 48px));
+    margin: 0; display: flex; flex-direction: column; overflow: hidden;
+    position: relative; border-radius: 54px; background: var(--bg-secondary);
+    box-shadow: 0 0 0 13px #1c1c1e, 0 0 0 15px #3a3a3c, 0 40px 90px rgba(0,0,0,.55);
+  }
+  .header { padding-top: 22px; }
+  main { flex: 1; overflow-y: auto; padding-bottom: 96px; }
+  .bottom-nav { position: absolute; left: 0; right: 0; max-width: none; margin: 0; }
+  /* Dynamic Island */
+  .app-shell::before {
+    content: ''; position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
+    width: 116px; height: 33px; background: #000; border-radius: 18px; z-index: 40; pointer-events: none;
+  }
+}
