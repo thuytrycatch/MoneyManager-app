@@ -138,6 +138,7 @@
       trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
       forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
       needMoreData: 'Cần ít nhất 4 tháng dữ liệu để dự báo.', spikeMonth: 'Chi tiêu cao bất thường',
+      trendEmpty: 'Chưa đủ dữ liệu để hiển thị xu hướng theo tháng — cần ít nhất 2 tháng có chi tiêu.',
       projectedOverspend: 'Dự kiến vượt ngân sách', perMonth: '/tháng',
       // Net worth / assets & liabilities
       netWorth: 'Tài sản ròng', netWorthNow: 'Hiện tại', totalAssets: 'Tổng tài sản', totalLiabilities: 'Tổng nợ',
@@ -213,6 +214,7 @@
       trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
       forecastNote: '🔮 Estimate based on recent months — for reference only.',
       needMoreData: 'Need at least 4 months of data to forecast.', spikeMonth: 'Unusual spending spike',
+      trendEmpty: 'Not enough data to show monthly trends yet — need at least 2 months with spending.',
       projectedOverspend: 'Projected to overspend', perMonth: '/mo',
       // Net worth / assets & liabilities
       netWorth: 'Net Worth', netWorthNow: 'Current', totalAssets: 'Total assets', totalLiabilities: 'Total liabilities',
@@ -760,11 +762,15 @@
     return Math.max(0, Math.round(slope * (n + 1) + intercept));
   }
   function trendsForecastHtml() {
+    const title = '<div class="section-title">' + t('trendForecast') + '</div>';
     const series = monthlyExpenseSeries(12, reportAnchor).filter((_, i, arr) => {
       // drop leading all-zero months before the first real transaction so the trend isn't skewed
       return arr.slice(0, i + 1).some((s) => s.expense > 0);
     });
-    if (series.length < 2) return '';
+    // Always render the section; show an empty state until there's enough history to chart.
+    if (series.length < 2) {
+      return title + '<div class="card"><div class="empty">' + t('trendEmpty') + '</div></div>';
+    }
     const expenses = series.map((s) => s.expense);
     const trend = movingAvg(expenses, 3);
     const spikes = detectSpikes(series);
@@ -804,7 +810,7 @@
     }
     if (forecast != null) extras += '<div class="hint">' + t('forecastNote') + '</div>';
 
-    return '<div class="section-title">' + t('trendForecast') + '</div>' +
+    return title +
       '<div class="card"><div class="chart-box tall"><canvas id="repTrendLine"></canvas></div></div>' +
       '<div class="forecast-extras">' + extras + '</div>';
   }
