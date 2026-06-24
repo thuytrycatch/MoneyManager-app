@@ -44,6 +44,7 @@
     target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
     piggy: '<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5Z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/>',
     spark: '<path d="M12 3v18"/><path d="M5 8l7-5 7 5"/><path d="M5 16l7 5 7-5"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
     car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
     bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
@@ -138,6 +139,15 @@
       paceFast: 'Chi nhanh hơn kế hoạch', paceOk: 'Chi tiêu trong tầm kiểm soát', overspentWeek: 'Tuần này chi nhiều hơn tuần trước',
       savedWell: 'Tuần này tiết kiệm tốt!', daysLeft: 'ngày còn lại trong tháng', biggestWeek: 'Khoản chi lớn nhất tuần',
       noAlerts: 'Mọi thứ ổn định. Tiếp tục duy trì nhé! 👍',
+      // Streak & reminders
+      streak: 'Chuỗi ghi chép', streakDays: 'ngày liên tiếp', loggedToday: 'Đã ghi hôm nay',
+      notLoggedToday: 'Ghi một khoản để giữ chuỗi', startStreak: 'Bắt đầu chuỗi ghi chép hôm nay', bestStreak: 'Kỷ lục',
+      reminder: 'Nhắc ghi chép', reminderOn: 'Bật nhắc nhở', reminderTime: 'Giờ nhắc',
+      reminderHint: '🔔 Tới giờ đã đặt, nếu hôm đó bạn chưa ghi khoản nào, app sẽ nhắc khi bạn mở app. Thông báo chỉ hiện trên thiết bị này và không kèm số tiền.',
+      reminderTitle: 'Sổ Thu Chi', reminderBody: 'Hôm nay bạn chưa ghi khoản nào — ghi nhanh để theo dõi nhé!',
+      reminderKeepStreak: '🔥 Giữ chuỗi {n} ngày — ghi một khoản hôm nay nhé!',
+      reminderEnabled: 'Đã bật nhắc nhở', reminderDisabled: 'Đã tắt nhắc nhở',
+      reminderDenied: 'Thông báo đang bị chặn — hãy cho phép trong cài đặt trình duyệt.', reminderUnsupported: 'Trình duyệt không hỗ trợ thông báo.',
       // Trends & forecast
       trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
       forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
@@ -218,6 +228,15 @@
       paceFast: 'Spending faster than planned', paceOk: 'Spending under control', overspentWeek: 'Spent more than last week',
       savedWell: 'Great saving this week!', daysLeft: 'days left this month', biggestWeek: 'Biggest expense this week',
       noAlerts: 'All good. Keep it up! 👍',
+      // Streak & reminders
+      streak: 'Logging streak', streakDays: 'day streak', loggedToday: 'Logged today',
+      notLoggedToday: 'Log one to keep your streak', startStreak: 'Start your streak today', bestStreak: 'Best',
+      reminder: 'Logging reminder', reminderOn: 'Enable reminders', reminderTime: 'Reminder time',
+      reminderHint: '🔔 At the set time, if you have not logged anything that day, the app reminds you when you open it. Notifications stay on this device and never include amounts.',
+      reminderTitle: 'Sổ Thu Chi', reminderBody: "You haven't logged anything today — add a quick entry!",
+      reminderKeepStreak: '🔥 Keep your {n}-day streak — log something today!',
+      reminderEnabled: 'Reminders on', reminderDisabled: 'Reminders off',
+      reminderDenied: 'Notifications are blocked — allow them in your browser settings.', reminderUnsupported: 'Notifications are not supported in this browser.',
       // Trends & forecast
       trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
       forecastNote: '🔮 Estimate based on recent months — for reference only.',
@@ -306,6 +325,89 @@
   }
   function allTimeBalance() { return totals(DATA.transactions).net; }
   function totalBudget() { return Object.values(DATA.budgets).reduce((a, b) => a + (b || 0), 0); }
+
+  /* ============== Streak & reminders ============== */
+  // Consecutive days with at least one logged transaction, ending today (or
+  // yesterday if today isn't logged yet — the streak is still "alive").
+  function computeStreak() {
+    const set = new Set(DATA.transactions.map((tx) => tx.date));
+    const loggedToday = set.has(ymd(new Date()));
+    let current = 0;
+    let cursor = loggedToday ? new Date()
+      : (set.has(ymd(addDays(new Date(), -1))) ? addDays(new Date(), -1) : null);
+    while (cursor && set.has(ymd(cursor))) { current++; cursor = addDays(cursor, -1); }
+    // Longest consecutive run across all history.
+    let longest = 0, run = 0, prev = '';
+    Array.from(set).sort().forEach((d) => {
+      run = (prev && ymd(addDays(new Date(prev + 'T00:00:00'), 1)) === d) ? run + 1 : 1;
+      if (run > longest) longest = run;
+      prev = d;
+    });
+    return { current: current, longest: longest, loggedToday: loggedToday };
+  }
+  function streakCardHtml() {
+    const s = computeStreak();
+    const flame = s.current > 0 ? '🔥' : '✨';
+    const state = s.loggedToday
+      ? '<span class="streak-state ok">' + icon('check') + ' ' + t('loggedToday') + '</span>'
+      : (s.current > 0 ? '<span class="streak-state warn">' + t('notLoggedToday') + '</span>'
+        : '<span class="streak-state">' + t('startStreak') + '</span>');
+    return '<div class="streak-card' + (s.loggedToday ? ' lit' : '') + '">' +
+      '<div class="streak-flame">' + flame + '</div>' +
+      '<div class="streak-main"><div class="streak-num">' + s.current + ' <span>' + t('streakDays') + '</span></div>' +
+      state + '</div>' +
+      (s.longest > 1 ? '<div class="streak-best">' + t('bestStreak') + '<b>' + s.longest + '</b></div>' : '') +
+      '</div>';
+  }
+
+  // Reminder config (localStorage). Notifications are LOCAL only (no server push):
+  // they appear when you open/return to the app after the set time if not logged.
+  function getReminderCfg() {
+    try { return Object.assign({ enabled: false, time: '20:00' }, JSON.parse(localStorage.getItem('mm_reminder') || '{}')); }
+    catch (e) { return { enabled: false, time: '20:00' }; }
+  }
+  function setReminderCfg(c) { try { localStorage.setItem('mm_reminder', JSON.stringify(c)); } catch (e) { /* ignore */ } }
+  function getLastNotified() { try { return localStorage.getItem('mm_reminder_last') || ''; } catch (e) { return ''; } }
+  function setLastNotified(d) { try { localStorage.setItem('mm_reminder_last', d); } catch (e) { /* ignore */ } }
+
+  async function toggleReminder() {
+    const cfg = getReminderCfg();
+    if (!cfg.enabled) {
+      if (!('Notification' in window)) { toast(t('reminderUnsupported'), 'warn'); return; }
+      let perm = Notification.permission;
+      if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; } }
+      if (perm !== 'granted') { toast(t('reminderDenied'), 'warn'); render(); return; }
+      cfg.enabled = true; setReminderCfg(cfg); toast(t('reminderEnabled'), 'success');
+    } else {
+      cfg.enabled = false; setReminderCfg(cfg); toast(t('reminderDisabled'), 'info');
+    }
+    render();
+  }
+
+  async function showLocalNotification(title, body) {
+    const opts = { body: body, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: 'sotc-reminder', lang: lang };
+    // Prefer the service worker (so a tap can focus the app); fall back to a page Notification.
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      try { const reg = await navigator.serviceWorker.ready; await reg.showNotification(title, opts); return; }
+      catch (e) { /* fall through */ }
+    }
+    try { new Notification(title, opts); } catch (e) { /* ignore */ }
+  }
+  // Fire a gentle reminder at most once per day, only after the set time and only if not logged.
+  function maybeNotify() {
+    const cfg = getReminderCfg();
+    if (!cfg.enabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+    const now = new Date(), today = ymd(now);
+    if (getLastNotified() === today) return;
+    const parts = (cfg.time || '20:00').split(':');
+    const hh = parseInt(parts[0], 10) || 0, mm = parseInt(parts[1], 10) || 0;
+    if (now.getHours() < hh || (now.getHours() === hh && now.getMinutes() < mm)) return;
+    const s = computeStreak();
+    if (s.loggedToday) return;
+    setLastNotified(today);
+    const body = s.current > 0 ? t('reminderKeepStreak').replace('{n}', s.current) : t('reminderBody');
+    showLocalNotification(t('reminderTitle'), body);
+  }
 
   /* ============== Accounts (wallets) ============== */
   const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'savings', 'credit_card', 'loan', 'other'];
@@ -752,6 +854,9 @@
       statTile(t('spentToday'), spentToday, 'expense', 'up') +
       statTile(t('avgPerDay'), avgDay, 'neutral', 'chart') +
       '</div>' +
+
+      // Habit streak
+      streakCardHtml() +
 
       // Wallet balances
       walletStripHtml() +
@@ -1209,6 +1314,7 @@
       iosGroup([
         iosRow({ ic: 'globe', tint: 'teal', label: t('language'), value: (lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'), action: 'lang' }),
         iosRow({ ic: 'moon', tint: 'purple', label: t('darkMode'), control: themeSwitch, action: 'theme', noChevron: true }),
+        iosRow({ ic: 'bell', tint: 'orange', label: t('reminder'), value: (getReminderCfg().enabled ? getReminderCfg().time : ''), page: 'reminder' }),
       ], t('grpGeneral')) +
       iosGroup([
         iosRow({ ic: 'spark', tint: 'pink', label: t('aiCategorize'), page: 'ai' }),
@@ -1277,6 +1383,18 @@
         f('cfgSupaKey', t('supaKey'), C.SUPABASE_ANON_KEY, 'password') + '</div>' +
         '<button id="saveSupaBtn" class="ghost-btn">' + icon('settings') + ' ' + t('saveConnect') + '</button>' +
         '<div class="hint">' + t('tokenHint') + '</div>';
+    } else if (page === 'reminder') {
+      title = t('reminder');
+      const r = getReminderCfg();
+      const sw = '<span class="ios-switch' + (r.enabled ? ' on' : '') + '"><span class="ios-knob"></span></span>';
+      const blocked = ('Notification' in window) && Notification.permission === 'denied';
+      body = iosGroup([
+        iosRow({ ic: 'bell', tint: 'orange', label: t('reminderOn'), control: sw, action: 'remind-toggle', noChevron: true }),
+      ]) +
+        (r.enabled ? '<div class="conn-row" style="margin-top:14px"><label>' + t('reminderTime') + '</label>' +
+          '<input id="remindTime" type="time" value="' + esc(r.time || '20:00') + '"/></div>' : '') +
+        (blocked ? '<div class="warn-hint">' + icon('alert') + ' ' + t('reminderDenied') + '</div>' : '') +
+        '<div class="hint">' + t('reminderHint') + '</div>';
     } else {
       settingsPage = null;
       return settingsRoot();
@@ -1612,11 +1730,15 @@
     // Settings: back from a sub-page to the root menu
     const back = document.querySelector('[data-back]');
     if (back) back.addEventListener('click', () => { settingsPage = null; render(); });
-    // Settings: inline actions (language popup, dark-mode toggle, sign out)
+    // Reminder time picker
+    const rt = document.getElementById('remindTime');
+    if (rt) rt.addEventListener('change', () => { const c = getReminderCfg(); c.time = rt.value || '20:00'; setReminderCfg(c); toast(t('save') + ' ✓', 'success'); });
+    // Settings: inline actions (language popup, dark-mode toggle, reminder toggle, sign out)
     document.querySelectorAll('[data-saction]').forEach((b) => b.addEventListener('click', () => {
       const a = b.dataset.saction;
       if (a === 'lang') openLangPicker();
       else if (a === 'theme') { toggleTheme(); render(); }
+      else if (a === 'remind-toggle') toggleReminder();
       else if (a === 'signout') signOutNow();
     }));
   }
@@ -1776,6 +1898,7 @@
     currentTab = 'overview';
     render();
     startAutoSync();
+    maybeNotify();
   }
 
   /* ============== Auto-sync (realtime + when returning to the app) ============== */
@@ -1802,8 +1925,8 @@
     if (autoSyncWired) return;
     autoSyncWired = true;
     // Fallback: reload when returning to the tab / when back online
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshData(true); });
-    window.addEventListener('focus', () => refreshData(true));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshData(true); maybeNotify(); } });
+    window.addEventListener('focus', () => { refreshData(true); maybeNotify(); });
     window.addEventListener('online', () => refreshData(true));
   }
 

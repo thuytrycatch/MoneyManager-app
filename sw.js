@@ -15,7 +15,7 @@
 'use strict';
 
 // Bump VERSION whenever this file changes → old caches are purged on activate.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'sotc-' + VERSION;
 
 // Cross-origin hosts whose PUBLIC assets are safe to cache (no auth, no secrets).
@@ -84,5 +84,15 @@ self.addEventListener('fetch', (event) => {
       return res;
     }).catch(() => null);
     return cached || (await fromNetwork) || Response.error();
+  })());
+});
+
+// Tapping a reminder notification focuses an open tab (or opens the app).
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) { if ('focus' in c) return c.focus(); }
+    if (self.clients.openWindow) return self.clients.openWindow('.');
   })());
 });
