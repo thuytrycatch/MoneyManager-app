@@ -130,6 +130,8 @@
       confirmRemoveMember: 'Xóa thành viên này khỏi hộ?', memberRemoved: 'Đã xóa thành viên',
       leaveHousehold: 'Rời hộ này', confirmLeave: 'Rời khỏi hộ này?', onlyOwnerRemove: 'Chỉ chủ hộ mới xóa được thành viên.',
       added: 'Đã thêm', deleted: 'Đã xóa', confirmDelete: 'Xóa giao dịch này?',
+      confirmEntries: 'Xác nhận giao dịch', saveAll: 'Lưu tất cả', undo: 'Hoàn tác',
+      unrecognizedLines: 'dòng chưa nhận diện được', maxEntries: 'Chỉ xử lý tối đa 20 dòng mỗi lần.',
       emptyInput: 'Vui lòng nhập nội dung.', cantParse: 'Không nhận diện được số tiền.',
       warn80: 'Sắp vượt ngân sách', warn100: 'Vượt ngân sách', parsing: 'Đang phân tích…',
       synced: 'Đã đồng bộ ✓', syncError: 'Lỗi đồng bộ', offline: 'Offline — sẽ đồng bộ sau', saving: 'Đang lưu…',
@@ -208,6 +210,8 @@
       confirmRemoveMember: 'Remove this member from the household?', memberRemoved: 'Member removed',
       leaveHousehold: 'Leave this household', confirmLeave: 'Leave this household?', onlyOwnerRemove: 'Only the owner can remove members.',
       added: 'Added', deleted: 'Deleted', confirmDelete: 'Delete this transaction?',
+      confirmEntries: 'Confirm transactions', saveAll: 'Save all', undo: 'Undo',
+      unrecognizedLines: 'line(s) not recognized', maxEntries: 'Up to 20 entries at a time.',
       emptyInput: 'Please enter something.', cantParse: 'Could not detect amount.',
       warn80: 'Near budget limit', warn100: 'Over budget', parsing: 'Parsing…',
       synced: 'Synced ✓', syncError: 'Sync error', offline: 'Offline — will sync later', saving: 'Saving…',
@@ -418,46 +422,173 @@
     const btn = btnId && document.getElementById(btnId);
     const old = btn && btn.innerHTML;
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    let parsed;
-    try { parsed = await window.Parser.parseTransaction(raw); }
-    catch (e) { parsed = window.Parser.parseWithRegex(raw); }
-    if (!parsed.amount) {
-      if (btn) { btn.disabled = false; btn.innerHTML = old; }
-      toast(t('cantParse'), 'warn'); return;
-    }
-    const now = new Date();
-    const today = ymd(now);
+    // Parse one OR many entries ("ăn sáng 35k, cafe 20k, grab 1tr2" → 3 drafts).
+    let parsedList;
+    try { parsedList = await window.Parser.parseMany(raw); }
+    catch (e) { parsedList = [{ ...window.Parser.parseWithRegex(raw), rawInput: raw.trim() }]; }
+    if (btn) { btn.disabled = false; btn.innerHTML = old; }
+
+    const recognized = (parsedList || []).filter((p) => p && p.amount > 0);
+    const dropped = (parsedList || []).length - recognized.length;
+    if (!recognized.length) { toast(t('cantParse'), 'warn'); return; }
+    if (window.Parser.splitEntries(raw).length > window.Parser.MAX_ENTRIES) toast(t('maxEntries'), 'warn');
+
+    const today = ymd(new Date());
     // Date priority: a date the user picked in the date bar wins; otherwise a date
-    // detected in the sentence ("hôm qua", "20/6"); otherwise today.
+    // detected in each sentence ("hôm qua", "20/6"); otherwise today.
     const dateInput = dateInputId && document.getElementById(dateInputId);
     const picked = dateInput ? dateInput.value : '';
+    const acctSel = accountSelectId && document.getElementById(accountSelectId);
+    const accountId = (acctSel ? acctSel.value : defaultAccountId()) || '';
+
+    const drafts = recognized.map((p) => buildDraft(p, picked, today, accountId));
+
+    // Single entry → fast save with an Undo bar. Multiple → confirm sheet first.
+    if (drafts.length === 1) await saveDrafts(drafts, accountId, { undo: true });
+    else openEntryPreview(drafts, accountId, dropped);
+  }
+
+  // Assemble a parsed result into a storable draft, applying the date priority.
+  function buildDraft(parsed, picked, today, accountId) {
     let date = picked || today;
     if (parsed.date && (!picked || picked === today)) date = parsed.date;
     // Keep a real clock time only for today's entries; past days get no misleading time.
-    const time = date === today ? now.toTimeString().slice(0, 5) : '';
-    const acctSel = accountSelectId && document.getElementById(accountSelectId);
-    const accountId = acctSel ? acctSel.value : defaultAccountId();
-    const draft = {
-      date: date, time: time,
-      rawInput: raw, amount: parsed.amount, type: parsed.type,
+    const time = date === today ? new Date().toTimeString().slice(0, 5) : '';
+    return {
+      date: date, time: time, rawInput: parsed.rawInput || '',
+      amount: Math.round(Number(parsed.amount) || 0),
+      type: parsed.type === 'income' ? 'income' : 'expense',
       category: parsed.category, note: parsed.note,
       accountId: accountId || null,
     };
+  }
+
+  // Persist one or many drafts (batched), update state, and surface feedback.
+  async function saveDrafts(drafts, accountId, opts) {
+    opts = opts || {};
     setStatus(t('saving'));
     try {
-      const saved = await window.Store.addTransaction(draft);
-      DATA.transactions.unshift(saved);
+      const saved = drafts.length === 1
+        ? [await window.Store.addTransaction(drafts[0])]
+        : await window.Store.addTransactions(drafts);
+      DATA.transactions = saved.concat(DATA.transactions);
       if (accountId) setLastAccountId(accountId);
       setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 2500);
-      toast(t('added') + ': ' + parsed.note + ' · ' + fmtVND(parsed.amount) + (date !== today ? ' · ' + date : ''), 'success');
-      if (parsed.type === 'expense') checkBudgetWarning(parsed.category);
       render();
+      if (opts.undo && saved.length === 1) showUndoBar(saved[0]);
+      else toast(addedSummary(saved), 'success');
+      // Budget alerts for each distinct expense category touched.
+      [...new Set(saved.filter((s) => s.type === 'expense').map((s) => s.category))]
+        .forEach((c) => checkBudgetWarning(c));
+      return saved;
     } catch (err) {
       setStatus(t('syncError'), 'err'); setTimeout(() => setStatus(''), 4000);
       toast(t('syncError') + ': ' + err.message, 'error');
-    } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = old; }
+      return null;
     }
+  }
+
+  function addedSummary(saved) {
+    if (saved.length === 1) return t('added') + ': ' + saved[0].note + ' · ' + fmtVND(saved[0].amount);
+    return '✓ ' + t('added') + ' ' + saved.length + ' ' + t('txs').toLowerCase();
+  }
+
+  // Transient "saved — Undo" bar (single-entry fast path). Auto-dismisses after 5s.
+  let undoTimer = null;
+  function showUndoBar(tx) {
+    const prev = document.getElementById('undoBar'); if (prev) prev.remove();
+    if (undoTimer) clearTimeout(undoTimer);
+    const bar = document.createElement('div');
+    bar.id = 'undoBar'; bar.className = 'action-toast';
+    const sign = tx.type === 'income' ? '+' : '−';
+    const ic = tx.type === 'transfer' ? icon('transfer') : catIcon(tx.category);
+    bar.innerHTML =
+      '<span class="at-ic ' + tx.type + '">' + ic + '</span>' +
+      '<span class="at-text"><b>' + esc(tx.note || tx.rawInput || t('added')) + '</b>' +
+      '<span class="at-sub">' + esc(catLabel(tx.category)) + ' · ' + sign + fmtShort(tx.amount) + '₫</span></span>' +
+      '<button class="at-btn" data-undo="1">' + icon('refresh') + ' ' + t('undo') + '</button>';
+    document.body.appendChild(bar);
+    requestAnimationFrame(() => bar.classList.add('show'));
+    const close = () => { bar.classList.remove('show'); setTimeout(() => { if (bar.parentNode) bar.remove(); }, 250); };
+    bar.querySelector('[data-undo]').addEventListener('click', async () => {
+      if (undoTimer) clearTimeout(undoTimer);
+      close();
+      try {
+        await window.Store.deleteTransaction(tx.id);
+        DATA.transactions = DATA.transactions.filter((x) => x.id !== tx.id);
+        toast(t('deleted'), 'info'); render();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
+    undoTimer = setTimeout(close, 5000);
+  }
+
+  // One editable row inside the multi-entry confirm sheet.
+  function entryPreviewRow(d) {
+    const catOpts = CATS.map((c) => '<option value="' + esc(c) + '"' + (c === d.category ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>').join('');
+    const isPast = d.date !== ymd(new Date());
+    return '<div class="entry-row" data-date="' + esc(d.date) + '" data-time="' + esc(d.time || '') + '" data-raw="' + esc(d.rawInput || '') + '">' +
+      '<div class="ep-line1">' +
+      '<input type="text" class="ep-note" value="' + esc(d.note || '') + '" placeholder="' + t('note') + '"/>' +
+      '<button type="button" class="icon-btn danger" data-eprm="1" title="' + t('delete') + '">' + icon('trash') + '</button>' +
+      '</div>' +
+      '<div class="ep-line2">' +
+      '<input type="number" inputmode="numeric" class="ep-amount" value="' + d.amount + '"/>' +
+      '<select class="ep-cat">' + catOpts + '</select>' +
+      '</div>' +
+      '<div class="seg ep-type" data-type="' + esc(d.type) + '">' +
+      '<button type="button" class="seg-btn ' + (d.type === 'expense' ? 'active' : '') + '" data-type="expense">' + t('expense') + '</button>' +
+      '<button type="button" class="seg-btn ' + (d.type === 'income' ? 'active' : '') + '" data-type="income">' + t('income') + '</button>' +
+      (isPast ? '<span class="ep-date">' + esc(d.date) + '</span>' : '') +
+      '</div></div>';
+  }
+
+  // Confirm sheet for a multi-entry add: review/edit each row, then save all.
+  function openEntryPreview(drafts, accountId, dropped) {
+    const rows = drafts.map((d) => entryPreviewRow(d)).join('');
+    const walletSel = activeAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('epAccount', accountId) : '';
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal entry-modal">' +
+      '<div class="card-title">' + icon('check') + ' ' + t('confirmEntries') + ' (' + drafts.length + ')</div>' +
+      (dropped ? '<div class="warn-hint">' + icon('alert') + ' ' + dropped + ' ' + t('unrecognizedLines') + '</div>' : '') +
+      '<div class="entry-list" id="entryList">' + rows + '</div>' + walletSel +
+      '<div class="modal-actions"><button class="ghost-btn" id="epCancel">' + t('cancel') + '</button>' +
+      '<button class="primary-btn" id="epSave">' + icon('check') + ' ' + t('saveAll') + ' (' + drafts.length + ')</button></div>' +
+      '</div></div>';
+    document.body.appendChild(wrap.firstChild);
+    const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
+    const refreshCount = () => {
+      const n = document.querySelectorAll('#entryList .entry-row').length;
+      if (!n) { close(); return; }
+      const sv = document.getElementById('epSave');
+      if (sv) sv.innerHTML = icon('check') + ' ' + t('saveAll') + ' (' + n + ')';
+    };
+    document.getElementById('epCancel').addEventListener('click', close);
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
+    document.querySelectorAll('#entryList [data-eprm]').forEach((b) => b.addEventListener('click', () => {
+      const row = b.closest('.entry-row'); if (row) row.remove(); refreshCount();
+    }));
+    document.querySelectorAll('#entryList .ep-type').forEach((seg) => seg.querySelectorAll('button').forEach((b) =>
+      b.addEventListener('click', () => {
+        seg.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active'); seg.dataset.type = b.dataset.type;
+      })));
+    document.getElementById('epSave').addEventListener('click', async () => {
+      const acct = (document.getElementById('epAccount') ? document.getElementById('epAccount').value : accountId) || '';
+      const out = [];
+      Array.from(document.querySelectorAll('#entryList .entry-row')).forEach((r) => {
+        const amount = Math.round(Number(r.querySelector('.ep-amount').value) || 0);
+        if (amount <= 0) return;
+        out.push({
+          date: r.dataset.date, time: r.dataset.time || '', rawInput: r.dataset.raw || '',
+          amount: amount, type: r.querySelector('.ep-type').dataset.type === 'income' ? 'income' : 'expense',
+          category: r.querySelector('.ep-cat').value, note: (r.querySelector('.ep-note').value || '').trim(),
+          accountId: acct || null,
+        });
+      });
+      if (!out.length) { toast(t('needAmount'), 'warn'); return; }
+      close();
+      await saveDrafts(out, acct, { undo: false });
+    });
   }
   function checkBudgetWarning(cat) {
     const limit = DATA.budgets[cat]; if (!limit) return;

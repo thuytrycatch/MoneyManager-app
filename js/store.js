@@ -360,6 +360,32 @@
     return mapRow(data);
   }
 
+  // Insert several transactions at once (one round-trip). Same household/RLS scope
+  // and the same amount rounding as addTransaction(). Returns the saved rows.
+  async function addTransactions(list) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    if (!Array.isArray(list) || !list.length) return [];
+    const user = await getUser();
+    const sb = getClient();
+    const uid = user ? user.id : null;
+    const rows = list.map((tx) => ({
+      household_id: household.id,
+      user_id: uid,
+      date: tx.date,
+      time: tx.time || null,
+      amount: Math.round(tx.amount),
+      type: tx.type,
+      category: tx.category,
+      note: tx.note || null,
+      raw_input: tx.rawInput || null,
+      account_id: tx.accountId || null,
+      to_account_id: tx.toAccountId || null,
+    }));
+    const { data, error } = await sb.from('transactions').insert(rows).select();
+    if (error) throw new Error(error.message);
+    return (data || []).map(mapRow);
+  }
+
   async function updateTransaction(id, fields) {
     const sb = getClient();
     const patch = {};
@@ -477,6 +503,7 @@
     loadData,
     getCachedData,
     addTransaction,
+    addTransactions,
     updateTransaction,
     deleteTransaction,
     saveBudgets,

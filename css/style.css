@@ -488,3 +488,44 @@ main { padding: 4px 12px 92px; }
     width: 116px; height: 33px; background: #000; border-radius: 18px; z-index: 40; pointer-events: none;
   }
 }
+
+/* =====================================================================
+ *  Multi-entry confirm sheet + Undo bar
+ * ===================================================================== */
+.entry-modal { max-height: 86vh; display: flex; flex-direction: column; }
+.entry-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 6px -2px 2px; padding: 2px; }
+.entry-row { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+.entry-row:last-child { margin-bottom: 2px; }
+.entry-row .ep-line1 { display: flex; gap: 8px; align-items: center; }
+.entry-row .ep-note { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; font-weight: 600; }
+.entry-row .ep-line2 { display: flex; gap: 8px; margin-top: 8px; }
+.entry-row .ep-amount { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; font-weight: 700; }
+.entry-row .ep-cat { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.entry-row .ep-type { margin-top: 8px; padding: 3px; background: var(--bg-elev); display: flex; align-items: center; border-radius: 11px; }
+.entry-row .ep-type .seg-btn { padding: 6px 14px; font-size: 13px; }
+.entry-row .ep-date { margin-left: auto; padding-right: 6px; font-size: 12px; color: var(--text-secondary); }
+.entry-row .icon-btn.danger { color: var(--expense); flex-shrink: 0; }
+.entry-modal input:focus, .entry-modal select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.warn-hint { display: flex; align-items: center; gap: 6px; color: var(--warning); font-size: 13px; margin: 6px 2px; }
+.warn-hint .ic { width: 16px; height: 16px; flex-shrink: 0; }
+
+.action-toast {
+  position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 16px); z-index: 200;
+  display: flex; align-items: center; gap: 12px;
+  width: calc(100% - 32px); max-width: 460px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 16px;
+  padding: 10px 12px; box-shadow: var(--shadow-lg);
+  opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+}
+.action-toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.action-toast .at-ic { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 11px; background: var(--bg-secondary); flex-shrink: 0; }
+.action-toast .at-ic.expense { color: var(--expense); }
+.action-toast .at-ic.income { color: var(--income); }
+.action-toast .at-ic.transfer { color: var(--accent); }
+.action-toast .at-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.action-toast .at-text b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.action-toast .at-sub { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.action-toast .at-btn { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 9px 13px; font-weight: 700; font-size: 13px; cursor: pointer; }
+.action-toast .at-btn .ic { width: 15px; height: 15px; }
+.action-toast .at-btn:active { transform: translateY(1px); }

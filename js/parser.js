@@ -277,12 +277,44 @@
     return { ...parseWithRegex(raw), source: 'regex' };
   }
 
+  /* ---------------------------------------------------------------
+   *  Multi-entry: split one input into several entries, parse each.
+   * --------------------------------------------------------------- */
+  // Split on newlines/semicolons always; split on a comma ONLY when it is not
+  // inside a number (so "35.000"/"35,000" stays intact but "35k, lương" splits).
+  function splitEntries(raw) {
+    return String(raw || '')
+      .split(/[\n;]+/)
+      .reduce((acc, seg) => acc.concat(seg.split(/,\s*(?=\D)/)), [])
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  // Parse a (possibly multi-item) input into an array of transaction drafts.
+  // Each item carries its own rawInput so the UI can show/confirm it.
+  const MAX_ENTRIES = 20; // safety cap: avoid a runaway batch from a huge paste
+  async function parseMany(raw) {
+    const parts = splitEntries(raw);
+    if (parts.length <= 1) {
+      const one = await parseTransaction(raw);
+      return [{ ...one, rawInput: raw.trim() }];
+    }
+    const capped = parts.slice(0, MAX_ENTRIES);
+    return Promise.all(capped.map(async (p) => {
+      try { return { ...(await parseTransaction(p)), rawInput: p }; }
+      catch (e) { return { ...parseWithRegex(p), source: 'regex', rawInput: p }; }
+    }));
+  }
+
   // Export to global
   window.Parser = {
     parseTransaction,
     parseWithRegex,
     parseAmount,
     parseDate,
+    splitEntries,
+    parseMany,
+    MAX_ENTRIES,
     CATEGORIES,
   };
 })();
