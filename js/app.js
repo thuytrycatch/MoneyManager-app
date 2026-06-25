@@ -1125,19 +1125,21 @@
       // Savings goals
       goalsSectionHtml() +
 
-      // Weekly review card
-      '<div class="card week-card">' +
+      // Weekly review + alerts (side by side on desktop)
+      '<div class="dash">' +
+      '<section class="dash-card"><div class="card week-card">' +
       '<div class="card-title">' + icon('calendar') + ' ' + t('weekReview') + '</div>' +
       '<div class="week-body">' +
       '<div><div class="week-amount">' + fmtVND(wkExp) + '</div>' +
       '<div class="week-diff ' + (diffPct > 0 ? 'bad' : 'good') + '">' + icon(diffPct > 0 ? 'trendUp' : 'trendDown') +
       ' ' + (diffPct > 0 ? '+' : '') + diffPct + '% ' + t('vsLastWeek') + '</div></div>' +
       '<div class="spark-wrap"><canvas id="weekSpark"></canvas></div>' +
-      '</div></div>' +
+      '</div></div></section>' +
 
       // Alerts
-      '<div class="section-title">' + t('alerts') + '</div>' +
-      '<div class="alerts">' + buildAlerts(now, mt, budget, dayNow, daysInMonth, wkExp, lastWkExp, wkTx) + '</div>' +
+      '<section class="dash-card"><div class="section-title">' + t('alerts') + '</div>' +
+      '<div class="alerts">' + buildAlerts(now, mt, budget, dayNow, daysInMonth, wkExp, lastWkExp, wkTx) + '</div></section>' +
+      '</div>' +
 
       // Recent
       '<div class="section-row"><div class="section-title">' + t('recent') + '</div>' +
@@ -1535,11 +1537,12 @@
       '<div class="sum-cell neutral"><span>' + t('savingsRate') + '</span><b>' + rate + '%</b></div>' +
       '</div>' +
 
-      '<div class="section-title">' + t('trend') + '</div>' +
-      '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div></div>' +
-
-      '<div class="section-title">' + t('byCategory') + '</div>' +
-      '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div>' +
+      '<div class="dash">' +
+      '<section class="dash-card"><div class="section-title">' + t('trend') + '</div>' +
+      '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div></div></section>' +
+      '<section class="dash-card"><div class="section-title">' + t('byCategory') + '</div>' +
+      '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div></section>' +
+      '</div>' +
 
       (reportPeriod === 'month' ?
         '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' +
@@ -1961,13 +1964,13 @@
   function renderNav() {
     const nav = document.getElementById('bottomNav');
     if (!nav) return;
-    const item = (tab, ic, label, badge) => '<button class="nav-btn ' + (currentTab === tab ? 'active' : '') + '" data-tab="' + tab + '">' +
+    const item = (tab, ic, label, badge) => '<button class="nav-btn ' + (currentTab === tab ? 'active' : '') + '" data-tab="' + tab + '"' + (currentTab === tab ? ' aria-current="page"' : '') + '>' +
       '<span class="nav-ic">' + icon(ic) + (badge ? '<span class="nav-badge">' + (badge > 9 ? '9+' : badge) + '</span>' : '') + '</span>' +
       '<span>' + label + '</span></button>';
     nav.innerHTML =
       item('overview', 'wallet', t('overview'), alertCount()) +
       item('reports', 'chart', t('reports')) +
-      '<button class="nav-fab ' + (currentTab === 'add' ? 'active' : '') + '" data-tab="add">' + icon('plus') + '</button>' +
+      '<button class="nav-fab ' + (currentTab === 'add' ? 'active' : '') + '" data-tab="add" data-label="' + esc(t('add')) + '" title="' + esc(t('add')) + '">' + icon('plus') + '</button>' +
       item('transactions', 'list', t('txs')) +
       item('settings', 'settings', t('settings'));
     nav.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { currentTab = b.dataset.tab; render(); }));
