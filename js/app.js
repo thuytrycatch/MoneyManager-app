@@ -1499,6 +1499,10 @@
       (liabAccs.length ? '<div class="nw-group-title">' + t('liabilities') + '</div><div class="nw-list">' + liabAccs.map(accRow).join('') + '</div>' : '');
   }
 
+  // Wrap a report section as an atomic card (skipped when empty so the masonry
+  // grid never gets blank cells). See .report-grid / .dash-card in style.css.
+  function reportCard(inner) { return inner ? '<section class="dash-card">' + inner + '</section>' : ''; }
+
   function viewReports() {
     const { s, e } = reportRange();
     const txs = inRange(s, e);
@@ -1537,28 +1541,29 @@
       '<div class="sum-cell neutral"><span>' + t('savingsRate') + '</span><b>' + rate + '%</b></div>' +
       '</div>' +
 
+      // Charts side by side on a wide screen
       '<div class="dash">' +
-      '<section class="dash-card"><div class="section-title">' + t('trend') + '</div>' +
-      '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div></div></section>' +
-      '<section class="dash-card"><div class="section-title">' + t('byCategory') + '</div>' +
-      '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div></section>' +
+      reportCard('<div class="section-title">' + t('trend') + '</div>' +
+        '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div></div>') +
+      reportCard('<div class="section-title">' + t('byCategory') + '</div>' +
+        '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div>') +
       '</div>' +
 
-      (reportPeriod === 'month' ?
+      // Remaining sections: balanced 2-column masonry so cards are evenly sized.
+      '<div class="report-grid">' +
+      reportCard(reportPeriod === 'month' ?
         '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' +
         budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : '') +
-
       // Auto insights + spending calendar (month view only)
-      (reportPeriod === 'month' ? autoInsightsHtml() + spendingHeatmapHtml() : '') +
-
+      reportCard(reportPeriod === 'month' ? autoInsightsHtml() : '') +
+      reportCard(reportPeriod === 'month' ? spendingHeatmapHtml() : '') +
       // Trend analysis & forecast (rolling monthly window, independent of the period selector)
-      trendsForecastHtml() +
-
+      reportCard(trendsForecastHtml()) +
       // Net worth: assets vs liabilities (current snapshot)
-      netWorthHtml() +
-
-      '<div class="section-title">' + t('topSpending') + '</div>' +
-      '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>'
+      reportCard(netWorthHtml()) +
+      reportCard('<div class="section-title">' + t('topSpending') + '</div>' +
+        '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>') +
+      '</div>'
     );
   }
 
