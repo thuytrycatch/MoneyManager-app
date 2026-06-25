@@ -584,3 +584,22 @@ main { padding: 4px 12px 92px; }
 .tpl-edit-l2 .tp-amount, .tpl-edit-l2 .tp-type, .tpl-edit-l2 .tp-cat { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 .tpl-edit-row .icon-btn.danger { color: var(--expense); flex-shrink: 0; }
 .tpl-edit input:focus, .tpl-edit select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+
+/* =====================================================================
+ *  Spending calendar heat-map
+ * ===================================================================== */
+.hm-card { padding: 14px; }
+.hm-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.hm-head { margin-bottom: 6px; }
+.hm-dow { text-align: center; font-size: 10.5px; font-weight: 700; color: var(--text-secondary); }
+.hm-cell { aspect-ratio: 1; border: none; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--text-secondary); background: var(--bg-secondary); cursor: pointer; padding: 0; font-family: inherit; }
+.hm-cell.empty { background: transparent; cursor: default; }
+.hm-cell.lvl-1 { background: rgba(239, 68, 68, .22); color: var(--text-primary); }
+.hm-cell.lvl-2 { background: rgba(239, 68, 68, .42); color: #fff; }
+.hm-cell.lvl-3 { background: rgba(239, 68, 68, .66); color: #fff; }
+.hm-cell.lvl-4 { background: rgba(239, 68, 68, .9); color: #fff; }
+.hm-cell.today { outline: 2px solid var(--accent); outline-offset: -2px; }
+.hm-cell:active { transform: scale(.92); }
+.hm-legend { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: 10.5px; color: var(--text-secondary); }
+.hm-legend .sw { width: 14px; height: 14px; aspect-ratio: auto; border-radius: 4px; cursor: default; }
+.hm-legend .sw:active { transform: none; }

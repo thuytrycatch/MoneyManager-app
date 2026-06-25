@@ -158,6 +158,12 @@
       quickTemplates: 'Mẫu chi nhanh', addTemplate: 'Thêm mẫu', templateName: 'Tên mẫu',
       noTemplates: 'Chưa có mẫu nào.', templatePrefix: 'Mẫu: ',
       templatesHint: 'Tạo mẫu cho khoản hay lặp lại (gửi xe, cơm trưa…). Ở trang Thêm, chạm 1 cái là ghi ngay (có thể Hoàn tác). Mẫu lưu trên thiết bị này.',
+      // Auto insights & spending calendar
+      insights: 'Nhận xét tự động', spendingCalendar: 'Lịch chi tiêu', less: 'Ít', more: 'Nhiều',
+      insMoreAvg: 'Tháng này chi nhiều hơn {n}% so với trung bình gần đây.',
+      insLessAvg: 'Tháng này chi ít hơn {n}% so với trung bình gần đây.',
+      insWeekend: 'Cuối tuần bạn chi gấp {n} lần ngày thường.',
+      insCatJump: '{c} tăng {n}% so với tháng trước.',
       // Trends & forecast
       trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
       forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
@@ -257,6 +263,12 @@
       quickTemplates: 'Quick templates', addTemplate: 'Add template', templateName: 'Template name',
       noTemplates: 'No templates yet.', templatePrefix: 'Template: ',
       templatesHint: 'Create templates for frequent entries (parking, lunch…). On the Add page, one tap logs it instantly (with Undo). Templates are stored on this device.',
+      // Auto insights & spending calendar
+      insights: 'Insights', spendingCalendar: 'Spending calendar', less: 'Less', more: 'More',
+      insMoreAvg: 'This month is {n}% above your recent average.',
+      insLessAvg: 'This month is {n}% below your recent average.',
+      insWeekend: 'You spend {n}× more on weekends than weekdays.',
+      insCatJump: '{c} is up {n}% vs last month.',
       // Trends & forecast
       trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
       forecastNote: '🔮 Estimate based on recent months — for reference only.',
@@ -328,6 +340,7 @@
     const today = new Date(); today.setHours(0, 0, 0, 0);
     return Math.round((new Date(ymdStr + 'T00:00:00') - today) / 86400000);
   }
+  function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
   function uuid() {
     return (crypto.randomUUID && crypto.randomUUID()) ||
       ('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }));
@@ -1096,6 +1109,77 @@
       (coach ? '<div class="wrap-coach">' + coach + '</div>' : '') +
       '</div>';
   }
+
+  /* ============== Auto insights & spending calendar ============== */
+  // A few plain-language observations for the anchored month (max 3).
+  function autoInsights(anchor) {
+    const out = [];
+    const mk = monthKey(anchor);
+    const catOf = (key) => { const o = {}; DATA.transactions.forEach((x) => { if (x.type === 'expense' && x.date.slice(0, 7) === key) o[x.category] = (o[x.category] || 0) + x.amount; }); return o; };
+    const cur = catOf(mk);
+    const monthExp = Object.values(cur).reduce((a, b) => a + b, 0);
+    if (!monthExp) return out;
+    // 1) vs recent 3-month average
+    const prior = monthlyExpenseSeries(4, anchor).slice(0, 3).map((s) => s.expense).filter((v) => v > 0);
+    if (prior.length) {
+      const avg = prior.reduce((a, b) => a + b, 0) / prior.length;
+      if (avg > 0) {
+        const pct = Math.round((monthExp - avg) / avg * 100);
+        if (Math.abs(pct) >= 10) out.push({ kind: pct > 0 ? 'warn' : 'good', ic: pct > 0 ? 'trendUp' : 'trendDown', text: t(pct > 0 ? 'insMoreAvg' : 'insLessAvg').replace('{n}', Math.abs(pct)) });
+      }
+    }
+    // 2) weekend vs weekday daily average
+    const byDay = {};
+    DATA.transactions.forEach((x) => { if (x.type === 'expense' && x.date.slice(0, 7) === mk) byDay[x.date] = (byDay[x.date] || 0) + x.amount; });
+    let we = 0, wec = 0, wd = 0, wdc = 0;
+    Object.keys(byDay).forEach((d) => { const g = new Date(d + 'T00:00:00').getDay(); if (g === 0 || g === 6) { we += byDay[d]; wec++; } else { wd += byDay[d]; wdc++; } });
+    if (wec && wdc) { const r = (we / wec) / (wd / wdc); if (r >= 1.3) out.push({ kind: 'info', ic: 'calendar', text: t('insWeekend').replace('{n}', r.toFixed(1)) }); }
+    // 3) biggest category jump vs previous month
+    const prev = catOf(monthKey(addMonths(anchor, -1)));
+    let jc = '', jp = 0;
+    Object.keys(cur).forEach((c) => { const p = prev[c] || 0; if (p > 0) { const pct = Math.round((cur[c] - p) / p * 100); if (pct > jp) { jp = pct; jc = c; } } });
+    if (jc && jp >= 30) out.push({ kind: 'warn', ic: 'trendUp', text: t('insCatJump').replace('{c}', catLabel(jc)).replace('{n}', jp) });
+    return out.slice(0, 3);
+  }
+  function autoInsightsHtml() {
+    const items = autoInsights(reportAnchor);
+    if (!items.length) return '';
+    return '<div class="section-title">' + t('insights') + '</div>' +
+      '<div class="alerts">' + items.map((i) => alertItem(i.kind, i.ic, i.text)).join('') + '</div>';
+  }
+  // Month calendar heat-map: each day shaded by how much was spent.
+  function spendingHeatmapHtml() {
+    const anchor = reportAnchor;
+    const mk = monthKey(anchor);
+    const first = startOfMonth(anchor);
+    const days = endOfMonth(anchor).getDate();
+    const byDay = {}; let maxv = 0;
+    DATA.transactions.forEach((tx) => {
+      if (tx.type !== 'expense' || tx.date.slice(0, 7) !== mk) return;
+      const d = parseInt(tx.date.slice(8, 10), 10);
+      byDay[d] = (byDay[d] || 0) + tx.amount;
+      if (byDay[d] > maxv) maxv = byDay[d];
+    });
+    const lead = (first.getDay() + 6) % 7; // Monday-first offset
+    const todayStr = ymd(new Date());
+    let cells = '';
+    for (let i = 0; i < lead; i++) cells += '<div class="hm-cell empty"></div>';
+    for (let d = 1; d <= days; d++) {
+      const v = byDay[d] || 0;
+      const lvl = (v === 0 || maxv === 0) ? 0 : Math.min(4, Math.ceil(v / maxv * 4));
+      const dateStr = mk + '-' + pad(d);
+      cells += '<button class="hm-cell lvl-' + lvl + (dateStr === todayStr ? ' today' : '') + '" data-hmday="' + dateStr + '"' +
+        (v ? ' title="' + fmtShort(v) + '₫"' : '') + '>' + d + '</button>';
+    }
+    const head = t('dows').map((dn) => '<div class="hm-dow">' + dn + '</div>').join('');
+    return '<div class="section-title">' + t('spendingCalendar') + '</div>' +
+      '<div class="card hm-card">' +
+      '<div class="hm-grid hm-head">' + head + '</div>' +
+      '<div class="hm-grid">' + cells + '</div>' +
+      '<div class="hm-legend"><span>' + t('less') + '</span>' +
+      [0, 1, 2, 3, 4].map((l) => '<span class="hm-cell sw lvl-' + l + '"></span>').join('') +
+      '<span>' + t('more') + '</span></div></div>';
+  }
   function trendData(txs, range) {
     let labels = [], inc = [], exp = [];
     if (reportPeriod === 'week') {
@@ -1307,6 +1391,9 @@
       (reportPeriod === 'month' ?
         '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' +
         budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : '') +
+
+      // Auto insights + spending calendar (month view only)
+      (reportPeriod === 'month' ? autoInsightsHtml() + spendingHeatmapHtml() : '') +
 
       // Trend analysis & forecast (rolling monthly window, independent of the period selector)
       trendsForecastHtml() +
@@ -1768,6 +1855,8 @@
     // reports period + nav
     document.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => { reportPeriod = b.dataset.period; render(); }));
     document.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', () => shiftReport(parseInt(b.dataset.shift, 10))));
+    // spending calendar: tap a day → open that month's transactions
+    document.querySelectorAll('[data-hmday]').forEach((b) => b.addEventListener('click', () => { filterMonth = b.dataset.hmday.slice(0, 7); filterCategory = ''; filterType = ''; currentTab = 'transactions'; render(); }));
     // budgets
     const sb = document.getElementById('saveBudgetBtn');
     if (sb) sb.addEventListener('click', async () => {
