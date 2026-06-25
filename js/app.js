@@ -148,6 +148,11 @@
       reminderKeepStreak: '🔥 Giữ chuỗi {n} ngày — ghi một khoản hôm nay nhé!',
       reminderEnabled: 'Đã bật nhắc nhở', reminderDisabled: 'Đã tắt nhắc nhở',
       reminderDenied: 'Thông báo đang bị chặn — hãy cho phép trong cài đặt trình duyệt.', reminderUnsupported: 'Trình duyệt không hỗ trợ thông báo.',
+      // Wrap-up & comparison
+      wrapNoPrev: 'Chưa có dữ liệu kỳ trước để so sánh.', wrapMore: 'Chi nhiều hơn {n}% so với kỳ trước.',
+      wrapLess: 'Chi ít hơn {n}% so với kỳ trước.', wrapSame: 'Chi tương đương kỳ trước.',
+      wrapGood: '👏 Bạn tiết kiệm tốt hơn — giữ nhịp nhé!', wrapWatch: '⚠️ Chi tăng khá nhiều — để ý nhé.',
+      wrapBiggest: 'Lớn nhất',
       // Trends & forecast
       trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
       forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
@@ -237,6 +242,11 @@
       reminderKeepStreak: '🔥 Keep your {n}-day streak — log something today!',
       reminderEnabled: 'Reminders on', reminderDisabled: 'Reminders off',
       reminderDenied: 'Notifications are blocked — allow them in your browser settings.', reminderUnsupported: 'Notifications are not supported in this browser.',
+      // Wrap-up & comparison
+      wrapNoPrev: 'No previous period to compare.', wrapMore: 'Spent {n}% more than last period.',
+      wrapLess: 'Spent {n}% less than last period.', wrapSame: 'About the same as last period.',
+      wrapGood: '👏 You saved more — keep it up!', wrapWatch: '⚠️ Spending jumped — keep an eye on it.',
+      wrapBiggest: 'Biggest',
       // Trends & forecast
       trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
       forecastNote: '🔮 Estimate based on recent months — for reference only.',
@@ -931,6 +941,42 @@
     else a.setMonth(a.getMonth() + dir);
     reportAnchor = a; render();
   }
+  // Range of the period immediately before the anchored one (same length).
+  function prevReportRange() {
+    const a = new Date(reportAnchor);
+    if (reportPeriod === 'week') { a.setDate(a.getDate() - 7); return { s: startOfWeek(a), e: endOfWeek(a) }; }
+    if (reportPeriod === 'year') { a.setFullYear(a.getFullYear() - 1); return { s: new Date(a.getFullYear(), 0, 1), e: new Date(a.getFullYear(), 11, 31) }; }
+    a.setMonth(a.getMonth() - 1); return { s: startOfMonth(a), e: endOfMonth(a) };
+  }
+  // Small ▲/▼ delta chip vs the previous period. higherIsGood flips the colour meaning.
+  function deltaChip(cur, prev, higherIsGood) {
+    if (!prev && !cur) return '';
+    const pct = prev !== 0 ? Math.round((cur - prev) / Math.abs(prev) * 100) : (cur ? 100 : 0);
+    if (pct === 0) return '<span class="sum-delta flat">—</span>';
+    const up = pct > 0, good = higherIsGood ? up : !up;
+    return '<span class="sum-delta ' + (good ? 'good' : 'bad') + '">' + icon(up ? 'trendUp' : 'trendDown') + ' ' + Math.abs(pct) + '%</span>';
+  }
+  // "Wrap-up" headline card summarising the selected period vs the previous one.
+  function reportWrapUpHtml(tt, pt, byCat) {
+    const rate = tt.income ? Math.round(tt.net / tt.income * 100) : 0;
+    let topCat = '', topVal = 0;
+    Object.keys(byCat).forEach((c) => { if (byCat[c] > topVal) { topVal = byCat[c]; topCat = c; } });
+    const dpct = pt.expense ? Math.round((tt.expense - pt.expense) / pt.expense * 100) : null;
+    let cmp;
+    if (dpct === null) cmp = t('wrapNoPrev');
+    else if (dpct > 0) cmp = t('wrapMore').replace('{n}', dpct);
+    else if (dpct < 0) cmp = t('wrapLess').replace('{n}', Math.abs(dpct));
+    else cmp = t('wrapSame');
+    const coach = (dpct !== null && dpct < 0) ? t('wrapGood') : ((dpct !== null && dpct > 10) ? t('wrapWatch') : '');
+    return '<div class="wrap-card">' +
+      '<div class="wrap-top"><span class="wrap-period">' + esc(reportLabel()) + '</span>' +
+      '<span class="wrap-rate">' + t('savingsRate') + ' ' + rate + '%</span></div>' +
+      '<div class="wrap-spent">' + fmtVND(tt.expense) + '</div>' +
+      '<div class="wrap-cmp">' + cmp + '</div>' +
+      (topCat ? '<div class="wrap-biggest">' + catIcon(topCat) + ' ' + t('wrapBiggest') + ': ' + esc(catLabel(topCat)) + ' · ' + fmtShort(topVal) + '₫</div>' : '') +
+      (coach ? '<div class="wrap-coach">' + coach + '</div>' : '') +
+      '</div>';
+  }
   function trendData(txs, range) {
     let labels = [], inc = [], exp = [];
     if (reportPeriod === 'week') {
@@ -1101,6 +1147,8 @@
     const tt = totals(txs);
     const byCat = byCategory(txs);
     const rate = tt.income ? Math.round(tt.net / tt.income * 100) : 0;
+    const pr = prevReportRange();
+    const pt = totals(inRange(pr.s, pr.e));
     const td = trendData(txs, { s, e });
     const incColor = getComputedStyle(document.body).getPropertyValue('--income').trim() || '#10b981';
     const expColor = getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444';
@@ -1122,10 +1170,12 @@
       '<span class="period-label">' + reportLabel() + '</span>' +
       '<button class="nav-arrow" data-shift="1">' + icon('right') + '</button></div>' +
 
+      reportWrapUpHtml(tt, pt, byCat) +
+
       '<div class="summary-grid">' +
-      '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + fmtShort(tt.income) + '₫</b></div>' +
-      '<div class="sum-cell expense"><span>' + t('expense') + '</span><b>' + fmtShort(tt.expense) + '₫</b></div>' +
-      '<div class="sum-cell ' + (tt.net >= 0 ? 'income' : 'expense') + '"><span>' + t('savings') + '</span><b>' + fmtShort(tt.net) + '₫</b></div>' +
+      '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + fmtShort(tt.income) + '₫</b>' + deltaChip(tt.income, pt.income, true) + '</div>' +
+      '<div class="sum-cell expense"><span>' + t('expense') + '</span><b>' + fmtShort(tt.expense) + '₫</b>' + deltaChip(tt.expense, pt.expense, false) + '</div>' +
+      '<div class="sum-cell ' + (tt.net >= 0 ? 'income' : 'expense') + '"><span>' + t('savings') + '</span><b>' + fmtShort(tt.net) + '₫</b>' + deltaChip(tt.net, pt.net, true) + '</div>' +
       '<div class="sum-cell neutral"><span>' + t('savingsRate') + '</span><b>' + rate + '%</b></div>' +
       '</div>' +
 
