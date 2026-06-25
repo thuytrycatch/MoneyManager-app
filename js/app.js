@@ -165,6 +165,7 @@
       typeSavings: 'Tiết kiệm', typeCredit: 'Thẻ tín dụng', typeLoan: 'Khoản vay',
       creditLimit: 'Hạn mức', statementDay: 'Ngày sao kê', dueDay: 'Ngày đến hạn',
       utilization: 'Đã dùng hạn mức', minPayment: 'Trả tối thiểu', dueDate: 'Đến hạn', owed: 'Đang nợ',
+      dueInDays: 'còn {n} ngày', dueTodayLabel: 'đến hạn hôm nay',
       liabilityHint: 'Với thẻ tín dụng / khoản vay: nhập số dư âm nếu đang nợ (vd −4.500.000). Hạn mức và ngày sao kê/đến hạn là tùy chọn.',
     },
     en: {
@@ -259,6 +260,7 @@
       typeSavings: 'Savings', typeCredit: 'Credit card', typeLoan: 'Loan',
       creditLimit: 'Credit limit', statementDay: 'Statement day', dueDay: 'Due day',
       utilization: 'Utilization', minPayment: 'Min. payment', dueDate: 'Due', owed: 'Owed',
+      dueInDays: 'in {n} days', dueTodayLabel: 'due today',
       liabilityHint: 'For credit cards / loans: enter a negative balance if you owe (e.g. −4,500,000). Limit and statement/due days are optional.',
     },
   };
@@ -312,6 +314,11 @@
   function endOfWeek(d) { const s = startOfWeek(d); const e = new Date(s); e.setDate(s.getDate() + 6); return e; }
   function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
+  // Whole days from today until a "YYYY-MM-DD" date (negative = already past).
+  function daysUntil(ymdStr) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return Math.round((new Date(ymdStr + 'T00:00:00') - today) / 86400000);
+  }
   function uuid() {
     return (crypto.randomUUID && crypto.randomUUID()) ||
       ('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }));
@@ -905,6 +912,24 @@
       if (pct >= 100) out.push(alertItem('danger', 'alert', '<b>' + cat + '</b>: ' + t('warn100').toLowerCase() + ' (' + pct + '% — ' + fmtShort(used) + '/' + fmtShort(lim) + '₫)'));
       else if (pct >= 80) out.push(alertItem('warn', 'alert', '<b>' + cat + '</b>: ' + t('warn80').toLowerCase() + ' (' + pct + '%)'));
     });
+    // credit-card / loan due reminders (and high utilization)
+    activeAccounts().forEach((acc) => {
+      if (accountClass(acc) !== 'liability') return;
+      const cyc = cardCycle(acc);
+      if (cyc.owed <= 0) return;
+      if (cyc.dueDate) {
+        const dleft = daysUntil(cyc.dueDate);
+        if (dleft <= 7) {
+          const when = dleft <= 0 ? t('dueTodayLabel') : t('dueInDays').replace('{n}', dleft);
+          const pay = cyc.minPayment > 0 ? ' · ' + t('minPayment').toLowerCase() + ' ' + fmtShort(cyc.minPayment) + '₫' : '';
+          out.push(alertItem(dleft <= 2 ? 'danger' : 'warn', 'card',
+            '<b>' + esc(acc.name) + '</b>: ' + t('dueDate').toLowerCase() + ' ' + cyc.dueDate + ' (' + when + ')' + pay));
+        }
+      }
+      if (cyc.utilization != null && cyc.utilization >= 80) {
+        out.push(alertItem('warn', 'card', '<b>' + esc(acc.name) + '</b>: ' + t('utilization').toLowerCase() + ' ' + cyc.utilization + '%'));
+      }
+    });
     // pace
     if (budget > 0) {
       const expected = budget * dayNow / daysInMonth;
@@ -919,6 +944,19 @@
     if (big) out.push(alertItem('info', 'spark', t('biggestWeek') + ': <b>' + esc(big.note) + '</b> · ' + fmtShort(big.amount) + '₫'));
     if (!out.length) out.push(alertItem('good', 'check', t('noAlerts')));
     return out.join('');
+  }
+  // Count of items that need attention now (drives the Overview nav badge):
+  // any category at/over budget this month + any liability due within 3 days.
+  function alertCount() {
+    let n = 0;
+    const byCat = byCategory(inRange(startOfMonth(new Date()), endOfMonth(new Date())));
+    Object.keys(DATA.budgets).forEach((c) => { const lim = DATA.budgets[c]; if (lim && (byCat[c] || 0) >= lim) n++; });
+    activeAccounts().forEach((a) => {
+      if (accountClass(a) !== 'liability') return;
+      const cyc = cardCycle(a);
+      if (cyc.owed > 0 && cyc.dueDate && daysUntil(cyc.dueDate) <= 3) n++;
+    });
+    return n;
   }
 
   /* ============== VIEW: Reports ============== */
@@ -1588,9 +1626,11 @@
   function renderNav() {
     const nav = document.getElementById('bottomNav');
     if (!nav) return;
-    const item = (tab, ic, label) => '<button class="nav-btn ' + (currentTab === tab ? 'active' : '') + '" data-tab="' + tab + '">' + icon(ic) + '<span>' + label + '</span></button>';
+    const item = (tab, ic, label, badge) => '<button class="nav-btn ' + (currentTab === tab ? 'active' : '') + '" data-tab="' + tab + '">' +
+      '<span class="nav-ic">' + icon(ic) + (badge ? '<span class="nav-badge">' + (badge > 9 ? '9+' : badge) + '</span>' : '') + '</span>' +
+      '<span>' + label + '</span></button>';
     nav.innerHTML =
-      item('overview', 'wallet', t('overview')) +
+      item('overview', 'wallet', t('overview'), alertCount()) +
       item('reports', 'chart', t('reports')) +
       '<button class="nav-fab ' + (currentTab === 'add' ? 'active' : '') + '" data-tab="add">' + icon('plus') + '</button>' +
       item('transactions', 'list', t('txs')) +
