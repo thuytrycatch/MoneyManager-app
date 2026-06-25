@@ -121,7 +121,6 @@ main { padding: 4px 16px 110px; }
    the tablet/desktop breakpoints below. Children must allow shrinking so
    chart canvases don't overflow their column. */
 .dash-card { min-width: 0; }
-.dash-card > .section-title:first-child { margin-top: 0; }
 
 /* ---------- Card ---------- */
 .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
@@ -171,13 +170,18 @@ main { padding: 4px 16px 110px; }
 
 /* ---------- Quick add / filters ---------- */
 .quick-add { display: flex; gap: 8px; margin-top: 8px; }
-.quick-add input { flex: 1; min-height: 50px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 0 16px; box-shadow: var(--shadow); }
+.quick-add input { flex: 1; min-width: 0; min-height: 50px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 0 16px; box-shadow: var(--shadow); }
 .quick-add input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 .add-btn-inline { display: flex; align-items: center; justify-content: center; min-width: 50px; height: 50px; background: var(--accent); color: #fff; border: none; border-radius: 14px; cursor: pointer; box-shadow: var(--shadow-lg); }
 .add-btn-inline .ic { width: 24px; height: 24px; }
 .add-btn-inline:disabled { opacity: .6; }
-.filters { display: flex; gap: 8px; margin: 12px 0; }
-.filters select { flex: 1; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 10px; box-shadow: var(--shadow); }
+/* Filters: 2 rows on mobile (month full-width, then category + type) so the
+   long Vietnamese labels fit without overflowing the viewport. min-width:0 lets
+   each <select> shrink below its intrinsic content width. */
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.filters #fMonth { grid-column: 1 / -1; }
+.filters select { min-width: 0; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; color: var(--text-primary); box-shadow: var(--shadow); text-overflow: ellipsis; }
+.acct-row select { flex: 1; min-width: 0; }
 
 /* ---------- Date bar (quick-add date picker) ---------- */
 .date-bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
@@ -489,8 +493,15 @@ main { padding: 4px 12px 92px; }
   .app-shell { max-width: 720px; }
   main { padding: 8px 24px 100px; }
   .tiles { grid-template-columns: repeat(4, 1fr); }
+  /* Enough width now — filters fit on a single row */
+  .filters { grid-template-columns: repeat(3, 1fr); }
+  .filters #fMonth { grid-column: auto; }
   .dash { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; align-items: start; }
   .dash > .dash-full { grid-column: 1 / -1; }
+  .dash-card > .section-title:first-child { margin-top: 0; }
+  /* Reports body: balanced 2-column masonry so cards are evenly sized */
+  .report-grid { column-count: 2; column-gap: 16px; }
+  .report-grid > .dash-card { break-inside: avoid; margin: 0 0 16px; }
 }
 
 /* ---------- Desktop: sidebar shell ---------- */
@@ -557,6 +568,8 @@ main { padding: 4px 12px 92px; }
 
   /* Dashboard: charts/cards side by side */
   .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
+  .report-grid { column-gap: 18px; }
+  .report-grid > .dash-card { margin-bottom: 18px; }
   .tiles { grid-template-columns: repeat(4, 1fr); }
   .summary-grid { grid-template-columns: repeat(4, 1fr); }
 
