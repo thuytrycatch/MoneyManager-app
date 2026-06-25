@@ -567,3 +567,20 @@ main { padding: 4px 12px 92px; }
 .sum-delta.good { color: var(--income); }
 .sum-delta.bad { color: var(--expense); }
 .sum-delta.flat { color: var(--text-secondary); }
+
+/* =====================================================================
+ *  Quick templates (chips on Add + editor in Settings)
+ * ===================================================================== */
+.tpl-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.tpl-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 9px 13px; cursor: pointer; box-shadow: var(--shadow); font-weight: 600; color: var(--text-primary); }
+.tpl-chip .ic { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+.tpl-chip .tpl-amt { color: var(--text-secondary); font-size: 12.5px; font-weight: 700; }
+.tpl-chip:active { transform: translateY(1px); background: var(--bg-secondary); }
+
+.tpl-edit-row { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+.tpl-edit-l1 { display: flex; gap: 8px; align-items: center; }
+.tpl-edit-l1 .tp-label { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; font-weight: 600; }
+.tpl-edit-l2 { display: flex; gap: 8px; margin-top: 8px; }
+.tpl-edit-l2 .tp-amount, .tpl-edit-l2 .tp-type, .tpl-edit-l2 .tp-cat { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.tpl-edit-row .icon-btn.danger { color: var(--expense); flex-shrink: 0; }
+.tpl-edit input:focus, .tpl-edit select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }

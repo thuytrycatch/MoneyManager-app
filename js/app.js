@@ -45,6 +45,7 @@
     piggy: '<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5Z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/>',
     spark: '<path d="M12 3v18"/><path d="M5 8l7-5 7 5"/><path d="M5 16l7 5 7-5"/>',
     bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
     utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
     car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
     bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
@@ -153,6 +154,10 @@
       wrapLess: 'Chi ít hơn {n}% so với kỳ trước.', wrapSame: 'Chi tương đương kỳ trước.',
       wrapGood: '👏 Bạn tiết kiệm tốt hơn — giữ nhịp nhé!', wrapWatch: '⚠️ Chi tăng khá nhiều — để ý nhé.',
       wrapBiggest: 'Lớn nhất',
+      // Quick templates
+      quickTemplates: 'Mẫu chi nhanh', addTemplate: 'Thêm mẫu', templateName: 'Tên mẫu',
+      noTemplates: 'Chưa có mẫu nào.', templatePrefix: 'Mẫu: ',
+      templatesHint: 'Tạo mẫu cho khoản hay lặp lại (gửi xe, cơm trưa…). Ở trang Thêm, chạm 1 cái là ghi ngay (có thể Hoàn tác). Mẫu lưu trên thiết bị này.',
       // Trends & forecast
       trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
       forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
@@ -248,6 +253,10 @@
       wrapLess: 'Spent {n}% less than last period.', wrapSame: 'About the same as last period.',
       wrapGood: '👏 You saved more — keep it up!', wrapWatch: '⚠️ Spending jumped — keep an eye on it.',
       wrapBiggest: 'Biggest',
+      // Quick templates
+      quickTemplates: 'Quick templates', addTemplate: 'Add template', templateName: 'Template name',
+      noTemplates: 'No templates yet.', templatePrefix: 'Template: ',
+      templatesHint: 'Create templates for frequent entries (parking, lunch…). On the Add page, one tap logs it instantly (with Undo). Templates are stored on this device.',
       // Trends & forecast
       trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
       forecastNote: '🔮 Estimate based on recent months — for reference only.',
@@ -424,6 +433,78 @@
     setLastNotified(today);
     const body = s.current > 0 ? t('reminderKeepStreak').replace('{n}', s.current) : t('reminderBody');
     showLocalNotification(t('reminderTitle'), body);
+  }
+
+  /* ============== Quick templates (per-device, localStorage) ============== */
+  function templatesKey() { return 'mm_templates_' + (DATA.household ? DATA.household.id : ''); }
+  function getTemplates() {
+    try { const a = JSON.parse(localStorage.getItem(templatesKey()) || '[]'); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function setTemplates(list) { try { localStorage.setItem(templatesKey(), JSON.stringify(list)); } catch (e) { /* ignore */ } }
+
+  // Tap a template → log it immediately for today (with an Undo bar).
+  async function addFromTemplate(id) {
+    const tp = getTemplates().find((x) => x.id === id); if (!tp) return;
+    const accountId = defaultAccountId() || '';
+    const draft = {
+      date: ymd(new Date()), time: new Date().toTimeString().slice(0, 5),
+      rawInput: t('templatePrefix') + tp.label,
+      amount: Math.round(tp.amount), type: tp.type === 'income' ? 'income' : 'expense',
+      category: tp.category, note: tp.note || tp.label, accountId: accountId || null,
+    };
+    await saveDrafts([draft], accountId, { undo: true });
+  }
+
+  // Tappable chips on the Add page.
+  function templateChipsHtml() {
+    const tpls = getTemplates();
+    if (!tpls.length) return '';
+    return '<div class="section-title">' + t('quickTemplates') + '</div>' +
+      '<div class="tpl-chips">' + tpls.map((tp) =>
+        '<button class="tpl-chip" data-usetpl="' + esc(tp.id) + '">' + catIcon(tp.category) +
+        '<span class="tpl-name">' + esc(tp.label) + '</span>' +
+        '<span class="tpl-amt">' + (tp.type === 'income' ? '+' : '−') + fmtShort(tp.amount) + '₫</span></button>').join('') +
+      '</div>';
+  }
+
+  // Editor row + editor (Settings → Quick templates).
+  function templateEditRowHtml(tp) {
+    const x = tp || { id: '', label: '', amount: '', type: 'expense', category: 'Ăn uống', note: '' };
+    const catOpts = CATS.map((c) => '<option value="' + esc(c) + '"' + (c === x.category ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>').join('');
+    const typeOpts = '<option value="expense"' + (x.type !== 'income' ? ' selected' : '') + '>' + t('expense') + '</option>' +
+      '<option value="income"' + (x.type === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
+    return '<div class="tpl-edit-row" data-tpl="' + esc(x.id) + '">' +
+      '<div class="tpl-edit-l1">' +
+      '<input type="text" class="tp-label" value="' + esc(x.label) + '" placeholder="' + t('templateName') + '"/>' +
+      (tp ? '<button type="button" class="icon-btn danger" data-deltpl="1" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') +
+      '</div>' +
+      '<div class="tpl-edit-l2">' +
+      '<input type="number" inputmode="numeric" class="tp-amount" value="' + (x.amount || '') + '" placeholder="' + t('amount') + '"/>' +
+      '<select class="tp-type">' + typeOpts + '</select>' +
+      '<select class="tp-cat">' + catOpts + '</select>' +
+      '</div></div>';
+  }
+  function templatesEditorHtml() {
+    const tpls = getTemplates();
+    const rows = tpls.length ? tpls.map(templateEditRowHtml).join('') : '<div class="empty">' + t('noTemplates') + '</div>';
+    return '<div class="tpl-edit" id="tplEdit">' + rows + '</div>' +
+      '<div class="wallet-edit-actions">' +
+      '<button id="addTplBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addTemplate') + '</button>' +
+      '<button id="saveTplBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button></div>';
+  }
+
+  // Recent distinct raw inputs → quick-add autocomplete (datalist).
+  function inputSuggestions() {
+    const seen = new Set(), out = [];
+    for (const tx of DATA.transactions) {
+      if (tx.type === 'transfer') continue;
+      const v = (tx.rawInput || '').trim(); if (!v) continue;
+      const k = v.toLowerCase(); if (seen.has(k)) continue;
+      seen.add(k); out.push(v);
+      if (out.length >= 15) break;
+    }
+    return out;
   }
 
   /* ============== Accounts (wallets) ============== */
@@ -1264,8 +1345,9 @@
     });
 
     return (
-      '<div class="quick-add"><input id="txInput" type="text" placeholder="' + t('placeholder') + '" autocomplete="off"/>' +
+      '<div class="quick-add"><input id="txInput" type="text" list="txSuggest" placeholder="' + t('placeholder') + '" autocomplete="off"/>' +
       '<button id="addBtn" class="add-btn-inline">' + icon('plus') + '</button></div>' +
+      '<datalist id="txSuggest">' + inputSuggestions().map((s) => '<option value="' + esc(s) + '"></option>').join('') + '</datalist>' +
       dateBar('txDate') +
       (accountSelect('txAccount') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccount') + '</div>' : '') +
       '<div class="filters">' +
@@ -1286,6 +1368,7 @@
       (accountSelect('txAccountBig') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccountBig') + '</div>' : '') +
       '<button id="addBtnBig" class="primary-btn">' + icon('plus') + ' ' + t('add') + '</button>' +
       (activeAccounts().length >= 2 ? '<button id="transferBtn" class="ghost-btn transfer-btn">' + icon('transfer') + ' ' + t('transferBetween') + '</button>' : '') +
+      templateChipsHtml() +
       '<div class="examples">' +
       ['ăn sáng 35k', 'lương 15 triệu', 'đổ xăng 80k', 'cafe 2 triệu rưỡi', 'grab 1tr2', 'tiền điện 500 nghìn', 'mua giày 800k', 'khám bệnh 250k']
         .map((ex) => '<button class="chip" data-ex="' + ex + '">' + ex + '</button>').join('') +
@@ -1398,6 +1481,7 @@
       iosGroup([
         iosRow({ ic: 'target', tint: 'red', label: t('budget'), page: 'budget' }),
         iosRow({ ic: 'card', tint: 'orange', label: t('wallets'), value: accs.length ? String(accs.length) : '', page: 'wallets' }),
+        iosRow({ ic: 'zap', tint: 'green', label: t('quickTemplates'), value: getTemplates().length ? String(getTemplates().length) : '', page: 'templates' }),
       ], t('grpMoney')) +
       iosGroup([
         iosRow({ ic: 'globe', tint: 'teal', label: t('language'), value: (lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'), action: 'lang' }),
@@ -1433,6 +1517,9 @@
     } else if (page === 'wallets') {
       title = t('wallets');
       body = walletsEditorHtml();
+    } else if (page === 'templates') {
+      title = t('quickTemplates');
+      body = '<div class="hint">' + t('templatesHint') + '</div>' + templatesEditorHtml();
     } else if (page === 'household') {
       title = t('household');
       body = (myHouseholds.length > 1 ?
@@ -1744,6 +1831,35 @@
         toast(t('walletDeleted'), 'info');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     }));
+    // Quick templates: tap a chip (Add page) to log it instantly
+    document.querySelectorAll('[data-usetpl]').forEach((b) => b.addEventListener('click', () => addFromTemplate(b.dataset.usetpl)));
+    // Quick templates: add a blank editor row
+    const atpl = document.getElementById('addTplBtn');
+    if (atpl) atpl.addEventListener('click', () => {
+      const box = document.getElementById('tplEdit'); if (!box) return;
+      const empty = box.querySelector('.empty'); if (empty) empty.remove();
+      box.insertAdjacentHTML('beforeend', templateEditRowHtml(null));
+      const last = box.querySelector('.tpl-edit-row:last-child .tp-label'); if (last) last.focus();
+    });
+    // Quick templates: delete a row (persisted on Save)
+    document.querySelectorAll('[data-deltpl]').forEach((b) => b.addEventListener('click', () => {
+      const row = b.closest('.tpl-edit-row'); if (row) row.remove();
+    }));
+    // Quick templates: save all rows
+    const stpl = document.getElementById('saveTplBtn');
+    if (stpl) stpl.addEventListener('click', () => {
+      const list = [];
+      Array.from(document.querySelectorAll('#tplEdit .tpl-edit-row')).forEach((r) => {
+        const label = (r.querySelector('.tp-label').value || '').trim();
+        const amount = Math.round(Number(r.querySelector('.tp-amount').value) || 0);
+        if (!label || amount <= 0) return;
+        list.push({ id: r.dataset.tpl || uuid(), label: label, amount: amount,
+          type: r.querySelector('.tp-type').value === 'income' ? 'income' : 'expense',
+          category: r.querySelector('.tp-cat').value, note: label });
+      });
+      setTemplates(list);
+      toast(t('save') + ' ✓', 'success'); render();
+    });
     // Save AI keys (parser): Gemini (free) + Claude (paid fallback)
     const sc = document.getElementById('saveConfigBtn');
     if (sc) sc.addEventListener('click', () => {
