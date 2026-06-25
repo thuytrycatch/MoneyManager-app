@@ -280,6 +280,15 @@
       sortOrder: a.sort_order || 0,
     };
   }
+  function mapGoal(g) {
+    return {
+      id: g.id,
+      name: g.name,
+      targetAmount: Number(g.target_amount || 0),
+      accountId: g.account_id || null,
+      dueDate: g.due_date || null,
+    };
+  }
 
   /* ---------------- Read all of the household's data ---------------- */
   async function loadData() {
@@ -317,7 +326,12 @@
     const transactions = (txRes.data || []).map(mapRow);
     const accounts = (accRes.data || []).map(mapAccount);
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts };
+    // Optional tables — tolerate absence so the app keeps working before
+    // supabase-schema.sql has been re-run (missing table → empty list).
+    const goals = await sb.from('goals').select('*').eq('household_id', hid)
+      .then((r) => (r.error ? [] : (r.data || []).map(mapGoal))).catch(() => []);
+
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals };
     idbSet('data', data).catch(() => {});
     return data;
   }
@@ -466,6 +480,36 @@
     if (error) throw new Error(error.message);
   }
 
+  /* ---------------- Savings goals ---------------- */
+  async function addGoal(goal) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { data, error } = await sb.from('goals').insert({
+      household_id: household.id,
+      name: goal.name,
+      target_amount: Math.round(goal.targetAmount || 0),
+      account_id: goal.accountId || null,
+      due_date: goal.dueDate || null,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return mapGoal(data);
+  }
+  async function updateGoal(id, fields) {
+    const sb = getClient();
+    const patch = {};
+    if ('name' in fields) patch.name = fields.name;
+    if ('targetAmount' in fields) patch.target_amount = Math.round(fields.targetAmount || 0);
+    if ('accountId' in fields) patch.account_id = fields.accountId || null;
+    if ('dueDate' in fields) patch.due_date = fields.dueDate || null;
+    const { error } = await sb.from('goals').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+  async function deleteGoal(id) {
+    const sb = getClient();
+    const { error } = await sb.from('goals').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
   /* ---------------- Realtime sync ---------------- */
   let channel = null;
   function subscribeChanges(onChange) {
@@ -477,6 +521,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: 'household_id=eq.' + hid }, onChange)
       .subscribe();
     return channel;
   }
@@ -510,6 +555,9 @@
     addAccount,
     updateAccount,
     deleteAccount,
+    addGoal,
+    updateGoal,
+    deleteGoal,
     subscribeChanges,
     unsubscribeChanges,
     DEFAULT_BUDGETS,

@@ -603,3 +603,30 @@ main { padding: 4px 12px 92px; }
 .hm-legend { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: 10.5px; color: var(--text-secondary); }
 .hm-legend .sw { width: 14px; height: 14px; aspect-ratio: auto; border-radius: 4px; cursor: default; }
 .hm-legend .sw:active { transform: none; }
+
+/* =====================================================================
+ *  Savings goals
+ * ===================================================================== */
+.goal-list { display: flex; flex-direction: column; gap: 10px; }
+.goal-card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; box-shadow: var(--shadow); }
+.goal-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.goal-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.goal-name .ic { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+.goal-pct { font-weight: 800; color: var(--accent); flex-shrink: 0; }
+.goal-pct.done { color: var(--income); }
+.goal-track { height: 8px; background: var(--bg-secondary); border-radius: 99px; overflow: hidden; margin: 9px 0 7px; }
+.goal-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 99px; transition: width .4s ease; }
+.goal-fill.done { background: linear-gradient(90deg, var(--income), #34d399); }
+.goal-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
+.goal-eta { color: var(--accent); flex-shrink: 0; }
+
+.goal-edit-row { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+.goal-edit-l1 { display: flex; gap: 8px; align-items: center; }
+.goal-edit-l1 .g-name { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; font-weight: 600; }
+.goal-edit-l2 { display: flex; gap: 8px; margin-top: 8px; }
+.goal-edit-l2 .g-target, .goal-edit-l2 .g-acct { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.goal-edit-l3 { margin-top: 8px; }
+.goal-edit-l3 label { display: block; font-size: 12px; color: var(--text-secondary); font-weight: 600; margin-bottom: 4px; }
+.goal-edit-l3 .g-due { width: 100%; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; }
+.goal-edit-row .icon-btn.danger { color: var(--expense); flex-shrink: 0; }
+.goal-edit input:focus, .goal-edit select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }

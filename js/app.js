@@ -164,6 +164,13 @@
       insLessAvg: 'Tháng này chi ít hơn {n}% so với trung bình gần đây.',
       insWeekend: 'Cuối tuần bạn chi gấp {n} lần ngày thường.',
       insCatJump: '{c} tăng {n}% so với tháng trước.',
+      // Savings goals
+      savingsGoals: 'Mục tiêu tiết kiệm', addGoal: 'Thêm mục tiêu', goalName: 'Tên mục tiêu',
+      targetAmount: 'Số tiền mục tiêu', linkedWallet: 'Ví tiết kiệm', dueDateOpt: 'Hạn (tùy chọn)',
+      noGoals: 'Chưa có mục tiêu nào.', goalDone: 'Hoàn thành! 🎉',
+      goalNeed: 'còn {m} tháng · để {a}/tháng', goalDueSoon: 'sắp đến hạn',
+      goalsHint: 'Gắn mục tiêu với một ví Tiết kiệm — tiến độ tự tính theo số dư ví đó. Để trống ví nếu chỉ muốn ghi mục tiêu.',
+      goalNone: '— Không gắn ví —',
       // Trends & forecast
       trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
       forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
@@ -269,6 +276,13 @@
       insLessAvg: 'This month is {n}% below your recent average.',
       insWeekend: 'You spend {n}× more on weekends than weekdays.',
       insCatJump: '{c} is up {n}% vs last month.',
+      // Savings goals
+      savingsGoals: 'Savings goals', addGoal: 'Add goal', goalName: 'Goal name',
+      targetAmount: 'Target amount', linkedWallet: 'Savings wallet', dueDateOpt: 'Deadline (optional)',
+      noGoals: 'No goals yet.', goalDone: 'Reached! 🎉',
+      goalNeed: '{m} months left · {a}/mo', goalDueSoon: 'due soon',
+      goalsHint: 'Link a goal to a Savings wallet — progress tracks that wallet balance. Leave the wallet empty to just note a target.',
+      goalNone: '— No wallet —',
       // Trends & forecast
       trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
       forecastNote: '🔮 Estimate based on recent months — for reference only.',
@@ -301,7 +315,7 @@
   function catLabel(c) { return (CAT_LABELS[lang] && CAT_LABELS[lang][c]) || c; }
 
   /* ============== State ============== */
-  let DATA = { household: null, budgets: {}, transactions: [], accounts: [] };
+  let DATA = { household: null, budgets: {}, transactions: [], accounts: [], goals: [] };
   let authMode = 'login'; // 'config' | 'login'
   let authIsSignup = false;
   let currentUserEmail = '';
@@ -518,6 +532,58 @@
       if (out.length >= 15) break;
     }
     return out;
+  }
+
+  /* ============== Savings goals ============== */
+  // Progress = balance of the linked savings wallet (0 if unlinked).
+  function goalSaved(g) { return g.accountId ? accountBalance(g.accountId) : 0; }
+  function goalEta(g, saved) {
+    if (g.targetAmount > 0 && saved >= g.targetAmount) return { done: true, text: t('goalDone') };
+    if (!g.dueDate) return { done: false, text: '' };
+    const now = new Date();
+    const due = new Date(g.dueDate + 'T00:00:00');
+    const months = (due.getFullYear() - now.getFullYear()) * 12 + (due.getMonth() - now.getMonth());
+    if (months <= 0) return { done: false, text: t('goalDueSoon') };
+    const perMonth = Math.ceil(Math.max(0, g.targetAmount - saved) / months);
+    return { done: false, text: t('goalNeed').replace('{m}', months).replace('{a}', fmtShort(perMonth) + '₫') };
+  }
+  function goalCardHtml(g) {
+    const saved = goalSaved(g);
+    const pct = g.targetAmount > 0 ? Math.min(100, Math.round(saved / g.targetAmount * 100)) : 0;
+    const eta = goalEta(g, saved);
+    return '<div class="goal-card">' +
+      '<div class="goal-top"><span class="goal-name">' + icon('target') + ' ' + esc(g.name) + '</span>' +
+      '<span class="goal-pct' + (eta.done ? ' done' : '') + '">' + pct + '%</span></div>' +
+      '<div class="goal-track"><div class="goal-fill' + (eta.done ? ' done' : '') + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="goal-meta"><span>' + mask(fmtShort(saved) + '₫') + ' / ' + fmtShort(g.targetAmount) + '₫</span>' +
+      (eta.text ? '<span class="goal-eta">' + eta.text + '</span>' : '') + '</div></div>';
+  }
+  function goalsSectionHtml() {
+    const goals = DATA.goals || [];
+    if (!goals.length) return '';
+    return '<div class="section-title">' + t('savingsGoals') + '</div>' +
+      '<div class="goal-list">' + goals.map(goalCardHtml).join('') + '</div>';
+  }
+  function goalEditRowHtml(g) {
+    const x = g || { id: '', name: '', targetAmount: '', accountId: '', dueDate: '' };
+    const acctOpts = '<option value="">' + t('goalNone') + '</option>' +
+      activeAccounts().map((a) => '<option value="' + esc(a.id) + '"' + (a.id === x.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('');
+    return '<div class="goal-edit-row" data-goal="' + esc(x.id) + '">' +
+      '<div class="goal-edit-l1"><input type="text" class="g-name" value="' + esc(x.name) + '" placeholder="' + t('goalName') + '"/>' +
+      (g ? '<button type="button" class="icon-btn danger" data-delgoal="' + esc(x.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') + '</div>' +
+      '<div class="goal-edit-l2">' +
+      '<input type="number" inputmode="numeric" class="g-target" value="' + (x.targetAmount || '') + '" placeholder="' + t('targetAmount') + '"/>' +
+      '<select class="g-acct">' + acctOpts + '</select></div>' +
+      '<div class="goal-edit-l3"><label>' + t('dueDateOpt') + '</label><input type="date" class="g-due" value="' + esc(x.dueDate || '') + '"/></div>' +
+      '</div>';
+  }
+  function goalsEditorHtml() {
+    const goals = DATA.goals || [];
+    const rows = goals.length ? goals.map(goalEditRowHtml).join('') : '<div class="empty">' + t('noGoals') + '</div>';
+    return '<div class="goal-edit" id="goalEdit">' + rows + '</div>' +
+      '<div class="wallet-edit-actions">' +
+      '<button id="addGoalBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addGoal') + '</button>' +
+      '<button id="saveGoalsBtn" class="primary-btn">' + icon('target') + ' ' + t('save') + '</button></div>';
   }
 
   /* ============== Accounts (wallets) ============== */
@@ -971,6 +1037,9 @@
 
       // Wallet balances
       walletStripHtml() +
+
+      // Savings goals
+      goalsSectionHtml() +
 
       // Weekly review card
       '<div class="card week-card">' +
@@ -1569,6 +1638,7 @@
         iosRow({ ic: 'target', tint: 'red', label: t('budget'), page: 'budget' }),
         iosRow({ ic: 'card', tint: 'orange', label: t('wallets'), value: accs.length ? String(accs.length) : '', page: 'wallets' }),
         iosRow({ ic: 'zap', tint: 'green', label: t('quickTemplates'), value: getTemplates().length ? String(getTemplates().length) : '', page: 'templates' }),
+        iosRow({ ic: 'piggy', tint: 'pink', label: t('savingsGoals'), value: (DATA.goals && DATA.goals.length) ? String(DATA.goals.length) : '', page: 'goals' }),
       ], t('grpMoney')) +
       iosGroup([
         iosRow({ ic: 'globe', tint: 'teal', label: t('language'), value: (lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'), action: 'lang' }),
@@ -1607,6 +1677,9 @@
     } else if (page === 'templates') {
       title = t('quickTemplates');
       body = '<div class="hint">' + t('templatesHint') + '</div>' + templatesEditorHtml();
+    } else if (page === 'goals') {
+      title = t('savingsGoals');
+      body = '<div class="hint">' + t('goalsHint') + '</div>' + goalsEditorHtml();
     } else if (page === 'household') {
       title = t('household');
       body = (myHouseholds.length > 1 ?
@@ -1949,6 +2022,38 @@
       setTemplates(list);
       toast(t('save') + ' ✓', 'success'); render();
     });
+    // Savings goals: add a blank editor row
+    const agoal = document.getElementById('addGoalBtn');
+    if (agoal) agoal.addEventListener('click', () => {
+      const box = document.getElementById('goalEdit'); if (!box) return;
+      const empty = box.querySelector('.empty'); if (empty) empty.remove();
+      box.insertAdjacentHTML('beforeend', goalEditRowHtml(null));
+      const last = box.querySelector('.goal-edit-row:last-child .g-name'); if (last) last.focus();
+    });
+    // Savings goals: delete (persists immediately)
+    document.querySelectorAll('[data-delgoal]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('delete') + '?')) return;
+      try { await window.Store.deleteGoal(b.dataset.delgoal); await refreshData(true); toast(t('deleted'), 'info'); }
+      catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
+    // Savings goals: save all rows (insert new / update existing)
+    const sgoal = document.getElementById('saveGoalsBtn');
+    if (sgoal) sgoal.addEventListener('click', async () => {
+      const rows = Array.from(document.querySelectorAll('#goalEdit .goal-edit-row'));
+      try {
+        for (const r of rows) {
+          const name = (r.querySelector('.g-name').value || '').trim();
+          const targetAmount = Math.round(Number(r.querySelector('.g-target').value) || 0);
+          if (!name || targetAmount <= 0) continue;
+          const fields = { name: name, targetAmount: targetAmount, accountId: r.querySelector('.g-acct').value || null, dueDate: r.querySelector('.g-due').value || null };
+          const id = r.dataset.goal;
+          if (id) await window.Store.updateGoal(id, fields);
+          else await window.Store.addGoal(fields);
+        }
+        await refreshData(true);
+        toast(t('save') + ' ✓', 'success');
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
     // Save AI keys (parser): Gemini (free) + Claude (paid fallback)
     const sc = document.getElementById('saveConfigBtn');
     if (sc) sc.addEventListener('click', () => {
@@ -2188,6 +2293,7 @@
     if (!DATA.budgets) DATA.budgets = {};
     if (!DATA.transactions) DATA.transactions = [];
     if (!DATA.accounts) DATA.accounts = [];
+    if (!DATA.goals) DATA.goals = [];
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     currentTab = 'overview';
@@ -2206,6 +2312,7 @@
       if (!DATA.budgets) DATA.budgets = {};
       if (!DATA.transactions) DATA.transactions = [];
       if (!DATA.accounts) DATA.accounts = [];
+    if (!DATA.goals) DATA.goals = [];
       render();
       if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
     } catch (e) { /* keep existing data */ }

@@ -194,3 +194,28 @@ begin
   begin alter publication supabase_realtime add table public.budgets;      exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.accounts;     exception when duplicate_object then null; end;
 end $$;
+
+-- =====================================================================
+--  Savings goals — a target amount (optionally linked to a savings wallet
+--  and a deadline). Progress is computed from the linked wallet's balance.
+--  Safe to re-run.
+-- =====================================================================
+create table if not exists public.goals (
+  id            uuid primary key default gen_random_uuid(),
+  household_id  uuid not null references public.households(id) on delete cascade,
+  name          text not null,
+  target_amount bigint not null default 0,
+  account_id    uuid references public.accounts(id) on delete set null,
+  due_date      date,
+  created_at    timestamptz not null default now()
+);
+create index if not exists idx_goals_hh on public.goals (household_id);
+alter table public.goals enable row level security;
+drop policy if exists goals_all on public.goals;
+create policy goals_all on public.goals for all
+  using (household_id in (select public.user_households()))
+  with check (household_id in (select public.user_households()));
+do $$
+begin
+  begin alter publication supabase_realtime add table public.goals; exception when duplicate_object then null; end;
+end $$;
