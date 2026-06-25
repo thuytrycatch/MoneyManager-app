@@ -219,3 +219,35 @@ do $$
 begin
   begin alter publication supabase_realtime add table public.goals; exception when duplicate_object then null; end;
 end $$;
+
+-- =====================================================================
+--  Recurring entries — fixed monthly items (rent, internet, subscriptions).
+--  The app auto-creates a transaction on each due day (client-side, on open),
+--  tagging it with recurring_id so it is never created twice. Safe to re-run.
+-- =====================================================================
+create table if not exists public.recurring (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  name         text not null,
+  amount       bigint not null default 0,
+  type         text not null default 'expense' check (type in ('income','expense')),
+  category     text not null,
+  account_id   uuid references public.accounts(id) on delete set null,
+  freq         text not null default 'monthly' check (freq in ('monthly','weekly')),
+  day          int  not null default 1,        -- day of month (1–31)
+  next_run     date not null,
+  active       boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_recurring_hh on public.recurring (household_id);
+-- Tag transactions generated from a recurring item (prevents duplicates).
+alter table public.transactions add column if not exists recurring_id uuid references public.recurring(id) on delete set null;
+alter table public.recurring enable row level security;
+drop policy if exists recurring_all on public.recurring;
+create policy recurring_all on public.recurring for all
+  using (household_id in (select public.user_households()))
+  with check (household_id in (select public.user_households()));
+do $$
+begin
+  begin alter publication supabase_realtime add table public.recurring; exception when duplicate_object then null; end;
+end $$;

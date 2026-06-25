@@ -171,6 +171,11 @@
       goalNeed: 'còn {m} tháng · để {a}/tháng', goalDueSoon: 'sắp đến hạn',
       goalsHint: 'Gắn mục tiêu với một ví Tiết kiệm — tiến độ tự tính theo số dư ví đó. Để trống ví nếu chỉ muốn ghi mục tiêu.',
       goalNone: '— Không gắn ví —',
+      // Recurring
+      recurring: 'Chi định kỳ', addRecurring: 'Thêm khoản định kỳ', recurringName: 'Tên khoản',
+      dayOfMonth: 'Ngày hàng tháng', noRecurring: 'Chưa có khoản định kỳ.',
+      recurringHint: 'App tự ghi khoản này mỗi tháng vào ngày đã chọn (khi bạn mở app). Hợp với tiền nhà, internet, thuê bao…',
+      recurringCreated: 'Đã tự ghi {n} khoản định kỳ', recurringPrefix: 'Định kỳ: ',
       // Trends & forecast
       trendForecast: 'Xu hướng & Dự báo', actualLabel: 'Thực tế', trendLabel: 'Trung bình động', forecastLabel: 'Dự báo',
       forecastNote: '🔮 Ước tính dựa trên xu hướng các tháng gần đây — chỉ mang tính tham khảo.',
@@ -283,6 +288,11 @@
       goalNeed: '{m} months left · {a}/mo', goalDueSoon: 'due soon',
       goalsHint: 'Link a goal to a Savings wallet — progress tracks that wallet balance. Leave the wallet empty to just note a target.',
       goalNone: '— No wallet —',
+      // Recurring
+      recurring: 'Recurring', addRecurring: 'Add recurring', recurringName: 'Name',
+      dayOfMonth: 'Day of month', noRecurring: 'No recurring items.',
+      recurringHint: 'The app logs this every month on the chosen day (when you open the app). Great for rent, internet, subscriptions…',
+      recurringCreated: 'Auto-logged {n} recurring item(s)', recurringPrefix: 'Recurring: ',
       // Trends & forecast
       trendForecast: 'Trends & Forecast', actualLabel: 'Actual', trendLabel: 'Moving average', forecastLabel: 'Forecast',
       forecastNote: '🔮 Estimate based on recent months — for reference only.',
@@ -315,7 +325,7 @@
   function catLabel(c) { return (CAT_LABELS[lang] && CAT_LABELS[lang][c]) || c; }
 
   /* ============== State ============== */
-  let DATA = { household: null, budgets: {}, transactions: [], accounts: [], goals: [] };
+  let DATA = { household: null, budgets: {}, transactions: [], accounts: [], goals: [], recurring: [] };
   let authMode = 'login'; // 'config' | 'login'
   let authIsSignup = false;
   let currentUserEmail = '';
@@ -584,6 +594,80 @@
       '<div class="wallet-edit-actions">' +
       '<button id="addGoalBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addGoal') + '</button>' +
       '<button id="saveGoalsBtn" class="primary-btn">' + icon('target') + ' ' + t('save') + '</button></div>';
+  }
+
+  /* ============== Recurring entries ============== */
+  // Advance a "YYYY-MM-DD" by one period (monthly clamps to the chosen day-of-month).
+  function advanceRecur(freq, dateStr, day) {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (freq === 'weekly') { d.setDate(d.getDate() + 7); return ymd(d); }
+    const y = d.getFullYear(), m = d.getMonth();
+    const ny = m === 11 ? y + 1 : y, nm = (m + 1) % 12;
+    const last = new Date(ny, nm + 1, 0).getDate();
+    return ymd(new Date(ny, nm, Math.min(day || d.getDate(), last)));
+  }
+  // First occurrence on/after today for a given day-of-month.
+  function nextOccurrence(day) {
+    const now = new Date();
+    const last = endOfMonth(now).getDate();
+    const target = ymd(new Date(now.getFullYear(), now.getMonth(), Math.min(day, last)));
+    return target < ymd(now) ? advanceRecur('monthly', target, day) : target;
+  }
+  // On app open: create any due recurring transactions, then advance their next_run.
+  // The recurring_id tag + an in-memory dup check prevent creating the same one twice.
+  async function runRecurring() {
+    const list = DATA.recurring || [];
+    if (!list.length) return;
+    const today = ymd(new Date());
+    let created = 0;
+    for (const r of list) {
+      if (!r.active) continue;
+      let next = r.nextRun, guard = 0;
+      while (next && next <= today && guard < 24) {
+        guard++;
+        const dup = DATA.transactions.some((tx) => tx.recurringId === r.id && tx.date === next);
+        if (!dup) {
+          try {
+            const saved = await window.Store.addTransaction({
+              date: next, time: '', amount: r.amount, type: r.type, category: r.category,
+              note: r.name, accountId: r.accountId, recurringId: r.id, rawInput: t('recurringPrefix') + r.name,
+            });
+            DATA.transactions.unshift(saved); created++;
+          } catch (e) { break; }
+        }
+        next = advanceRecur(r.freq, next, r.day);
+      }
+      if (next !== r.nextRun) { try { await window.Store.updateRecurring(r.id, { nextRun: next }); r.nextRun = next; } catch (e) { /* ignore */ } }
+    }
+    if (created) { toast(t('recurringCreated').replace('{n}', created), 'info'); render(); }
+  }
+
+  function recurringEditRowHtml(r) {
+    const x = r || { id: '', name: '', amount: '', type: 'expense', category: 'Hóa đơn', accountId: '', day: 1 };
+    const catOpts = CATS.map((c) => '<option value="' + esc(c) + '"' + (c === x.category ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>').join('');
+    const typeOpts = '<option value="expense"' + (x.type !== 'income' ? ' selected' : '') + '>' + t('expense') + '</option>' +
+      '<option value="income"' + (x.type === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
+    const acctOpts = '<option value="">' + t('goalNone') + '</option>' +
+      activeAccounts().map((a) => '<option value="' + esc(a.id) + '"' + (a.id === x.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('');
+    return '<div class="rec-edit-row" data-rec="' + esc(x.id) + '">' +
+      '<div class="rec-edit-l1"><input type="text" class="r-name" value="' + esc(x.name) + '" placeholder="' + t('recurringName') + '"/>' +
+      (r ? '<button type="button" class="icon-btn danger" data-delrec="' + esc(x.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') + '</div>' +
+      '<div class="rec-edit-l2">' +
+      '<input type="number" inputmode="numeric" class="r-amount" value="' + (x.amount || '') + '" placeholder="' + t('amount') + '"/>' +
+      '<select class="r-type">' + typeOpts + '</select>' +
+      '<select class="r-cat">' + catOpts + '</select></div>' +
+      '<div class="rec-edit-l3">' +
+      '<label class="rec-day">' + t('dayOfMonth') + '<input type="number" min="1" max="31" class="r-day" value="' + (x.day || 1) + '"/></label>' +
+      '<select class="r-acct">' + acctOpts + '</select></div>' +
+      '</div>';
+  }
+  function recurringEditorHtml() {
+    const list = DATA.recurring || [];
+    const rows = list.length ? list.map(recurringEditRowHtml).join('') : '<div class="empty">' + t('noRecurring') + '</div>';
+    return '<div class="rec-edit" id="recEdit">' + rows + '</div>' +
+      '<div class="wallet-edit-actions">' +
+      '<button id="addRecBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addRecurring') + '</button>' +
+      '<button id="saveRecBtn" class="primary-btn">' + icon('refresh') + ' ' + t('save') + '</button></div>';
   }
 
   /* ============== Accounts (wallets) ============== */
@@ -1639,6 +1723,7 @@
         iosRow({ ic: 'card', tint: 'orange', label: t('wallets'), value: accs.length ? String(accs.length) : '', page: 'wallets' }),
         iosRow({ ic: 'zap', tint: 'green', label: t('quickTemplates'), value: getTemplates().length ? String(getTemplates().length) : '', page: 'templates' }),
         iosRow({ ic: 'piggy', tint: 'pink', label: t('savingsGoals'), value: (DATA.goals && DATA.goals.length) ? String(DATA.goals.length) : '', page: 'goals' }),
+        iosRow({ ic: 'refresh', tint: 'blue', label: t('recurring'), value: (DATA.recurring && DATA.recurring.length) ? String(DATA.recurring.length) : '', page: 'recurring' }),
       ], t('grpMoney')) +
       iosGroup([
         iosRow({ ic: 'globe', tint: 'teal', label: t('language'), value: (lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'), action: 'lang' }),
@@ -1680,6 +1765,9 @@
     } else if (page === 'goals') {
       title = t('savingsGoals');
       body = '<div class="hint">' + t('goalsHint') + '</div>' + goalsEditorHtml();
+    } else if (page === 'recurring') {
+      title = t('recurring');
+      body = '<div class="hint">' + t('recurringHint') + '</div>' + recurringEditorHtml();
     } else if (page === 'household') {
       title = t('household');
       body = (myHouseholds.length > 1 ?
@@ -2054,6 +2142,40 @@
         toast(t('save') + ' ✓', 'success');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     });
+    // Recurring: add a blank editor row
+    const arec = document.getElementById('addRecBtn');
+    if (arec) arec.addEventListener('click', () => {
+      const box = document.getElementById('recEdit'); if (!box) return;
+      const empty = box.querySelector('.empty'); if (empty) empty.remove();
+      box.insertAdjacentHTML('beforeend', recurringEditRowHtml(null));
+      const last = box.querySelector('.rec-edit-row:last-child .r-name'); if (last) last.focus();
+    });
+    // Recurring: delete (persists immediately)
+    document.querySelectorAll('[data-delrec]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('delete') + '?')) return;
+      try { await window.Store.deleteRecurring(b.dataset.delrec); await refreshData(true); toast(t('deleted'), 'info'); }
+      catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
+    // Recurring: save all rows (insert new / update existing), then run any now due
+    const srec = document.getElementById('saveRecBtn');
+    if (srec) srec.addEventListener('click', async () => {
+      const rows = Array.from(document.querySelectorAll('#recEdit .rec-edit-row'));
+      try {
+        for (const r of rows) {
+          const name = (r.querySelector('.r-name').value || '').trim();
+          const amount = Math.round(Number(r.querySelector('.r-amount').value) || 0);
+          if (!name || amount <= 0) continue;
+          let day = Math.round(Number(r.querySelector('.r-day').value) || 1); day = Math.min(31, Math.max(1, day));
+          const fields = { name: name, amount: amount, type: r.querySelector('.r-type').value === 'income' ? 'income' : 'expense', category: r.querySelector('.r-cat').value, accountId: r.querySelector('.r-acct').value || null, day: day };
+          const id = r.dataset.rec;
+          if (id) await window.Store.updateRecurring(id, fields);
+          else await window.Store.addRecurring(Object.assign({ freq: 'monthly', nextRun: nextOccurrence(day) }, fields));
+        }
+        await refreshData(true);
+        await runRecurring();
+        toast(t('save') + ' ✓', 'success');
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
     // Save AI keys (parser): Gemini (free) + Claude (paid fallback)
     const sc = document.getElementById('saveConfigBtn');
     if (sc) sc.addEventListener('click', () => {
@@ -2294,12 +2416,14 @@
     if (!DATA.transactions) DATA.transactions = [];
     if (!DATA.accounts) DATA.accounts = [];
     if (!DATA.goals) DATA.goals = [];
+    if (!DATA.recurring) DATA.recurring = [];
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     currentTab = 'overview';
     render();
     startAutoSync();
     maybeNotify();
+    runRecurring();
   }
 
   /* ============== Auto-sync (realtime + when returning to the app) ============== */
@@ -2313,6 +2437,7 @@
       if (!DATA.transactions) DATA.transactions = [];
       if (!DATA.accounts) DATA.accounts = [];
     if (!DATA.goals) DATA.goals = [];
+    if (!DATA.recurring) DATA.recurring = [];
       render();
       if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
     } catch (e) { /* keep existing data */ }

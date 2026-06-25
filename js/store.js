@@ -262,7 +262,22 @@
       rawInput: r.raw_input || '',
       accountId: r.account_id || null,
       toAccountId: r.to_account_id || null,
+      recurringId: r.recurring_id || null,
       createdAt: r.created_at,
+    };
+  }
+  function mapRecurring(r) {
+    return {
+      id: r.id,
+      name: r.name,
+      amount: Number(r.amount || 0),
+      type: r.type,
+      category: r.category,
+      accountId: r.account_id || null,
+      freq: r.freq || 'monthly',
+      day: Number(r.day || 1),
+      nextRun: r.next_run,
+      active: r.active !== false,
     };
   }
   function mapAccount(a) {
@@ -330,8 +345,10 @@
     // supabase-schema.sql has been re-run (missing table → empty list).
     const goals = await sb.from('goals').select('*').eq('household_id', hid)
       .then((r) => (r.error ? [] : (r.data || []).map(mapGoal))).catch(() => []);
+    const recurring = await sb.from('recurring').select('*').eq('household_id', hid)
+      .then((r) => (r.error ? [] : (r.data || []).map(mapRecurring))).catch(() => []);
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring };
     idbSet('data', data).catch(() => {});
     return data;
   }
@@ -369,6 +386,9 @@
       account_id: tx.accountId || null,
       to_account_id: tx.toAccountId || null,
     };
+    // Only reference recurring_id when set — keeps inserts working even before the
+    // schema with that column has been re-run (a plain add never sends it).
+    if (tx.recurringId) row.recurring_id = tx.recurringId;
     const { data, error } = await sb.from('transactions').insert(row).select().single();
     if (error) throw new Error(error.message);
     return mapRow(data);
@@ -510,6 +530,45 @@
     if (error) throw new Error(error.message);
   }
 
+  /* ---------------- Recurring entries ---------------- */
+  async function addRecurring(r) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { data, error } = await sb.from('recurring').insert({
+      household_id: household.id,
+      name: r.name,
+      amount: Math.round(r.amount || 0),
+      type: r.type === 'income' ? 'income' : 'expense',
+      category: r.category,
+      account_id: r.accountId || null,
+      freq: r.freq || 'monthly',
+      day: r.day || 1,
+      next_run: r.nextRun,
+      active: r.active !== false,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return mapRecurring(data);
+  }
+  async function updateRecurring(id, fields) {
+    const sb = getClient();
+    const patch = {};
+    if ('name' in fields) patch.name = fields.name;
+    if ('amount' in fields) patch.amount = Math.round(fields.amount || 0);
+    if ('type' in fields) patch.type = fields.type === 'income' ? 'income' : 'expense';
+    if ('category' in fields) patch.category = fields.category;
+    if ('accountId' in fields) patch.account_id = fields.accountId || null;
+    if ('day' in fields) patch.day = fields.day || 1;
+    if ('nextRun' in fields) patch.next_run = fields.nextRun;
+    if ('active' in fields) patch.active = !!fields.active;
+    const { error } = await sb.from('recurring').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+  async function deleteRecurring(id) {
+    const sb = getClient();
+    const { error } = await sb.from('recurring').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
   /* ---------------- Realtime sync ---------------- */
   let channel = null;
   function subscribeChanges(onChange) {
@@ -522,6 +581,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring', filter: 'household_id=eq.' + hid }, onChange)
       .subscribe();
     return channel;
   }
@@ -558,6 +618,9 @@
     addGoal,
     updateGoal,
     deleteGoal,
+    addRecurring,
+    updateRecurring,
+    deleteRecurring,
     subscribeChanges,
     unsubscribeChanges,
     DEFAULT_BUDGETS,
