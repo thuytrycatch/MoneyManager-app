@@ -198,6 +198,49 @@ main { padding: 4px 16px 110px; }
 .acct-row .ic { width: 18px; height: 18px; flex: none; }
 .acct-select, .acct-row select { flex: 1; min-height: 42px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; color: var(--text-primary); box-shadow: var(--shadow); }
 
+/* ====================================================================
+   Custom dropdown (js/dropdown.js) — replaces native <select> with a
+   consistent button + popover/bottom-sheet. The native <select> stays in
+   the DOM (visually hidden) so its value & change events keep working.
+   ==================================================================== */
+.cs { position: relative; display: block; width: 100%; min-width: 0; }
+/* Hide the native control but keep it focusable/usable programmatically. */
+.cs-native { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; pointer-events: none; }
+.cs-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; color: var(--text-primary); box-shadow: var(--shadow); cursor: pointer; font: inherit; text-align: left; transition: border-color .15s, box-shadow .15s; }
+.cs-btn:hover { border-color: var(--text-secondary); }
+.cs.open .cs-btn, .cs-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.cs-val { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-chev { width: 18px; height: 18px; flex-shrink: 0; color: var(--text-secondary); transition: transform .2s; }
+.cs.open .cs-chev { transform: rotate(180deg); }
+
+/* Popover / sheet (appended to <body>, positioned fixed). */
+.cs-backdrop { position: fixed; inset: 0; z-index: 1200; background: transparent; }
+.cs-panel { position: fixed; z-index: 1201; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 6px; max-height: 320px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.cs-opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; padding: 0 12px; border: none; background: none; border-radius: 8px; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.cs-opt-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-opt:hover, .cs-opt.active { background: var(--bg-secondary); }
+.cs-opt[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+.cs-check { width: 16px; height: 16px; flex-shrink: 0; color: var(--accent); opacity: 0; }
+.cs-opt[aria-selected="true"] .cs-check { opacity: 1; }
+
+/* Per-context sizing so wrappers match the layout the <select> used to have. */
+.acct-row .cs, .tpl-edit-l2 .cs, .goal-edit-l2 .cs, .rec-edit-l2 .cs, .rec-edit-l3 .cs { flex: 1 1 0; min-width: 0; }
+.tpl-edit-l2 .cs-btn, .goal-edit-l2 .cs-btn, .rec-edit-l2 .cs-btn, .rec-edit-l3 .cs-btn { min-height: 42px; border-radius: 10px; padding: 0 10px; }
+.acct-row .cs-btn, .acct-select + .cs-btn { min-height: 42px; }
+.wallet-edit-main .cs { flex: 0 1 auto; min-width: 0; }
+.wallet-edit-main .cs-btn { width: auto; min-width: 104px; min-height: 42px; background: var(--bg-secondary); border-radius: 10px; padding: 0 10px; }
+.modal .cs-btn { background: var(--bg-secondary); min-height: 48px; }
+/* Filters: month spans both columns on mobile (matches old #fMonth rule). */
+.filters .cs:first-child { grid-column: 1 / -1; }
+
+/* Mobile: long dropdowns slide up as a bottom-sheet. */
+@media (max-width: 768px) {
+  .cs-backdrop { background: rgba(0,0,0,.4); }
+  .cs-panel.cs-sheet { left: 0 !important; right: 0; top: auto !important; bottom: 0; min-width: 0 !important; width: 100%; max-height: 70vh; border-radius: 18px 18px 0 0; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); animation: csSheetUp .22s ease; }
+  .cs-sheet .cs-opt { min-height: 48px; }
+}
+@keyframes csSheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
 /* Wallet cards strip (Overview) */
 .wallet-strip { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 6px; -webkit-overflow-scrolling: touch; }
 .wallet-card { flex: 0 0 auto; min-width: 130px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); }
@@ -210,7 +253,7 @@ main { padding: 4px 16px 110px; }
 .wallet-edit { display: flex; flex-direction: column; gap: 12px; }
 .wallet-edit-row { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow); }
 .wallet-edit-main { display: flex; gap: 8px; align-items: center; }
-.wallet-edit-main .w-name { flex: 1; min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; }
+.wallet-edit-main .w-name { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; }
 .wallet-edit-main .w-type { min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; }
 .wallet-edit-sub { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .wallet-edit-sub label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
@@ -220,6 +263,13 @@ main { padding: 4px 16px 110px; }
 .wallet-edit-actions .ghost-btn { flex: 1; justify-content: center; }
 .wallet-edit-actions .primary-btn { flex: 1; margin-top: 0; }
 .icon-btn.danger { color: var(--expense); }
+/* Default-wallet star: hollow until chosen, then gold-filled. */
+.w-default { color: var(--text-secondary); flex-shrink: 0; transition: color .2s, transform .1s; }
+.w-default .ic { fill: none; }
+.w-default.on { color: #f5b301; }
+.w-default.on .ic { fill: #f5b301; }
+.w-default:active { transform: scale(.9); }
+.wallet-edit-row.is-default { border-color: #f5b30166; }
 
 /* Transfers */
 .transfer-btn { width: 100%; justify-content: center; margin-top: 14px; }
@@ -324,6 +374,8 @@ main { padding: 4px 16px 110px; }
 .budget-edit-row label { flex: 1; display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 14px; }
 .budget-edit-row label .ic { width: 16px; height: 16px; color: var(--text-secondary); }
 .budget-edit-row input { width: 130px; min-height: 44px; text-align: right; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; box-shadow: var(--shadow); }
+/* Amount inputs: right-align so the thousand-separated digits read like money. */
+.js-money { text-align: right; }
 .settings-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .conn-form { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
 .conn-row { display: flex; flex-direction: column; gap: 4px; }
@@ -496,6 +548,8 @@ main { padding: 4px 12px 92px; }
   /* Enough width now — filters fit on a single row */
   .filters { grid-template-columns: repeat(3, 1fr); }
   .filters #fMonth { grid-column: auto; }
+  .filters .cs:first-child { grid-column: auto; }
+  .filters .cs-btn { min-height: 40px; }
   .dash { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; align-items: start; }
   .dash > .dash-full { grid-column: 1 / -1; }
   .dash-card > .section-title:first-child { margin-top: 0; }

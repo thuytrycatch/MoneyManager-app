@@ -91,6 +91,13 @@ alter table public.accounts add column if not exists statement_day   int;       
 alter table public.accounts add column if not exists due_day         int;          -- payment due day (1–31)
 alter table public.accounts add column if not exists min_payment_pct numeric(5,2); -- % of statement balance
 
+-- Default wallet: the one pre-selected in the entry form. At most one per household.
+-- Safe to re-run.
+alter table public.accounts add column if not exists is_default boolean not null default false;
+-- Enforce "at most one default per household" at the DB level (partial unique index).
+create unique index if not exists idx_accounts_one_default
+  on public.accounts (household_id) where is_default;
+
 create index if not exists idx_tx_household_date on public.transactions (household_id, date desc);
 create index if not exists idx_members_user on public.household_members (user_id);
 create index if not exists idx_accounts_hh on public.accounts (household_id);
