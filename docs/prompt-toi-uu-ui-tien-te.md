@@ -18,37 +18,45 @@ Bạn là kỹ sư frontend làm việc trên app quản lý chi tiêu **BudgetM
 1. **Bỏ hoàn toàn `₫`** khỏi UI. Tất cả call site đang nối `+ '₫'` (và `'₫ · '` trong charts) phải gỡ bỏ.
 
 2. **Quy ước số kiểu quốc tế (en-US):** dấu **phẩy** phân tách hàng nghìn, dấu **chấm** thập phân.
-   - `850000 → 850,000` · `12000 → 12,000`.
-   - `1500000 → 1.5M` · `1234567 → 1.23M` · `125000000 → 125M`.
-   - `2300000000 → 2.3B` · `1250000000 → 1.25B`.
+   - `850000 → 850,000` · `12000 → 12,000` · `125000000 → 125,000,000`.
+   - `1500000000 → 1.5B` · `2300000000 → 2.3B`.
 
-3. **Ngưỡng rút gọn (số nhỏ hiện đầy đủ, số lớn mới viết tắt):**
-   - `|n| < 1,000,000` → đầy đủ: `850,000`.
-   - `1,000,000 ≤ |n| < 1,000,000,000` → `M`: `1.5M`.
-   - `|n| ≥ 1,000,000,000` → `B`: `2.3B`.
-   - `K` (nghìn) chỉ dùng ở nhãn trục biểu đồ nếu cần tiết kiệm chỗ.
+3. **Ngưỡng rút gọn (chỉ số TRÊN 9 CHỮ SỐ mới viết tắt):**
+   - `|n| ≤ 999,999,999` (đến 9 chữ số) → giữ ĐẦY ĐỦ chữ số: `850,000`, `125,000,000`.
+   - `|n| ≥ 1,000,000,000` (trên 9 chữ số) → `B`: `1.5B`, `2.3B`.
+   - Vì dưới 1 tỷ luôn hiện đầy đủ, `M`/`K` **chỉ còn dùng ở nhãn trục biểu đồ** (hàm `fmtAxis`) để tick không quá dài.
 
-4. **~3 chữ số ý nghĩa** khi rút gọn, tự bỏ số 0 thừa (`1.50M → 1.5M`). Số âm: dấu `−` đứng trước (`−1.5M`), giữ màu/dấu income–expense hiện có.
+4. **~3 chữ số ý nghĩa** khi rút gọn, tự bỏ số 0 thừa (`1.50B → 1.5B`). Số âm: dấu `−` đứng trước, giữ màu/dấu income–expense hiện có.
 
-**Triển khai (giữ tối thiểu):** cả ~43 điểm gọi định dạng đều đi qua **một hàm `fmtShort(n)`** (`js/charts.js:15`) → sửa 1 hàm là toàn UI cập nhật.
+**Triển khai (giữ tối thiểu):** mọi điểm gọi hiển thị tiền đi qua **`fmtShort(n)`** (`js/charts.js`); nhãn trục biểu đồ dùng **`fmtAxis(n)`** riêng → sửa 2 hàm là toàn UI cập nhật.
 
 ```js
+// ~3 chữ số ý nghĩa, dấu CHẤM thập phân
+function dec(v) {
+  const av = Math.abs(v);
+  let s = v.toFixed(av >= 100 ? 0 : av >= 10 ? 1 : 2);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+}
+// Hiển thị chính: chỉ số ≥ 1 tỷ (trên 9 chữ số) mới rút gọn (B); còn lại đầy đủ.
 function fmtShort(n) {
   n = Math.round(n || 0);
+  if (Math.abs(n) >= 1e9) return dec(n / 1e9) + 'B';
+  return n.toLocaleString('en-US');           // ≤ 9 chữ số: đầy đủ, phẩy ngăn nghìn
+}
+// Bản gọn riêng cho nhãn trục biểu đồ — giữ K/M/B để tick ngắn.
+function fmtAxis(n) {
+  n = Math.round(n || 0);
   const a = Math.abs(n);
-  const dec = (v) => {                       // ~3 chữ số ý nghĩa, dấu CHẤM thập phân
-    const av = Math.abs(v);
-    let s = v.toFixed(av >= 100 ? 0 : av >= 10 ? 1 : 2);
-    if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
-    return s;                                 // giữ '.' (en-US), KHÔNG đổi sang ','
-  };
   if (a >= 1e9) return dec(n / 1e9) + 'B';
   if (a >= 1e6) return dec(n / 1e6) + 'M';
-  return n.toLocaleString('en-US');           // < 1 triệu: đầy đủ, phẩy ngăn nghìn
+  if (a >= 1e3) return Math.round(n / 1e3) + 'K';
+  return String(n);
 }
 ```
 
-- `fmtVND(n)` (`js/charts.js:30`, dùng cho tooltip biểu đồ): đổi sang số đầy đủ **không có ký hiệu** → `new Intl.NumberFormat('en-US').format(Math.round(n||0))`. (Đổi tên thành `fmtFull` nếu muốn rõ nghĩa, nhớ cập nhật chỗ gọi.)
+- `fmtVND(n)` (tooltip biểu đồ): số đầy đủ **không ký hiệu** → `new Intl.NumberFormat('en-US').format(Math.round(n||0))`.
+- Nhãn trục Y của bars/line/lines dùng `fmtAxis`; tooltip dùng `fmtVND`; legend dùng `fmtShort`.
 - Gỡ mọi `+ '₫'` / `'₫ · '` còn lại trong `js/app.js` và `js/charts.js`.
 
 ---
@@ -94,7 +102,7 @@ Thêm một mục báo cáo mới: tổng **thu** và **chi** theo từng thành
 5. Tên người nhập dài (email) không tràn dòng giao dịch.
 
 ### Tiêu chí nghiệm thu
-- [ ] `850000 → 850,000` · `1500000 → 1.5M` · `2300000000 → 2.3B`, **không có `₫`** ở bất kỳ đâu.
+- [ ] `850000 → 850,000` · `125000000 → 125,000,000` · `999999999 → 999,999,999` (đầy đủ) · `1500000000 → 1.5B` · `2300000000 → 2.3B`, **không có `₫`** ở bất kỳ đâu.
 - [ ] Tooltip biểu đồ hiện số đầy đủ kiểu `1,234,567` (không ký hiệu).
 - [ ] Mỗi dòng giao dịch hiện tên người nhập; chính mình hiện `bạn`/`you`; giao dịch cũ hiện nhãn "chưa rõ".
 - [ ] Trang Báo cáo có mục "thu chi theo người" với thu/chi/ròng đúng cho từng thành viên trong kỳ.
@@ -103,6 +111,6 @@ Thêm một mục báo cáo mới: tổng **thu** và **chi** theo từng thành
 ---
 
 ### Ghi chú quyết định (đã chốt với người dùng)
-- Viết tắt **K / M / B**, **bỏ ký hiệu ₫**, định dạng **quốc tế en-US** (phẩy ngăn nghìn, chấm thập phân). *Nếu muốn giữ dấu phẩy thập phân kiểu Việt (`1,5M`) thay vì `1.5M`, chỉ cần đổi `dec()` trả về `s.replace('.', ',')`.*
-- Ngưỡng: **< 1 triệu hiện đầy đủ**, ≥ 1 triệu rút gọn.
+- **Bỏ ký hiệu ₫**, định dạng **quốc tế en-US** (phẩy ngăn nghìn, chấm thập phân). *Nếu muốn dấu phẩy thập phân kiểu Việt (`1,5B`) thì đổi `dec()` trả về `s.replace('.', ',')`.*
+- Ngưỡng: **chỉ số trên 9 chữ số (≥ 1 tỷ) mới rút gọn thành `B`**; mọi số ≤ 9 chữ số giữ đầy đủ chữ số. `M`/`K` chỉ còn ở nhãn trục biểu đồ (`fmtAxis`).
 - "Người nhập" lấy từ `transactions.user_id` (không đổi schema); báo cáo theo người group theo `user_id`.
