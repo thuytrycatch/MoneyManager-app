@@ -15,7 +15,15 @@
   function fmtShort(n) {
     n = Math.round(n || 0);
     const a = Math.abs(n);
-    if (a >= 1000000) { const v = n / 1000000; return (Math.abs(v) >= 10 ? String(Math.round(v)) : v.toFixed(1).replace(/\.0$/, '')) + 'tr'; }
+    // ~3 significant digits, vi-VN decimal comma: 1,25tr · 15,5tr · 125tr · 1,25 tỷ.
+    function dec(v) {
+      const av = Math.abs(v);
+      let s = v.toFixed(av >= 100 ? 0 : av >= 10 ? 1 : 2);
+      if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+      return s.replace('.', ',');
+    }
+    if (a >= 1000000000) return dec(n / 1000000000) + ' tỷ';
+    if (a >= 1000000) return dec(n / 1000000) + 'tr';
     if (a >= 1000) return Math.round(n / 1000) + 'k';
     return String(n);
   }

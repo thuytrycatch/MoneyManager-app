@@ -293,6 +293,7 @@
       minPaymentPct: a.min_payment_pct != null ? Number(a.min_payment_pct) : null,
       archived: !!a.archived,
       sortOrder: a.sort_order || 0,
+      isDefault: !!a.is_default,
     };
   }
   function mapGoal(g) {
@@ -489,7 +490,24 @@
     if ('minPaymentPct' in fields) patch.min_payment_pct = fields.minPaymentPct != null ? fields.minPaymentPct : null;
     if ('sortOrder' in fields) patch.sort_order = fields.sortOrder || 0;
     if ('archived' in fields) patch.archived = !!fields.archived;
+    if ('isDefault' in fields) patch.is_default = !!fields.isDefault;
     const { error } = await sb.from('accounts').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // Mark one wallet as the household's default (the one pre-selected on the entry form).
+  // Atomic-ish: clear the flag on every other wallet first so the partial unique
+  // index (one default per household) is never violated, then set the chosen one.
+  // Pass id = null/'' to simply clear the default.
+  async function setDefaultAccount(id) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    let q = sb.from('accounts').update({ is_default: false }).eq('household_id', household.id);
+    if (id) q = q.neq('id', id);
+    const { error: eClear } = await q;
+    if (eClear) throw new Error(eClear.message);
+    if (!id) return;
+    const { error } = await sb.from('accounts').update({ is_default: true }).eq('id', id);
     if (error) throw new Error(error.message);
   }
 
@@ -615,6 +633,7 @@
     addAccount,
     updateAccount,
     deleteAccount,
+    setDefaultAccount,
     addGoal,
     updateGoal,
     deleteGoal,

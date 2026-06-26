@@ -62,6 +62,7 @@
     eyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>',
     card: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
     scale: '<path d="M16 16l3-8 3 8c-2 1.5-4 1.5-6 0Z"/><path d="M2 16l3-8 3 8c-2 1.5-4 1.5-6 0Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -87,6 +88,7 @@
       date: 'Ngày', time: 'Giờ', today: 'Hôm nay', yesterday: 'Hôm qua', pickDate: 'Chọn ngày',
       wallets: 'Ví / Tài khoản', wallet: 'Ví', walletCash: 'Tiền mặt', addWallet: 'Thêm ví',
       walletName: 'Tên ví', walletType: 'Loại', openingBalance: 'Số dư đầu kỳ',
+      setDefaultWallet: 'Đặt làm ví mặc định', defaultWallet: 'Ví mặc định',
       typeCash: 'Tiền mặt', typeBank: 'Ngân hàng', typeEwallet: 'Ví điện tử', typeOther: 'Khác',
       totalBalance: 'Tổng số dư', walletSaved: 'Đã lưu ví', walletDeleted: 'Đã xóa ví',
       confirmDeleteWallet: 'Xóa ví này? Giao dịch cũ vẫn giữ nhưng sẽ không còn gắn ví.',
@@ -204,6 +206,7 @@
       date: 'Date', time: 'Time', today: 'Today', yesterday: 'Yesterday', pickDate: 'Pick date',
       wallets: 'Wallets / Accounts', wallet: 'Wallet', walletCash: 'Cash', addWallet: 'Add wallet',
       walletName: 'Wallet name', walletType: 'Type', openingBalance: 'Opening balance',
+      setDefaultWallet: 'Set as default wallet', defaultWallet: 'Default wallet',
       typeCash: 'Cash', typeBank: 'Bank', typeEwallet: 'E-wallet', typeOther: 'Other',
       totalBalance: 'Total balance', walletSaved: 'Wallet saved', walletDeleted: 'Wallet deleted',
       confirmDeleteWallet: 'Delete this wallet? Past transactions are kept but will no longer be linked to a wallet.',
@@ -345,6 +348,32 @@
 
   const fmtVND = window.Charts.fmtVND;
   const fmtShort = window.Charts.fmtShort;
+
+  /* ============== Money inputs ==============
+   * Amount fields use type="text" + class="js-money": only digits are kept and
+   * thousand separators ("." vi-VN) are inserted live while typing. Read the raw
+   * integer back with readMoney(); render an initial value with groupMoney(). */
+  function readMoney(elOrStr) {
+    const s = typeof elOrStr === 'string' ? elOrStr : (elOrStr && elOrStr.value) || '';
+    return Math.round(Number(String(s).replace(/\D/g, '')) || 0);
+  }
+  function groupMoney(v) {
+    const d = String(v == null ? '' : v).replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+    return d ? d.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
+  }
+  // One delegated listener formats every .js-money field, including re-rendered views.
+  document.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!el || !el.classList || !el.classList.contains('js-money')) return;
+    const start = el.selectionStart, before = el.value;
+    el.value = groupMoney(before);
+    // Keep the caret roughly in place after separators shift the text.
+    if (el.selectionStart != null) {
+      const diff = el.value.length - before.length;
+      const pos = Math.max(0, (start || 0) + diff);
+      try { el.setSelectionRange(pos, pos); } catch (_) {}
+    }
+  });
 
   // Privacy: hide balances/amounts behind dots until the user taps the eye icon. Default: hidden.
   let hideAmounts = (localStorage.getItem('hideAmounts') || '1') === '1';
@@ -517,7 +546,7 @@
       (tp ? '<button type="button" class="icon-btn danger" data-deltpl="1" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') +
       '</div>' +
       '<div class="tpl-edit-l2">' +
-      '<input type="number" inputmode="numeric" class="tp-amount" value="' + (x.amount || '') + '" placeholder="' + t('amount') + '"/>' +
+      '<input type="text" inputmode="numeric" class="tp-amount js-money" value="' + groupMoney(x.amount) + '" placeholder="' + t('amount') + '"/>' +
       '<select class="tp-type">' + typeOpts + '</select>' +
       '<select class="tp-cat">' + catOpts + '</select>' +
       '</div></div>';
@@ -582,7 +611,7 @@
       '<div class="goal-edit-l1"><input type="text" class="g-name" value="' + esc(x.name) + '" placeholder="' + t('goalName') + '"/>' +
       (g ? '<button type="button" class="icon-btn danger" data-delgoal="' + esc(x.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') + '</div>' +
       '<div class="goal-edit-l2">' +
-      '<input type="number" inputmode="numeric" class="g-target" value="' + (x.targetAmount || '') + '" placeholder="' + t('targetAmount') + '"/>' +
+      '<input type="text" inputmode="numeric" class="g-target js-money" value="' + groupMoney(x.targetAmount) + '" placeholder="' + t('targetAmount') + '"/>' +
       '<select class="g-acct">' + acctOpts + '</select></div>' +
       '<div class="goal-edit-l3"><label>' + t('dueDateOpt') + '</label><input type="date" class="g-due" value="' + esc(x.dueDate || '') + '"/></div>' +
       '</div>';
@@ -653,7 +682,7 @@
       '<div class="rec-edit-l1"><input type="text" class="r-name" value="' + esc(x.name) + '" placeholder="' + t('recurringName') + '"/>' +
       (r ? '<button type="button" class="icon-btn danger" data-delrec="' + esc(x.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') + '</div>' +
       '<div class="rec-edit-l2">' +
-      '<input type="number" inputmode="numeric" class="r-amount" value="' + (x.amount || '') + '" placeholder="' + t('amount') + '"/>' +
+      '<input type="text" inputmode="numeric" class="r-amount js-money" value="' + groupMoney(x.amount) + '" placeholder="' + t('amount') + '"/>' +
       '<select class="r-type">' + typeOpts + '</select>' +
       '<select class="r-cat">' + catOpts + '</select></div>' +
       '<div class="rec-edit-l3">' +
@@ -745,14 +774,12 @@
       dueDate: due ? ymd(due) : null,
     };
   }
-  // Remember the last wallet used for quick entry, scoped per household.
-  function lastAccountKey() { return 'mm_last_account_' + (DATA.household ? DATA.household.id : ''); }
-  function getLastAccountId() { try { return localStorage.getItem(lastAccountKey()) || ''; } catch (e) { return ''; } }
-  function setLastAccountId(id) { try { localStorage.setItem(lastAccountKey(), id || ''); } catch (e) { /* ignore */ } }
+  // Pre-selected wallet for the entry forms: the household's default wallet if one
+  // is set, otherwise the first active wallet. (No "last used" — the default always wins.)
   function defaultAccountId() {
     const accs = activeAccounts(); if (!accs.length) return '';
-    const last = getLastAccountId();
-    return accs.some((a) => a.id === last) ? last : accs[0].id;
+    const def = accs.find((a) => a.isDefault);
+    return def ? def.id : accs[0].id;
   }
   // <select> of wallets for the entry forms; empty string when the household has no wallets.
   function accountSelect(id, selectedId) {
@@ -835,7 +862,6 @@
         ? [await window.Store.addTransaction(drafts[0])]
         : await window.Store.addTransactions(drafts);
       DATA.transactions = saved.concat(DATA.transactions);
-      if (accountId) setLastAccountId(accountId);
       setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 2500);
       render();
       if (opts.undo && saved.length === 1) showUndoBar(saved[0]);
@@ -895,7 +921,7 @@
       '<button type="button" class="icon-btn danger" data-eprm="1" title="' + t('delete') + '">' + icon('trash') + '</button>' +
       '</div>' +
       '<div class="ep-line2">' +
-      '<input type="number" inputmode="numeric" class="ep-amount" value="' + d.amount + '"/>' +
+      '<input type="text" inputmode="numeric" class="ep-amount js-money" value="' + groupMoney(d.amount) + '"/>' +
       '<select class="ep-cat">' + catOpts + '</select>' +
       '</div>' +
       '<div class="seg ep-type" data-type="' + esc(d.type) + '">' +
@@ -918,6 +944,7 @@
       '<button class="primary-btn" id="epSave">' + icon('check') + ' ' + t('saveAll') + ' (' + drafts.length + ')</button></div>' +
       '</div></div>';
     document.body.appendChild(wrap.firstChild);
+    if (window.CustomSelect) window.CustomSelect.enhanceAll();
     const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
     const refreshCount = () => {
       const n = document.querySelectorAll('#entryList .entry-row').length;
@@ -939,7 +966,7 @@
       const acct = (document.getElementById('epAccount') ? document.getElementById('epAccount').value : accountId) || '';
       const out = [];
       Array.from(document.querySelectorAll('#entryList .entry-row')).forEach((r) => {
-        const amount = Math.round(Number(r.querySelector('.ep-amount').value) || 0);
+        const amount = readMoney(r.querySelector('.ep-amount'));
         if (amount <= 0) return;
         out.push({
           date: r.dataset.date, time: r.dataset.time || '', rawInput: r.dataset.raw || '',
@@ -1649,18 +1676,24 @@
     const typeOpts = ACCOUNT_TYPES.map((ty) => '<option value="' + ty + '"' + (ty === a.type ? ' selected' : '') + '>' + accountTypeLabel(ty) + '</option>').join('');
     const balHtml = acc ? '<span class="w-bal">= ' + fmtShort(accountBalance(a.id)) + '₫</span>' : '';
     const isLia = LIABILITY_TYPES.includes(a.type);
-    return '<div class="wallet-edit-row" data-acc="' + esc(a.id) + '">' +
+    // Star toggles this wallet as the household default (the one pre-selected on entry).
+    // The chosen default is applied on Save. New (unsaved) rows can't be default yet.
+    const defBtn = '<button class="icon-btn w-default' + (a.isDefault ? ' on' : '') + '"' +
+      ' data-setdef="1" aria-pressed="' + (a.isDefault ? 'true' : 'false') + '"' +
+      ' title="' + t('setDefaultWallet') + '">' + icon('star') + '</button>';
+    return '<div class="wallet-edit-row' + (a.isDefault ? ' is-default' : '') + '" data-acc="' + esc(a.id) + '">' +
       '<div class="wallet-edit-main">' +
       '<input type="text" class="w-name" value="' + esc(a.name) + '" placeholder="' + t('walletName') + '"/>' +
       '<select class="w-type">' + typeOpts + '</select>' +
+      defBtn +
       (acc ? '<button class="icon-btn danger" data-delacc="' + esc(a.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') +
       '</div>' +
       '<div class="wallet-edit-sub"><label>' + t('openingBalance') + '</label>' +
-      '<input type="number" inputmode="numeric" class="w-open" value="' + (a.openingBalance || 0) + '"/>' + balHtml +
+      '<input type="text" inputmode="numeric" class="w-open js-money" value="' + groupMoney(a.openingBalance || 0) + '"/>' + balHtml +
       '</div>' +
       '<div class="wallet-credit-fields' + (isLia ? '' : ' hidden') + '">' +
       '<div class="wc-grid">' +
-      '<label>' + t('creditLimit') + '<input type="number" inputmode="numeric" class="w-limit" value="' + (a.creditLimit != null ? a.creditLimit : '') + '"/></label>' +
+      '<label>' + t('creditLimit') + '<input type="text" inputmode="numeric" class="w-limit js-money" value="' + groupMoney(a.creditLimit != null ? a.creditLimit : '') + '"/></label>' +
       '<label>' + t('statementDay') + '<input type="number" min="1" max="31" class="w-stmt" value="' + (a.statementDay || '') + '"/></label>' +
       '<label>' + t('dueDay') + '<input type="number" min="1" max="31" class="w-due" value="' + (a.dueDay || '') + '"/></label>' +
       '</div>' +
@@ -1760,7 +1793,7 @@
       title = t('budget');
       const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
         '<div class="budget-edit-row"><label>' + catIcon(c) + esc(catLabel(c)) + '</label>' +
-        '<input type="number" inputmode="numeric" data-budget="' + c + '" value="' + (DATA.budgets[c] || 0) + '"/></div>').join('');
+        '<input type="text" inputmode="numeric" class="js-money" data-budget="' + c + '" value="' + groupMoney(DATA.budgets[c] || 0) + '"/></div>').join('');
       body = '<div class="ios-grp-h">' + t('budget') + ' (' + t('month').toLowerCase() + ')</div>' +
         '<div class="ios-card budget-edit">' + budgetInputs + '</div>' +
         '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>';
@@ -1849,6 +1882,7 @@
       '<div class="modal-actions"><button class="ghost-btn" id="lpCancel">' + t('cancel') + '</button></div>' +
       '</div></div>';
     document.body.appendChild(wrap.firstChild);
+    if (window.CustomSelect) window.CustomSelect.enhanceAll();
     const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
     document.getElementById('lpCancel').addEventListener('click', close);
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
@@ -1883,19 +1917,20 @@
       '<div class="card-title">' + icon('transfer') + ' ' + t('transferBetween') + '</div>' +
       '<label>' + t('fromWallet') + '</label><select id="tFrom">' + fromOpts + '</select>' +
       '<label>' + t('toWallet') + '</label><select id="tTo">' + toOpts + '</select>' +
-      '<label>' + t('amount') + '</label><input id="tAmount" type="number" inputmode="numeric" value="' + (ex ? ex.amount : '') + '"/>' +
+      '<label>' + t('amount') + '</label><input id="tAmount" type="text" inputmode="numeric" class="js-money" value="' + groupMoney(ex ? ex.amount : '') + '"/>' +
       '<label>' + t('date') + '</label><input id="tDate" type="date" value="' + (ex ? esc(ex.date) : today) + '" max="' + today + '"/>' +
       '<label>' + t('note') + '</label><input id="tNote" type="text" value="' + (ex ? esc(ex.note) : '') + '"/>' +
       '<div class="modal-actions"><button class="ghost-btn" id="tCancel">' + t('cancel') + '</button>' +
       '<button class="primary-btn" id="tSave">' + t('save') + '</button></div></div></div>';
     document.body.appendChild(wrap.firstChild);
+    if (window.CustomSelect) window.CustomSelect.enhanceAll();
     const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
     document.getElementById('tCancel').addEventListener('click', close);
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
     document.getElementById('tSave').addEventListener('click', async () => {
       const from = document.getElementById('tFrom').value;
       const to = document.getElementById('tTo').value;
-      const amount = Math.round(Number(document.getElementById('tAmount').value) || 0);
+      const amount = readMoney(document.getElementById('tAmount'));
       const date = document.getElementById('tDate').value || today;
       const note = document.getElementById('tNote').value.trim();
       if (!amount) { toast(t('needAmount'), 'warn'); return; }
@@ -1925,7 +1960,7 @@
     const wrap = document.createElement('div');
     wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
       '<div class="card-title">' + icon('edit') + ' ' + t('edit') + '</div>' +
-      '<label>' + t('amount') + '</label><input id="eAmount" type="number" inputmode="numeric" value="' + tx.amount + '"/>' +
+      '<label>' + t('amount') + '</label><input id="eAmount" type="text" inputmode="numeric" class="js-money" value="' + groupMoney(tx.amount) + '"/>' +
       '<label>' + t('category') + '</label><select id="eCat">' + catOpts + '</select>' +
       '<label>' + t('note') + '</label><input id="eNote" type="text" value="' + esc(tx.note) + '"/>' +
       '<div class="edit-datetime"><div><label>' + t('date') + '</label><input id="eDate" type="date" value="' + esc(tx.date) + '" max="' + ymd(new Date()) + '"/></div>' +
@@ -1936,6 +1971,7 @@
       '<div class="modal-actions"><button class="ghost-btn" id="eCancel">' + t('cancel') + '</button>' +
       '<button class="primary-btn" id="eSave">' + t('save') + '</button></div></div></div>';
     document.body.appendChild(wrap.firstChild);
+    if (window.CustomSelect) window.CustomSelect.enhanceAll();
     let newType = tx.type;
     document.querySelectorAll('#modalBackdrop .seg-btn').forEach((b) => b.addEventListener('click', () => {
       newType = b.dataset.type;
@@ -1946,7 +1982,7 @@
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
     document.getElementById('eSave').addEventListener('click', async () => {
       const fields = {
-        amount: Math.round(Number(document.getElementById('eAmount').value) || 0),
+        amount: readMoney(document.getElementById('eAmount')),
         category: document.getElementById('eCat').value,
         note: document.getElementById('eNote').value.trim(),
         type: newType,
@@ -1991,6 +2027,7 @@
     view.scrollTop = 0;
     renderNav();
     wire();
+    if (window.CustomSelect) window.CustomSelect.enhanceAll(view);
   }
 
   function wire() {
@@ -2030,7 +2067,7 @@
     const sb = document.getElementById('saveBudgetBtn');
     if (sb) sb.addEventListener('click', async () => {
       const obj = {};
-      document.querySelectorAll('[data-budget]').forEach((i) => { obj[i.dataset.budget] = Math.round(Number(i.value) || 0); });
+      document.querySelectorAll('[data-budget]').forEach((i) => { obj[i.dataset.budget] = readMoney(i); });
       try {
         await window.Store.saveBudgets(obj);
         Object.assign(DATA.budgets, obj);
@@ -2048,6 +2085,22 @@
         if (cf) cf.classList.toggle('hidden', !LIABILITY_TYPES.includes(e.target.value));
       }
     });
+    // wallets: tap the star to choose the default wallet (single selection, applied on Save)
+    if (weBox) weBox.addEventListener('click', (e) => {
+      const star = e.target && e.target.closest('.w-default');
+      if (!star) return;
+      const row = star.closest('.wallet-edit-row');
+      const wasOn = row.classList.contains('is-default');
+      weBox.querySelectorAll('.wallet-edit-row.is-default').forEach((r) => {
+        r.classList.remove('is-default');
+        const b = r.querySelector('.w-default'); if (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }
+      });
+      // Re-tapping the current default clears it (back to "first wallet" fallback).
+      if (!wasOn) {
+        row.classList.add('is-default');
+        star.classList.add('on'); star.setAttribute('aria-pressed', 'true');
+      }
+    });
     // wallets: add a blank editable row
     const aw = document.getElementById('addWalletBtn');
     if (aw) aw.addEventListener('click', () => {
@@ -2062,20 +2115,32 @@
     if (sw) sw.addEventListener('click', async () => {
       const rows = Array.from(document.querySelectorAll('#walletEdit .wallet-edit-row'));
       try {
+        // Resolve the wallet id the user marked as default (may be a row inserted just now).
+        let defaultId = null; let defaultMarked = false;
         for (const row of rows) {
           const id = row.dataset.acc;
           const name = (row.querySelector('.w-name').value || '').trim();
           const type = row.querySelector('.w-type').value;
-          const openingBalance = Math.round(Number(row.querySelector('.w-open').value) || 0);
+          const openingBalance = readMoney(row.querySelector('.w-open'));
           const cls = LIABILITY_TYPES.includes(type) ? 'liability' : 'asset';
-          const numOrNull = (sel) => { const v = row.querySelector(sel); const n = v && v.value !== '' ? Number(v.value) : null; return n != null && !isNaN(n) ? n : null; };
+          const numOrNull = (sel) => { const v = row.querySelector(sel); const s = v ? String(v.value).replace(/\D/g, '') : ''; return s ? Number(s) : null; };
           // Credit/loan metadata only applies to liabilities; clear it otherwise.
           const extra = cls === 'liability'
             ? { class: cls, creditLimit: numOrNull('.w-limit'), statementDay: numOrNull('.w-stmt'), dueDay: numOrNull('.w-due') }
             : { class: cls, creditLimit: null, statementDay: null, dueDay: null };
-          if (id) await window.Store.updateAccount(id, Object.assign({ name: name || t('wallet'), type: type, openingBalance: openingBalance }, extra));
-          else if (name) await window.Store.addAccount(Object.assign({ name: name, type: type, openingBalance: openingBalance, sortOrder: rows.indexOf(row) }, extra));
+          const isDef = row.classList.contains('is-default');
+          if (isDef) defaultMarked = true;
+          if (id) {
+            await window.Store.updateAccount(id, Object.assign({ name: name || t('wallet'), type: type, openingBalance: openingBalance }, extra));
+            if (isDef) defaultId = id;
+          } else if (name) {
+            const created = await window.Store.addAccount(Object.assign({ name: name, type: type, openingBalance: openingBalance, sortOrder: rows.indexOf(row) }, extra));
+            if (isDef && created) defaultId = created.id;
+          }
         }
+        // Apply the default choice atomically (clears it on all others). Only touch it
+        // when the user expressed a choice, so we never wipe an existing default by accident.
+        if (defaultMarked) await window.Store.setDefaultAccount(defaultId);
         await refreshData(true);
         toast(t('walletSaved'), 'success');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
@@ -2109,7 +2174,7 @@
       const list = [];
       Array.from(document.querySelectorAll('#tplEdit .tpl-edit-row')).forEach((r) => {
         const label = (r.querySelector('.tp-label').value || '').trim();
-        const amount = Math.round(Number(r.querySelector('.tp-amount').value) || 0);
+        const amount = readMoney(r.querySelector('.tp-amount'));
         if (!label || amount <= 0) return;
         list.push({ id: r.dataset.tpl || uuid(), label: label, amount: amount,
           type: r.querySelector('.tp-type').value === 'income' ? 'income' : 'expense',
@@ -2139,7 +2204,7 @@
       try {
         for (const r of rows) {
           const name = (r.querySelector('.g-name').value || '').trim();
-          const targetAmount = Math.round(Number(r.querySelector('.g-target').value) || 0);
+          const targetAmount = readMoney(r.querySelector('.g-target'));
           if (!name || targetAmount <= 0) continue;
           const fields = { name: name, targetAmount: targetAmount, accountId: r.querySelector('.g-acct').value || null, dueDate: r.querySelector('.g-due').value || null };
           const id = r.dataset.goal;
@@ -2171,7 +2236,7 @@
       try {
         for (const r of rows) {
           const name = (r.querySelector('.r-name').value || '').trim();
-          const amount = Math.round(Number(r.querySelector('.r-amount').value) || 0);
+          const amount = readMoney(r.querySelector('.r-amount'));
           if (!name || amount <= 0) continue;
           let day = Math.round(Number(r.querySelector('.r-day').value) || 1); day = Math.min(31, Math.max(1, day));
           const fields = { name: name, amount: amount, type: r.querySelector('.r-type').value === 'income' ? 'income' : 'expense', category: r.querySelector('.r-cat').value, accountId: r.querySelector('.r-acct').value || null, day: day };
