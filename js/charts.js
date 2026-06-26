@@ -12,19 +12,28 @@
   const reg = {};
   function destroy(id) { if (reg[id]) { reg[id].destroy(); delete reg[id]; } }
 
+  // ~3 significant digits, dot decimal: 1.5 · 12.4 · 125.
+  function dec(v) {
+    const av = Math.abs(v);
+    let s = v.toFixed(av >= 100 ? 0 : av >= 10 ? 1 : 2);
+    if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    return s;
+  }
+  // Main money display: only numbers over 9 digits (>= 1 billion) are shortened (B);
+  // everything up to 999,999,999 keeps its full digits (e.g. 125,000,000).
   function fmtShort(n) {
     n = Math.round(n || 0);
+    if (Math.abs(n) >= 1000000000) return dec(n / 1000000000) + 'B';
+    return n.toLocaleString('en-US'); // <= 9 digits: full, comma thousands separator
+  }
+  // Compact form for space-constrained chart axes only — keeps K/M/B so ticks stay short.
+  function fmtAxis(n) {
+    n = Math.round(n || 0);
     const a = Math.abs(n);
-    // International style: <1M shown in full (1,234), then K/M/B. ~3 significant digits, dot decimal.
-    function dec(v) {
-      const av = Math.abs(v);
-      let s = v.toFixed(av >= 100 ? 0 : av >= 10 ? 1 : 2);
-      if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
-      return s; // keep '.' decimal (en-US)
-    }
     if (a >= 1000000000) return dec(n / 1000000000) + 'B';
     if (a >= 1000000) return dec(n / 1000000) + 'M';
-    return n.toLocaleString('en-US'); // < 1M: full, comma thousands separator
+    if (a >= 1000) return Math.round(n / 1000) + 'K';
+    return String(n);
   }
   function fmtVND(n) {
     return new Intl.NumberFormat('en-US').format(Math.round(n || 0));
@@ -93,7 +102,7 @@
         },
         scales: {
           x: { ticks: { color: c.text, font: { size: 10, family: FONT }, maxRotation: 0, autoSkip: true }, grid: { display: false }, border: { display: false } },
-          y: { ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtShort(v) }, grid: { color: c.grid }, border: { display: false } },
+          y: { ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtAxis(v) }, grid: { color: c.grid }, border: { display: false } },
         },
       },
     });
@@ -111,7 +120,7 @@
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: (it) => ' ' + fmtVND(it.parsed.y) } } },
         scales: {
           x: { ticks: { color: c.text, font: { size: 10, family: FONT } }, grid: { display: false }, border: { display: false } },
-          y: { ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtShort(v) }, grid: { color: c.grid }, border: { display: false } },
+          y: { ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtAxis(v) }, grid: { color: c.grid }, border: { display: false } },
         },
       },
     });
@@ -147,7 +156,7 @@
         },
         scales: {
           x: { ticks: { color: c.text, font: { size: 10, family: FONT } }, grid: { display: false }, border: { display: false } },
-          y: { ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtShort(v) }, grid: { color: c.grid }, border: { display: false } },
+          y: { ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtAxis(v) }, grid: { color: c.grid }, border: { display: false } },
         },
       },
     });
