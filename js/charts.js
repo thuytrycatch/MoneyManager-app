@@ -15,20 +15,19 @@
   function fmtShort(n) {
     n = Math.round(n || 0);
     const a = Math.abs(n);
-    // ~3 significant digits, vi-VN decimal comma: 1,25tr · 15,5tr · 125tr · 1,25 tỷ.
+    // International style: <1M shown in full (1,234), then K/M/B. ~3 significant digits, dot decimal.
     function dec(v) {
       const av = Math.abs(v);
       let s = v.toFixed(av >= 100 ? 0 : av >= 10 ? 1 : 2);
       if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
-      return s.replace('.', ',');
+      return s; // keep '.' decimal (en-US)
     }
-    if (a >= 1000000000) return dec(n / 1000000000) + ' tỷ';
-    if (a >= 1000000) return dec(n / 1000000) + 'tr';
-    if (a >= 1000) return Math.round(n / 1000) + 'k';
-    return String(n);
+    if (a >= 1000000000) return dec(n / 1000000000) + 'B';
+    if (a >= 1000000) return dec(n / 1000000) + 'M';
+    return n.toLocaleString('en-US'); // < 1M: full, comma thousands separator
   }
   function fmtVND(n) {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Math.round(n || 0));
+    return new Intl.NumberFormat('en-US').format(Math.round(n || 0));
   }
   function cssVar(name, fb) {
     const v = getComputedStyle(document.body).getPropertyValue(name).trim();
@@ -71,7 +70,7 @@
           return '<button class="legend-item" data-cat="' + l + '">' +
             '<span class="legend-dot" style="background:' + PALETTE[i % PALETTE.length] + '"></span>' +
             '<span class="legend-label">' + display[i] + '</span>' +
-            '<span class="legend-val">' + fmtShort(values[i]) + '₫ · ' + p + '%</span></button>';
+            '<span class="legend-val">' + fmtShort(values[i]) + ' · ' + p + '%</span></button>';
         }).join('');
         if (onClick) leg.querySelectorAll('.legend-item').forEach((b) => b.addEventListener('click', () => onClick(b.dataset.cat)));
       }

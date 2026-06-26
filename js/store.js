@@ -260,6 +260,7 @@
       category: r.category,
       note: r.note || '',
       rawInput: r.raw_input || '',
+      userId: r.user_id || null,
       accountId: r.account_id || null,
       toAccountId: r.to_account_id || null,
       recurringId: r.recurring_id || null,

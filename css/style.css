@@ -300,6 +300,14 @@ main { padding: 4px 16px 110px; }
 .sum-cell.income b { color: var(--income); }
 .sum-cell.expense b { color: var(--expense); }
 
+/* ---------- Income/expense by person ---------- */
+.person-list { display: flex; flex-direction: column; gap: 8px; }
+.person-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); }
+.person-name { font-weight: 700; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-nums { display: flex; gap: 12px; flex-shrink: 0; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.person-nums .income { color: var(--income); }
+.person-nums .expense { color: var(--expense); }
+
 /* ---------- Charts ---------- */
 .chart-box { height: 220px; position: relative; }
 .chart-box.tall { height: 240px; }
