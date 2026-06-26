@@ -1540,8 +1540,9 @@
   // grid never gets blank cells). See .report-grid / .dash-card in style.css.
   function reportCard(inner) { return inner ? '<section class="dash-card">' + inner + '</section>' : ''; }
 
-  // Per-person income/expense breakdown for the given transactions (current report period).
-  function byPersonHtml(txs) {
+  // Aggregate income/expense per person (who entered each tx) for the given period.
+  // Returns parallel arrays ready for a grouped bar chart, sorted by total activity.
+  function personTotals(txs) {
     const by = {};
     txs.forEach((tx) => {
       if (tx.type === 'transfer') return;
@@ -1549,20 +1550,20 @@
       const p = by[k] || (by[k] = { income: 0, expense: 0 });
       if (tx.type === 'income') p.income += tx.amount; else p.expense += tx.amount;
     });
-    const rows = Object.keys(by)
-      .map((k) => ({ name: memberName(k || null), ...by[k], net: by[k].income - by[k].expense }))
-      .sort((a, b) => b.expense - a.expense);
-    if (!rows.length) return '';
-    const body = rows.map((r) =>
-      '<div class="person-row">' +
-        '<div class="person-name">' + esc(r.name) + '</div>' +
-        '<div class="person-nums">' +
-          '<span class="income">+' + mask(fmtShort(r.income)) + '</span>' +
-          '<span class="expense">−' + mask(fmtShort(r.expense)) + '</span>' +
-          '<span class="' + (r.net >= 0 ? 'income' : 'expense') + '">' + mask(fmtShort(r.net)) + '</span>' +
-        '</div>' +
-      '</div>').join('');
-    return '<div class="section-title">' + t('byPerson') + '</div><div class="person-list">' + body + '</div>';
+    const keys = Object.keys(by).sort((a, b) => (by[b].income + by[b].expense) - (by[a].income + by[a].expense));
+    return {
+      labels: keys.map((k) => memberName(k || null)),
+      inc: keys.map((k) => by[k].income),
+      exp: keys.map((k) => by[k].expense),
+    };
+  }
+
+  // Per-person income/expense, shown as grouped bars (chart id 'repPerson') like the trend card.
+  // The chart itself is drawn in viewReports() once the canvas is in the DOM.
+  function byPersonHtml(pp) {
+    if (!pp.labels.length) return '';
+    return '<div class="section-title">' + t('byPerson') + '</div>' +
+      '<div class="card"><div class="chart-box tall"><canvas id="repPerson"></canvas></div></div>';
   }
 
   function viewReports() {
@@ -1574,6 +1575,7 @@
     const pr = prevReportRange();
     const pt = totals(inRange(pr.s, pr.e));
     const td = trendData(txs, { s, e });
+    const pp = personTotals(txs);
     const incColor = getComputedStyle(document.body).getPropertyValue('--income').trim() || '#10b981';
     const expColor = getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444';
     const top = txs.filter((x) => x.type === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 5);
@@ -1583,6 +1585,10 @@
       window.Charts.bars('repTrend', td.labels, [
         { label: t('income'), data: td.inc, color: incColor },
         { label: t('expense'), data: td.exp, color: expColor },
+      ]);
+      if (pp.labels.length) window.Charts.bars('repPerson', pp.labels, [
+        { label: t('income'), data: pp.inc, color: incColor },
+        { label: t('expense'), data: pp.exp, color: expColor },
       ]);
     }, 0);
 
@@ -1623,8 +1629,8 @@
       reportCard(trendsForecastHtml()) +
       // Net worth: assets vs liabilities (current snapshot)
       reportCard(netWorthHtml()) +
-      // Income/expense split by who entered each transaction
-      reportCard(byPersonHtml(txs)) +
+      // Income/expense split by who entered each transaction (grouped bar chart)
+      reportCard(byPersonHtml(pp)) +
       reportCard('<div class="section-title">' + t('topSpending') + '</div>' +
         '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>') +
       '</div>'
