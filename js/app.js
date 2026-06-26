@@ -131,6 +131,7 @@
       grpAccount: 'Hộ gia đình & Tài khoản', grpMoney: 'Quản lý tiền', grpGeneral: 'Cài đặt chung', grpAdvanced: 'Nâng cao',
       chooseLanguage: 'Chọn ngôn ngữ', darkMode: 'Chế độ tối',
       members: 'Thành viên', roleOwner: 'Chủ hộ', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
+      byPerson: 'Thu chi theo người',
       confirmRemoveMember: 'Xóa thành viên này khỏi hộ?', memberRemoved: 'Đã xóa thành viên',
       leaveHousehold: 'Rời hộ này', confirmLeave: 'Rời khỏi hộ này?', onlyOwnerRemove: 'Chỉ chủ hộ mới xóa được thành viên.',
       added: 'Đã thêm', deleted: 'Đã xóa', confirmDelete: 'Xóa giao dịch này?',
@@ -249,6 +250,7 @@
       grpAccount: 'Household & Account', grpMoney: 'Money', grpGeneral: 'General', grpAdvanced: 'Advanced',
       chooseLanguage: 'Choose language', darkMode: 'Dark mode',
       members: 'Members', roleOwner: 'Owner', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
+      byPerson: 'Income & expense by person',
       confirmRemoveMember: 'Remove this member from the household?', memberRemoved: 'Member removed',
       leaveHousehold: 'Leave this household', confirmLeave: 'Leave this household?', onlyOwnerRemove: 'Only the owner can remove members.',
       added: 'Added', deleted: 'Deleted', confirmDelete: 'Delete this transaction?',
@@ -378,6 +380,14 @@
   // Privacy: hide balances/amounts behind dots until the user taps the eye icon. Default: hidden.
   let hideAmounts = (localStorage.getItem('hideAmounts') || '1') === '1';
   function mask(str) { return hideAmounts ? '••••••' : str; }
+
+  // Display name of whoever entered a transaction (from tx.userId → household member).
+  function memberName(uid) {
+    if (uid && uid === currentUserId) return t('you');
+    const m = householdMembers.find((x) => x.userId === uid);
+    if (m && m.email) return m.email.split('@')[0];
+    return t('unknownMember');
+  }
 
   /* ============== Date helpers ============== */
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -530,7 +540,7 @@
       '<div class="tpl-chips">' + tpls.map((tp) =>
         '<button class="tpl-chip" data-usetpl="' + esc(tp.id) + '">' + catIcon(tp.category) +
         '<span class="tpl-name">' + esc(tp.label) + '</span>' +
-        '<span class="tpl-amt">' + (tp.type === 'income' ? '+' : '−') + fmtShort(tp.amount) + '₫</span></button>').join('') +
+        '<span class="tpl-amt">' + (tp.type === 'income' ? '+' : '−') + fmtShort(tp.amount) + '</span></button>').join('') +
       '</div>';
   }
 
@@ -584,7 +594,7 @@
     const months = (due.getFullYear() - now.getFullYear()) * 12 + (due.getMonth() - now.getMonth());
     if (months <= 0) return { done: false, text: t('goalDueSoon') };
     const perMonth = Math.ceil(Math.max(0, g.targetAmount - saved) / months);
-    return { done: false, text: t('goalNeed').replace('{m}', months).replace('{a}', fmtShort(perMonth) + '₫') };
+    return { done: false, text: t('goalNeed').replace('{m}', months).replace('{a}', fmtShort(perMonth)) };
   }
   function goalCardHtml(g) {
     const saved = goalSaved(g);
@@ -594,7 +604,7 @@
       '<div class="goal-top"><span class="goal-name">' + icon('target') + ' ' + esc(g.name) + '</span>' +
       '<span class="goal-pct' + (eta.done ? ' done' : '') + '">' + pct + '%</span></div>' +
       '<div class="goal-track"><div class="goal-fill' + (eta.done ? ' done' : '') + '" style="width:' + pct + '%"></div></div>' +
-      '<div class="goal-meta"><span>' + mask(fmtShort(saved) + '₫') + ' / ' + fmtShort(g.targetAmount) + '₫</span>' +
+      '<div class="goal-meta"><span>' + mask(fmtShort(saved)) + ' / ' + fmtShort(g.targetAmount) + '</span>' +
       (eta.text ? '<span class="goal-eta">' + eta.text + '</span>' : '') + '</div></div>';
   }
   function goalsSectionHtml() {
@@ -894,7 +904,7 @@
     bar.innerHTML =
       '<span class="at-ic ' + tx.type + '">' + ic + '</span>' +
       '<span class="at-text"><b>' + esc(tx.note || tx.rawInput || t('added')) + '</b>' +
-      '<span class="at-sub">' + esc(catLabel(tx.category)) + ' · ' + sign + fmtShort(tx.amount) + '₫</span></span>' +
+      '<span class="at-sub">' + esc(catLabel(tx.category)) + ' · ' + sign + fmtShort(tx.amount) + '</span></span>' +
       '<button class="at-btn" data-undo="1">' + icon('refresh') + ' ' + t('undo') + '</button>';
     document.body.appendChild(bar);
     requestAnimationFrame(() => bar.classList.add('show'));
@@ -1005,7 +1015,7 @@
   function statTile(label, value, kind, ic) {
     return '<div class="tile ' + (kind || '') + '">' +
       '<div class="tile-top">' + (ic ? icon(ic) : '') + '<span>' + label + '</span></div>' +
-      '<div class="tile-val">' + fmtShort(Math.abs(value)) + '₫</div></div>';
+      '<div class="tile-val">' + fmtShort(Math.abs(value)) + '</div></div>';
   }
   function txRow(tx) {
     if (tx.type === 'transfer') {
@@ -1016,8 +1026,8 @@
       return '<div class="tx-row" data-id="' + tx.id + '">' +
         '<div class="tx-ic transfer">' + icon('transfer') + '</div>' +
         '<div class="tx-main"><div class="tx-note">' + esc(tx.note || t('transfer')) + '</div>' +
-        '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + '</div></div>' +
-        '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '₫</div>' +
+        '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+        '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '</div>' +
         '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
         '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div></div></div>';
     }
@@ -1025,8 +1035,8 @@
     return '<div class="tx-row" data-id="' + tx.id + '">' +
       '<div class="tx-ic ' + tx.type + '">' + catIcon(tx.category) + '</div>' +
       '<div class="tx-main"><div class="tx-note">' + esc(tx.note || tx.rawInput) + '</div>' +
-      '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + '</div></div>' +
-      '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '₫</div>' +
+      '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+      '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
       '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
       '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div></div></div>';
   }
@@ -1054,12 +1064,12 @@
         if (projected >= limit) {
           if (cls === 'ok') cls = 'warn';
           projBadge = '<div class="budget-proj">' + icon('trendUp') + ' ' + t('projectedOverspend') +
-            ' · ~' + fmtShort(projected) + '₫</div>';
+            ' · ~' + fmtShort(projected) + '</div>';
         }
       }
       return '<div class="budget-row">' +
         '<div class="budget-top"><span class="budget-cat">' + catIcon(cat) + esc(catLabel(cat)) + '</span>' +
-        '<span class="budget-nums ' + (used > limit ? 'over' : '') + '">' + fmtShort(used) + ' / ' + fmtShort(limit) + '₫</span></div>' +
+        '<span class="budget-nums ' + (used > limit ? 'over' : '') + '">' + fmtShort(used) + ' / ' + fmtShort(limit) + '</span></div>' +
         '<div class="budget-track"><div class="budget-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
         projBadge + '</div>';
     }).join('');
@@ -1093,7 +1103,7 @@
       const b = accountBalance(a.id);
       return '<div class="wallet-card">' +
         '<div class="wallet-top">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
-        '<div class="wallet-bal ' + (b < 0 ? 'neg' : '') + '">' + mask(fmtShort(b) + '₫') + '</div></div>';
+        '<div class="wallet-bal ' + (b < 0 ? 'neg' : '') + '">' + mask(fmtShort(b)) + '</div></div>';
     }).join('');
     return '<div class="section-title">' + t('wallets') + '</div>' +
       '<div class="wallet-strip">' + cards + '</div>';
@@ -1132,8 +1142,8 @@
       '<button id="eyeToggle" class="eye-btn" title="' + (hideAmounts ? t('showBalance') : t('hideBalance')) + '">' + icon(hideAmounts ? 'eyeOff' : 'eye') + '</button></div>' +
       '<div class="hero-balance">' + mask(fmtVND(bal)) + '</div>' +
       '<div class="hero-chips">' +
-      '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + fmtShort(mt.income) + '₫</b></div>' +
-      '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + fmtShort(mt.expense) + '₫</b></div>' +
+      '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + fmtShort(mt.income) + '</b></div>' +
+      '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + fmtShort(mt.expense) + '</b></div>' +
       '</div></div>' +
 
       '<div class="tiles">' +
@@ -1185,7 +1195,7 @@
     Object.keys(DATA.budgets).forEach((cat) => {
       const lim = DATA.budgets[cat]; if (!lim) return;
       const used = byCat[cat] || 0; const pct = Math.round(used / lim * 100);
-      if (pct >= 100) out.push(alertItem('danger', 'alert', '<b>' + cat + '</b>: ' + t('warn100').toLowerCase() + ' (' + pct + '% — ' + fmtShort(used) + '/' + fmtShort(lim) + '₫)'));
+      if (pct >= 100) out.push(alertItem('danger', 'alert', '<b>' + cat + '</b>: ' + t('warn100').toLowerCase() + ' (' + pct + '% — ' + fmtShort(used) + '/' + fmtShort(lim) + ')'));
       else if (pct >= 80) out.push(alertItem('warn', 'alert', '<b>' + cat + '</b>: ' + t('warn80').toLowerCase() + ' (' + pct + '%)'));
     });
     // credit-card / loan due reminders (and high utilization)
@@ -1197,7 +1207,7 @@
         const dleft = daysUntil(cyc.dueDate);
         if (dleft <= 7) {
           const when = dleft <= 0 ? t('dueTodayLabel') : t('dueInDays').replace('{n}', dleft);
-          const pay = cyc.minPayment > 0 ? ' · ' + t('minPayment').toLowerCase() + ' ' + fmtShort(cyc.minPayment) + '₫' : '';
+          const pay = cyc.minPayment > 0 ? ' · ' + t('minPayment').toLowerCase() + ' ' + fmtShort(cyc.minPayment) : '';
           out.push(alertItem(dleft <= 2 ? 'danger' : 'warn', 'card',
             '<b>' + esc(acc.name) + '</b>: ' + t('dueDate').toLowerCase() + ' ' + cyc.dueDate + ' (' + when + ')' + pay));
         }
@@ -1217,7 +1227,7 @@
     else if (wkExp < lastWkExp) out.push(alertItem('good', 'piggy', t('savedWell')));
     // biggest expense this week
     const big = wkTx.filter((x) => x.type === 'expense').sort((a, b) => b.amount - a.amount)[0];
-    if (big) out.push(alertItem('info', 'spark', t('biggestWeek') + ': <b>' + esc(big.note) + '</b> · ' + fmtShort(big.amount) + '₫'));
+    if (big) out.push(alertItem('info', 'spark', t('biggestWeek') + ': <b>' + esc(big.note) + '</b> · ' + fmtShort(big.amount)));
     if (!out.length) out.push(alertItem('good', 'check', t('noAlerts')));
     return out.join('');
   }
@@ -1287,7 +1297,7 @@
       '<span class="wrap-rate">' + t('savingsRate') + ' ' + rate + '%</span></div>' +
       '<div class="wrap-spent">' + fmtVND(tt.expense) + '</div>' +
       '<div class="wrap-cmp">' + cmp + '</div>' +
-      (topCat ? '<div class="wrap-biggest">' + catIcon(topCat) + ' ' + t('wrapBiggest') + ': ' + esc(catLabel(topCat)) + ' · ' + fmtShort(topVal) + '₫</div>' : '') +
+      (topCat ? '<div class="wrap-biggest">' + catIcon(topCat) + ' ' + t('wrapBiggest') + ': ' + esc(catLabel(topCat)) + ' · ' + fmtShort(topVal) + '</div>' : '') +
       (coach ? '<div class="wrap-coach">' + coach + '</div>' : '') +
       '</div>';
   }
@@ -1351,7 +1361,7 @@
       const lvl = (v === 0 || maxv === 0) ? 0 : Math.min(4, Math.ceil(v / maxv * 4));
       const dateStr = mk + '-' + pad(d);
       cells += '<button class="hm-cell lvl-' + lvl + (dateStr === todayStr ? ' today' : '') + '" data-hmday="' + dateStr + '"' +
-        (v ? ' title="' + fmtShort(v) + '₫"' : '') + '>' + d + '</button>';
+        (v ? ' title="' + fmtShort(v) + '"' : '') + '>' + d + '</button>';
     }
     const head = t('dows').map((dn) => '<div class="hm-dow">' + dn + '</div>').join('');
     return '<div class="section-title">' + t('spendingCalendar') + '</div>' +
@@ -1472,13 +1482,13 @@
     let extras = '';
     if (forecast != null) {
       extras += '<div class="forecast-pill">' + icon('target') + ' ' + t('forecastLabel') + ': <b>' +
-        fmtShort(forecast) + '₫</b>' + t('perMonth') + '</div>';
+        fmtShort(forecast) + '</b>' + t('perMonth') + '</div>';
     } else {
       extras += '<div class="hint">' + t('needMoreData') + '</div>';
     }
     if (spikes.length) {
       extras += spikes.map((s) => alertItem('warn', 'trendUp',
-        '<b>' + s.label + '</b>: ' + t('spikeMonth') + ' · ' + fmtShort(s.expense) + '₫')).join('');
+        '<b>' + s.label + '</b>: ' + t('spikeMonth') + ' · ' + fmtShort(s.expense))).join('');
     }
     if (forecast != null) extras += '<div class="hint">' + t('forecastNote') + '</div>';
 
@@ -1505,13 +1515,13 @@
         const cyc = cardCycle(a);
         const bits = [];
         if (cyc.utilization != null) bits.push(t('utilization') + ' ' + cyc.utilization + '%');
-        if (cyc.minPayment > 0) bits.push(t('minPayment') + ' ' + fmtShort(cyc.minPayment) + '₫');
+        if (cyc.minPayment > 0) bits.push(t('minPayment') + ' ' + fmtShort(cyc.minPayment));
         if (cyc.dueDate) bits.push(t('dueDate') + ' ' + cyc.dueDate);
         if (bits.length) sub = '<div class="nw-acc-sub">' + bits.join(' · ') + '</div>';
       }
       return '<div class="nw-acc">' +
         '<div class="nw-acc-main">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
-        '<div class="nw-acc-val ' + (isLia ? 'neg' : '') + '">' + mask((isLia ? '−' : '') + fmtShort(shown) + '₫') + '</div>' +
+        '<div class="nw-acc-val ' + (isLia ? 'neg' : '') + '">' + mask((isLia ? '−' : '') + fmtShort(shown)) + '</div>' +
         sub + '</div>';
     };
 
@@ -1519,8 +1529,8 @@
       '<div class="nw-hero"><div class="nw-hero-label">' + icon('scale') + ' ' + t('netWorth') + '</div>' +
       '<div class="nw-hero-val ' + (nw.net < 0 ? 'neg' : '') + '">' + mask(fmtVND(nw.net)) + '</div></div>' +
       '<div class="summary-grid">' +
-      '<div class="sum-cell income"><span>' + t('totalAssets') + '</span><b>' + mask(fmtShort(nw.assets) + '₫') + '</b></div>' +
-      '<div class="sum-cell expense"><span>' + t('totalLiabilities') + '</span><b>' + mask(fmtShort(nw.liabilities) + '₫') + '</b></div>' +
+      '<div class="sum-cell income"><span>' + t('totalAssets') + '</span><b>' + mask(fmtShort(nw.assets)) + '</b></div>' +
+      '<div class="sum-cell expense"><span>' + t('totalLiabilities') + '</span><b>' + mask(fmtShort(nw.liabilities)) + '</b></div>' +
       '</div>' +
       (assetAccs.length ? '<div class="nw-group-title">' + t('assets') + '</div><div class="nw-list">' + assetAccs.map(accRow).join('') + '</div>' : '') +
       (liabAccs.length ? '<div class="nw-group-title">' + t('liabilities') + '</div><div class="nw-list">' + liabAccs.map(accRow).join('') + '</div>' : '');
@@ -1529,6 +1539,31 @@
   // Wrap a report section as an atomic card (skipped when empty so the masonry
   // grid never gets blank cells). See .report-grid / .dash-card in style.css.
   function reportCard(inner) { return inner ? '<section class="dash-card">' + inner + '</section>' : ''; }
+
+  // Per-person income/expense breakdown for the given transactions (current report period).
+  function byPersonHtml(txs) {
+    const by = {};
+    txs.forEach((tx) => {
+      if (tx.type === 'transfer') return;
+      const k = tx.userId || '';
+      const p = by[k] || (by[k] = { income: 0, expense: 0 });
+      if (tx.type === 'income') p.income += tx.amount; else p.expense += tx.amount;
+    });
+    const rows = Object.keys(by)
+      .map((k) => ({ name: memberName(k || null), ...by[k], net: by[k].income - by[k].expense }))
+      .sort((a, b) => b.expense - a.expense);
+    if (!rows.length) return '';
+    const body = rows.map((r) =>
+      '<div class="person-row">' +
+        '<div class="person-name">' + esc(r.name) + '</div>' +
+        '<div class="person-nums">' +
+          '<span class="income">+' + mask(fmtShort(r.income)) + '</span>' +
+          '<span class="expense">−' + mask(fmtShort(r.expense)) + '</span>' +
+          '<span class="' + (r.net >= 0 ? 'income' : 'expense') + '">' + mask(fmtShort(r.net)) + '</span>' +
+        '</div>' +
+      '</div>').join('');
+    return '<div class="section-title">' + t('byPerson') + '</div><div class="person-list">' + body + '</div>';
+  }
 
   function viewReports() {
     const { s, e } = reportRange();
@@ -1562,9 +1597,9 @@
       reportWrapUpHtml(tt, pt, byCat) +
 
       '<div class="summary-grid">' +
-      '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + fmtShort(tt.income) + '₫</b>' + deltaChip(tt.income, pt.income, true) + '</div>' +
-      '<div class="sum-cell expense"><span>' + t('expense') + '</span><b>' + fmtShort(tt.expense) + '₫</b>' + deltaChip(tt.expense, pt.expense, false) + '</div>' +
-      '<div class="sum-cell ' + (tt.net >= 0 ? 'income' : 'expense') + '"><span>' + t('savings') + '</span><b>' + fmtShort(tt.net) + '₫</b>' + deltaChip(tt.net, pt.net, true) + '</div>' +
+      '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + fmtShort(tt.income) + '</b>' + deltaChip(tt.income, pt.income, true) + '</div>' +
+      '<div class="sum-cell expense"><span>' + t('expense') + '</span><b>' + fmtShort(tt.expense) + '</b>' + deltaChip(tt.expense, pt.expense, false) + '</div>' +
+      '<div class="sum-cell ' + (tt.net >= 0 ? 'income' : 'expense') + '"><span>' + t('savings') + '</span><b>' + fmtShort(tt.net) + '</b>' + deltaChip(tt.net, pt.net, true) + '</div>' +
       '<div class="sum-cell neutral"><span>' + t('savingsRate') + '</span><b>' + rate + '%</b></div>' +
       '</div>' +
 
@@ -1588,6 +1623,8 @@
       reportCard(trendsForecastHtml()) +
       // Net worth: assets vs liabilities (current snapshot)
       reportCard(netWorthHtml()) +
+      // Income/expense split by who entered each transaction
+      reportCard(byPersonHtml(txs)) +
       reportCard('<div class="section-title">' + t('topSpending') + '</div>' +
         '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>') +
       '</div>'
@@ -1615,7 +1652,7 @@
     if (!dates.length) body = '<div class="empty">' + t('noTx') + '</div>';
     else dates.forEach((d) => {
       const dayExp = groups[d].filter((x) => x.type === 'expense').reduce((a, b) => a + b.amount, 0);
-      body += '<div class="day-head"><span>' + d + '</span><span class="day-sum">−' + fmtShort(dayExp) + '₫</span></div>';
+      body += '<div class="day-head"><span>' + d + '</span><span class="day-sum">−' + fmtShort(dayExp) + '</span></div>';
       body += groups[d].map(txRow).join('');
     });
 
@@ -1674,7 +1711,7 @@
   function walletEditRowHtml(acc) {
     const a = acc || { id: '', name: '', type: 'cash', openingBalance: 0 };
     const typeOpts = ACCOUNT_TYPES.map((ty) => '<option value="' + ty + '"' + (ty === a.type ? ' selected' : '') + '>' + accountTypeLabel(ty) + '</option>').join('');
-    const balHtml = acc ? '<span class="w-bal">= ' + fmtShort(accountBalance(a.id)) + '₫</span>' : '';
+    const balHtml = acc ? '<span class="w-bal">= ' + fmtShort(accountBalance(a.id)) + '</span>' : '';
     const isLia = LIABILITY_TYPES.includes(a.type);
     // Star toggles this wallet as the household default (the one pre-selected on entry).
     // The chosen default is applied on Save. New (unsaved) rows can't be default yet.
