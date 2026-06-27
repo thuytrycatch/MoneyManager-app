@@ -228,6 +228,37 @@
     }
   }
 
+  // Change a member's role ('admin' or 'member'). Owner-only — enforced server-side
+  // by the guard_member_role trigger + RLS, so a denied call throws here.
+  async function setMemberRole(userId, role) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const r = (role === 'admin') ? 'admin' : 'member';
+    const sb = getClient();
+    const { error } = await sb
+      .from('household_members')
+      .update({ role: r })
+      .eq('household_id', household.id)
+      .eq('user_id', userId);
+    if (error) throw new Error(error.message);
+  }
+
+  // Transfer ownership to another member: promote them to 'owner', then demote self to 'admin'.
+  // Order matters — we are still the owner when each update runs, so the role-guard trigger allows it.
+  async function transferOwnership(userId) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const user = await getUser();
+    if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
+    const sb = getClient();
+    const { error: e1 } = await sb
+      .from('household_members').update({ role: 'owner' })
+      .eq('household_id', household.id).eq('user_id', userId);
+    if (e1) throw new Error(e1.message);
+    const { error: e2 } = await sb
+      .from('household_members').update({ role: 'admin' })
+      .eq('household_id', household.id).eq('user_id', user.id);
+    if (e2) throw new Error(e2.message);
+  }
+
   // Switch to another household (for users who belong to multiple)
   async function switchHousehold(id) {
     const list = await listHouseholds();
@@ -624,6 +655,8 @@
     switchHousehold,
     listMembers,
     removeMember,
+    setMemberRole,
+    transferOwnership,
     loadData,
     getCachedData,
     addTransaction,
