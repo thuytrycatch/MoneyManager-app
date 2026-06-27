@@ -430,22 +430,27 @@ security definer
 set search_path = public
 as $$
 declare
-  v_row   jsonb;
+  -- Snapshot the rows as jsonb up front. This function is attached to several tables,
+  -- so we must NEVER reference NEW.<field>/OLD.<field> directly — PL/pgSQL eagerly
+  -- extracts such fields even when a tg_table_name guard is false, which errors on
+  -- tables that lack the column (e.g. NEW.role on `transactions`). jsonb access is safe.
+  v_new   jsonb := case when tg_op = 'DELETE' then null else to_jsonb(NEW) end;
+  v_old   jsonb := case when tg_op = 'INSERT' then null else to_jsonb(OLD) end;
+  v_row   jsonb := coalesce(v_new, v_old);
   v_hid   uuid;
   v_eid   uuid;
   v_email text;
 begin
   -- Ignore no-op updates (e.g. idempotent budget upserts that change nothing).
-  if tg_op = 'UPDATE' and to_jsonb(NEW) = to_jsonb(OLD) then
+  if tg_op = 'UPDATE' and v_new = v_old then
     return NEW;
   end if;
   -- For members, only membership/role changes matter — skip the email backfill noise.
   if tg_table_name = 'household_members' and tg_op = 'UPDATE'
-     and NEW.role is not distinct from OLD.role then
+     and (v_new->>'role') is not distinct from (v_old->>'role') then
     return NEW;
   end if;
 
-  v_row := to_jsonb(coalesce(NEW, OLD));
   if tg_table_name = 'households' then
     v_hid := (v_row->>'id')::uuid;
   else
@@ -468,10 +473,7 @@ begin
     insert into public.activity_log (household_id, user_id, user_email, action, entity, entity_id, summary)
     values (
       v_hid, auth.uid(), v_email, lower(tg_op), tg_table_name, v_eid,
-      jsonb_build_object(
-        'data', to_jsonb(coalesce(NEW, OLD)),
-        'prev', case when tg_op = 'UPDATE' then to_jsonb(OLD) else null end
-      )
+      jsonb_build_object('data', v_row, 'prev', case when tg_op = 'UPDATE' then v_old else null end)
     );
   exception when others then
     null;
