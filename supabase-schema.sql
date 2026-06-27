@@ -253,18 +253,36 @@ create trigger trg_guard_member_role
   for each row execute function public.guard_member_role();
 
 -- transactions ---------------------------------------------------------
+-- Stamp the actor server-side on every insert. This guarantees user_id is always
+-- the real signed-in user — even if the client sends null (e.g. it couldn't resolve
+-- the session in time) — so the per-owner UPDATE/DELETE checks below stay reliable.
+create or replace function public.set_tx_actor()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.user_id := auth.uid();
+  return new;
+end
+$$;
+drop trigger if exists trg_set_tx_actor on public.transactions;
+create trigger trg_set_tx_actor before insert on public.transactions
+  for each row execute function public.set_tx_actor();
+
 -- Everyone in the household can READ all transactions.
--- A member may only WRITE (insert/update/delete) their OWN rows; owners & admins write any.
+-- INSERT: any household member may add a transaction. We do NOT gate insert on user_id —
+--   the actor is stamped by trg_set_tx_actor above, and gating insert on a client-supplied
+--   user_id broke transfers/adds whenever the client couldn't resolve its own user id.
+-- UPDATE/DELETE: a member may only change their OWN rows; owners & admins change any.
 drop policy if exists tx_all on public.transactions;            -- legacy combined policy
 drop policy if exists tx_select on public.transactions;
 create policy tx_select on public.transactions for select
   using (household_id in (select public.user_households()));
 drop policy if exists tx_insert on public.transactions;
 create policy tx_insert on public.transactions for insert
-  with check (
-    household_id in (select public.user_households())
-    and (user_id = auth.uid() or public.is_household_admin(household_id))
-  );
+  with check (household_id in (select public.user_households()));
 drop policy if exists tx_update on public.transactions;
 create policy tx_update on public.transactions for update
   using (
