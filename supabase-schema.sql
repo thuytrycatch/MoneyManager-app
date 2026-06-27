@@ -382,3 +382,111 @@ do $$
 begin
   begin alter publication supabase_realtime add table public.recurring; exception when duplicate_object then null; end;
 end $$;
+
+-- =====================================================================
+--  Activity log — an immutable audit trail of every add/edit/delete a member
+--  performs across the household's data. Written ONLY by the log_activity()
+--  trigger (SECURITY DEFINER), so clients can never forge, change, or delete
+--  entries — they can only read it. Visible to owners & admins (oversight).
+--  Safe to re-run.
+-- =====================================================================
+create table if not exists public.activity_log (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  user_id      uuid references auth.users(id) on delete set null,  -- who did it
+  user_email   text,                                               -- snapshot of their email at the time
+  action       text not null check (action in ('insert', 'update', 'delete')),
+  entity       text not null,   -- source table: transactions | budgets | accounts | goals | recurring | household_members | households
+  entity_id    uuid,            -- the affected row's id (null for budgets, which have a composite key)
+  summary      jsonb,           -- { data: <row after>, prev: <row before, on update> } for display
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_activity_hh on public.activity_log (household_id, created_at desc);
+
+-- Generic logger attached to every data table. SECURITY DEFINER so its INSERT
+-- bypasses the (deliberately absent) write policies on activity_log.
+create or replace function public.log_activity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row   jsonb;
+  v_hid   uuid;
+  v_eid   uuid;
+  v_email text;
+begin
+  -- Ignore no-op updates (e.g. idempotent budget upserts that change nothing).
+  if tg_op = 'UPDATE' and to_jsonb(NEW) = to_jsonb(OLD) then
+    return NEW;
+  end if;
+  -- For members, only membership/role changes matter — skip the email backfill noise.
+  if tg_table_name = 'household_members' and tg_op = 'UPDATE'
+     and NEW.role is not distinct from OLD.role then
+    return NEW;
+  end if;
+
+  v_row := to_jsonb(coalesce(NEW, OLD));
+  if tg_table_name = 'households' then
+    v_hid := (v_row->>'id')::uuid;
+  else
+    v_hid := (v_row->>'household_id')::uuid;
+  end if;
+
+  if v_row ? 'id' then
+    v_eid := (v_row->>'id')::uuid;
+  elsif v_row ? 'user_id' then
+    v_eid := (v_row->>'user_id')::uuid;
+  end if;
+
+  select email into v_email
+    from public.household_members
+   where user_id = auth.uid() and household_id = v_hid
+   limit 1;
+
+  -- Logging must never break the real operation.
+  begin
+    insert into public.activity_log (household_id, user_id, user_email, action, entity, entity_id, summary)
+    values (
+      v_hid, auth.uid(), v_email, lower(tg_op), tg_table_name, v_eid,
+      jsonb_build_object(
+        'data', to_jsonb(coalesce(NEW, OLD)),
+        'prev', case when tg_op = 'UPDATE' then to_jsonb(OLD) else null end
+      )
+    );
+  exception when others then
+    null;
+  end;
+  return coalesce(NEW, OLD);
+end
+$$;
+
+-- Attach the logger to each table (AFTER, row-level). Drop first so re-running is safe.
+drop trigger if exists trg_log_transactions on public.transactions;
+create trigger trg_log_transactions after insert or update or delete on public.transactions
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_budgets on public.budgets;
+create trigger trg_log_budgets after insert or update or delete on public.budgets
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_accounts on public.accounts;
+create trigger trg_log_accounts after insert or update or delete on public.accounts
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_goals on public.goals;
+create trigger trg_log_goals after insert or update or delete on public.goals
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_recurring on public.recurring;
+create trigger trg_log_recurring after insert or update or delete on public.recurring
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_members on public.household_members;
+create trigger trg_log_members after insert or update or delete on public.household_members
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_households on public.households;
+create trigger trg_log_households after insert or update or delete on public.households
+  for each row execute function public.log_activity();
+
+-- RLS: owners & admins read the log; nobody writes it directly (only the trigger).
+alter table public.activity_log enable row level security;
+drop policy if exists activity_select on public.activity_log;
+create policy activity_select on public.activity_log for select
+  using (public.is_household_admin(household_id));

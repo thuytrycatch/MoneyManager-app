@@ -619,6 +619,32 @@
     if (error) throw new Error(error.message);
   }
 
+  /* ---------------- Activity log (audit trail) ---------------- */
+  // Read the household's activity log (newest first). Owners/admins only — RLS returns
+  // nothing for plain members. Tolerates the table being absent (before the schema re-run).
+  async function listActivity(opts) {
+    if (!household) return [];
+    const sb = getClient();
+    const limit = (opts && opts.limit) || 100;
+    const { data, error } = await sb
+      .from('activity_log')
+      .select('id,user_id,user_email,action,entity,entity_id,summary,created_at')
+      .eq('household_id', household.id)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) return [];
+    return (data || []).map((r) => ({
+      id: r.id,
+      userId: r.user_id || null,
+      userEmail: r.user_email || '',
+      action: r.action,
+      entity: r.entity,
+      entityId: r.entity_id || null,
+      summary: r.summary || {},
+      createdAt: r.created_at,
+    }));
+  }
+
   /* ---------------- Realtime sync ---------------- */
   let channel = null;
   function subscribeChanges(onChange) {
@@ -657,6 +683,7 @@
     removeMember,
     setMemberRole,
     transferOwnership,
+    listActivity,
     loadData,
     getCachedData,
     addTransaction,
