@@ -40,6 +40,19 @@ create table if not exists public.household_members (
 -- (if the table was created previously, add the email column)
 alter table public.household_members add column if not exists email text;
 
+-- Roles & permissions:
+--   owner  : full control — rename/delete household, manage members & roles, all config, all transactions.
+--   admin  : co-manager — shared config (budgets, wallets, goals, recurring) + edit any transaction.
+--   member : record their OWN transactions; read everything else.
+alter table public.household_members drop constraint if exists household_members_role_check;
+alter table public.household_members add constraint household_members_role_check
+  check (role in ('owner', 'admin', 'member'));
+-- Backfill: the household creator is its owner (older rows may still say 'member').
+update public.household_members m
+   set role = 'owner'
+  from public.households h
+ where m.household_id = h.id and m.user_id = h.created_by and m.role is distinct from 'owner';
+
 create table if not exists public.transactions (
   id           uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households(id) on delete cascade,
@@ -119,6 +132,38 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------
+-- Role helpers — used by the policies below to gate writes.
+-- SECURITY DEFINER so they bypass RLS on household_members (no recursion).
+-- ---------------------------------------------------------------------
+-- true if the current user is the OWNER of this household.
+create or replace function public.is_household_owner(hid uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.household_members
+     where household_id = hid and user_id = auth.uid() and role = 'owner'
+  )
+$$;
+
+-- true if the current user is an owner OR admin of this household (a "manager").
+create or replace function public.is_household_admin(hid uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.household_members
+     where household_id = hid and user_id = auth.uid() and role in ('owner', 'admin')
+  )
+$$;
+
+-- ---------------------------------------------------------------------
 -- Enable RLS
 -- ---------------------------------------------------------------------
 alter table public.households        enable row level security;
@@ -140,14 +185,16 @@ drop policy if exists households_insert on public.households;
 create policy households_insert on public.households for insert
   with check (created_by = auth.uid());
 
+-- Only the owner can rename the household.
 drop policy if exists households_update on public.households;
 create policy households_update on public.households for update
-  using (id in (select public.user_households()))
-  with check (id in (select public.user_households()));
+  using (public.is_household_owner(id))
+  with check (public.is_household_owner(id));
 
+-- Only the owner can delete the household.
 drop policy if exists households_delete on public.households;
 create policy households_delete on public.households for delete
-  using (created_by = auth.uid());
+  using (public.is_household_owner(id));
 
 -- household_members ----------------------------------------------------
 drop policy if exists members_select on public.household_members;
@@ -159,37 +206,103 @@ drop policy if exists members_insert on public.household_members;
 create policy members_insert on public.household_members for insert
   with check (user_id = auth.uid());
 
--- Update one's own row (to fill in the display email).
+-- Update one's own row (to fill in the display email), OR the owner updates any
+-- member (to change roles). Role changes are further restricted by the trigger below,
+-- so a member updating their own row can never escalate themselves to owner/admin.
 drop policy if exists members_update on public.household_members;
 create policy members_update on public.household_members for update
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (user_id = auth.uid() or public.is_household_owner(household_id))
+  with check (user_id = auth.uid() or public.is_household_owner(household_id));
 
--- Delete a member: leave the household yourself, OR the household owner (created_by) removes another member.
+-- Delete a member: leave the household yourself, OR the owner removes another member.
 drop policy if exists members_delete on public.household_members;
 create policy members_delete on public.household_members for delete
-  using (
-    user_id = auth.uid()
-    or household_id in (select id from public.households where created_by = auth.uid())
-  );
+  using (user_id = auth.uid() or public.is_household_owner(household_id));
+
+-- Guard: prevent privilege escalation on household_members.
+--  * UPDATE: only the household owner may change a member's role (blocks a member from
+--    self-promoting via the self-allowed email update above). Transfer of ownership still
+--    works because the acting user is still 'owner' at the moment of each update.
+--  * INSERT: a user joining via the invite code may only insert THEMSELVES as 'member'.
+--    An elevated role on insert is allowed only for an existing owner, or for the
+--    household creator bootstrapping their own owner row right after creating the household.
+create or replace function public.guard_member_role()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (tg_op = 'UPDATE'
+      and new.role is distinct from old.role
+      and not public.is_household_owner(old.household_id)) then
+    raise exception 'Only the household owner can change member roles';
+  end if;
+  if (tg_op = 'INSERT'
+      and new.role <> 'member'
+      and not public.is_household_owner(new.household_id)
+      and new.user_id is distinct from (select created_by from public.households where id = new.household_id)) then
+    raise exception 'Cannot self-assign an elevated role';
+  end if;
+  return new;
+end
+$$;
+drop trigger if exists trg_guard_member_role on public.household_members;
+create trigger trg_guard_member_role
+  before insert or update on public.household_members
+  for each row execute function public.guard_member_role();
 
 -- transactions ---------------------------------------------------------
-drop policy if exists tx_all on public.transactions;
-create policy tx_all on public.transactions for all
-  using (household_id in (select public.user_households()))
-  with check (household_id in (select public.user_households()));
+-- Everyone in the household can READ all transactions.
+-- A member may only WRITE (insert/update/delete) their OWN rows; owners & admins write any.
+drop policy if exists tx_all on public.transactions;            -- legacy combined policy
+drop policy if exists tx_select on public.transactions;
+create policy tx_select on public.transactions for select
+  using (household_id in (select public.user_households()));
+drop policy if exists tx_insert on public.transactions;
+create policy tx_insert on public.transactions for insert
+  with check (
+    household_id in (select public.user_households())
+    and (user_id = auth.uid() or public.is_household_admin(household_id))
+  );
+drop policy if exists tx_update on public.transactions;
+create policy tx_update on public.transactions for update
+  using (
+    household_id in (select public.user_households())
+    and (user_id = auth.uid() or public.is_household_admin(household_id))
+  )
+  with check (
+    household_id in (select public.user_households())
+    and (user_id = auth.uid() or public.is_household_admin(household_id))
+  );
+drop policy if exists tx_delete on public.transactions;
+create policy tx_delete on public.transactions for delete
+  using (
+    household_id in (select public.user_households())
+    and (user_id = auth.uid() or public.is_household_admin(household_id))
+  );
 
 -- budgets --------------------------------------------------------------
+-- Everyone reads; only owners & admins change the household's budgets.
 drop policy if exists budgets_all on public.budgets;
-create policy budgets_all on public.budgets for all
-  using (household_id in (select public.user_households()))
-  with check (household_id in (select public.user_households()));
+drop policy if exists budgets_select on public.budgets;
+create policy budgets_select on public.budgets for select
+  using (household_id in (select public.user_households()));
+drop policy if exists budgets_write on public.budgets;
+create policy budgets_write on public.budgets for all
+  using (public.is_household_admin(household_id))
+  with check (public.is_household_admin(household_id));
 
 -- accounts -------------------------------------------------------------
+-- Everyone reads; only owners & admins add/edit/delete wallets.
 drop policy if exists accounts_all on public.accounts;
-create policy accounts_all on public.accounts for all
-  using (household_id in (select public.user_households()))
-  with check (household_id in (select public.user_households()));
+drop policy if exists accounts_select on public.accounts;
+create policy accounts_select on public.accounts for select
+  using (household_id in (select public.user_households()));
+drop policy if exists accounts_write on public.accounts;
+create policy accounts_write on public.accounts for all
+  using (public.is_household_admin(household_id))
+  with check (public.is_household_admin(household_id));
 
 -- ---------------------------------------------------------------------
 -- Realtime: allow the app to receive instant changes (synced across members).
@@ -218,10 +331,15 @@ create table if not exists public.goals (
 );
 create index if not exists idx_goals_hh on public.goals (household_id);
 alter table public.goals enable row level security;
+-- Everyone reads; only owners & admins manage savings goals.
 drop policy if exists goals_all on public.goals;
-create policy goals_all on public.goals for all
-  using (household_id in (select public.user_households()))
-  with check (household_id in (select public.user_households()));
+drop policy if exists goals_select on public.goals;
+create policy goals_select on public.goals for select
+  using (household_id in (select public.user_households()));
+drop policy if exists goals_write on public.goals;
+create policy goals_write on public.goals for all
+  using (public.is_household_admin(household_id))
+  with check (public.is_household_admin(household_id));
 do $$
 begin
   begin alter publication supabase_realtime add table public.goals; exception when duplicate_object then null; end;
@@ -250,11 +368,125 @@ create index if not exists idx_recurring_hh on public.recurring (household_id);
 -- Tag transactions generated from a recurring item (prevents duplicates).
 alter table public.transactions add column if not exists recurring_id uuid references public.recurring(id) on delete set null;
 alter table public.recurring enable row level security;
+-- Everyone reads; only owners & admins manage recurring entries (they auto-create
+-- transactions for the whole household, so writes are restricted).
 drop policy if exists recurring_all on public.recurring;
-create policy recurring_all on public.recurring for all
-  using (household_id in (select public.user_households()))
-  with check (household_id in (select public.user_households()));
+drop policy if exists recurring_select on public.recurring;
+create policy recurring_select on public.recurring for select
+  using (household_id in (select public.user_households()));
+drop policy if exists recurring_write on public.recurring;
+create policy recurring_write on public.recurring for all
+  using (public.is_household_admin(household_id))
+  with check (public.is_household_admin(household_id));
 do $$
 begin
   begin alter publication supabase_realtime add table public.recurring; exception when duplicate_object then null; end;
 end $$;
+
+-- =====================================================================
+--  Activity log — an immutable audit trail of every add/edit/delete a member
+--  performs across the household's data. Written ONLY by the log_activity()
+--  trigger (SECURITY DEFINER), so clients can never forge, change, or delete
+--  entries — they can only read it. Visible to owners & admins (oversight).
+--  Safe to re-run.
+-- =====================================================================
+create table if not exists public.activity_log (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  user_id      uuid references auth.users(id) on delete set null,  -- who did it
+  user_email   text,                                               -- snapshot of their email at the time
+  action       text not null check (action in ('insert', 'update', 'delete')),
+  entity       text not null,   -- source table: transactions | budgets | accounts | goals | recurring | household_members | households
+  entity_id    uuid,            -- the affected row's id (null for budgets, which have a composite key)
+  summary      jsonb,           -- { data: <row after>, prev: <row before, on update> } for display
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_activity_hh on public.activity_log (household_id, created_at desc);
+
+-- Generic logger attached to every data table. SECURITY DEFINER so its INSERT
+-- bypasses the (deliberately absent) write policies on activity_log.
+create or replace function public.log_activity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row   jsonb;
+  v_hid   uuid;
+  v_eid   uuid;
+  v_email text;
+begin
+  -- Ignore no-op updates (e.g. idempotent budget upserts that change nothing).
+  if tg_op = 'UPDATE' and to_jsonb(NEW) = to_jsonb(OLD) then
+    return NEW;
+  end if;
+  -- For members, only membership/role changes matter — skip the email backfill noise.
+  if tg_table_name = 'household_members' and tg_op = 'UPDATE'
+     and NEW.role is not distinct from OLD.role then
+    return NEW;
+  end if;
+
+  v_row := to_jsonb(coalesce(NEW, OLD));
+  if tg_table_name = 'households' then
+    v_hid := (v_row->>'id')::uuid;
+  else
+    v_hid := (v_row->>'household_id')::uuid;
+  end if;
+
+  if v_row ? 'id' then
+    v_eid := (v_row->>'id')::uuid;
+  elsif v_row ? 'user_id' then
+    v_eid := (v_row->>'user_id')::uuid;
+  end if;
+
+  select email into v_email
+    from public.household_members
+   where user_id = auth.uid() and household_id = v_hid
+   limit 1;
+
+  -- Logging must never break the real operation.
+  begin
+    insert into public.activity_log (household_id, user_id, user_email, action, entity, entity_id, summary)
+    values (
+      v_hid, auth.uid(), v_email, lower(tg_op), tg_table_name, v_eid,
+      jsonb_build_object(
+        'data', to_jsonb(coalesce(NEW, OLD)),
+        'prev', case when tg_op = 'UPDATE' then to_jsonb(OLD) else null end
+      )
+    );
+  exception when others then
+    null;
+  end;
+  return coalesce(NEW, OLD);
+end
+$$;
+
+-- Attach the logger to each table (AFTER, row-level). Drop first so re-running is safe.
+drop trigger if exists trg_log_transactions on public.transactions;
+create trigger trg_log_transactions after insert or update or delete on public.transactions
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_budgets on public.budgets;
+create trigger trg_log_budgets after insert or update or delete on public.budgets
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_accounts on public.accounts;
+create trigger trg_log_accounts after insert or update or delete on public.accounts
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_goals on public.goals;
+create trigger trg_log_goals after insert or update or delete on public.goals
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_recurring on public.recurring;
+create trigger trg_log_recurring after insert or update or delete on public.recurring
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_members on public.household_members;
+create trigger trg_log_members after insert or update or delete on public.household_members
+  for each row execute function public.log_activity();
+drop trigger if exists trg_log_households on public.households;
+create trigger trg_log_households after insert or update or delete on public.households
+  for each row execute function public.log_activity();
+
+-- RLS: owners & admins read the log; nobody writes it directly (only the trigger).
+alter table public.activity_log enable row level security;
+drop policy if exists activity_select on public.activity_log;
+create policy activity_select on public.activity_log for select
+  using (public.is_household_admin(household_id));

@@ -63,6 +63,10 @@
     card: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
     scale: '<path d="M16 16l3-8 3 8c-2 1.5-4 1.5-6 0Z"/><path d="M2 16l3-8 3 8c-2 1.5-4 1.5-6 0Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
     star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    crown: '<path d="M2 18h20l-2-9-5 4-3-7-3 7-5-4-2 9z"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -130,10 +134,25 @@
       switchHousehold: 'Chọn hộ đang xem',
       grpAccount: 'Hộ gia đình & Tài khoản', grpMoney: 'Quản lý tiền', grpGeneral: 'Cài đặt chung', grpAdvanced: 'Nâng cao',
       chooseLanguage: 'Chọn ngôn ngữ', darkMode: 'Chế độ tối',
-      members: 'Thành viên', roleOwner: 'Chủ hộ', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
+      members: 'Thành viên', roleOwner: 'Chủ hộ', roleAdmin: 'Quản trị viên', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
       byPerson: 'Thu chi theo người',
       confirmRemoveMember: 'Xóa thành viên này khỏi hộ?', memberRemoved: 'Đã xóa thành viên',
       leaveHousehold: 'Rời hộ này', confirmLeave: 'Rời khỏi hộ này?', onlyOwnerRemove: 'Chỉ chủ hộ mới xóa được thành viên.',
+      makeAdmin: 'Đặt làm quản trị viên', removeAdmin: 'Bỏ quyền quản trị', makeOwner: 'Chuyển quyền chủ hộ',
+      confirmMakeAdmin: 'Cấp quyền quản trị viên cho thành viên này? Họ sẽ quản lý được ngân sách, ví, mục tiêu, khoản định kỳ và sửa mọi giao dịch.',
+      confirmRemoveAdmin: 'Bỏ quyền quản trị của thành viên này?',
+      confirmMakeOwner: 'Chuyển quyền chủ hộ cho thành viên này? Bạn sẽ trở thành quản trị viên và không thể hoàn tác.',
+      roleChanged: 'Đã cập nhật vai trò', ownerTransferred: 'Đã chuyển quyền chủ hộ',
+      ownerOnlyHint: 'Chỉ chủ hộ hoặc quản trị viên mới chỉnh sửa được mục này.',
+      ownerOnlyRename: 'Chỉ chủ hộ mới đổi được tên hộ.',
+      noPermission: 'Bạn không có quyền thực hiện thao tác này.',
+      cantEditOthersTx: 'Chỉ chủ hộ hoặc quản trị viên mới sửa/xóa được giao dịch của người khác.',
+      activity: 'Nhật ký hoạt động',
+      activityHint: 'Lịch sử các thao tác thêm / sửa / xóa của thành viên trong hộ.',
+      activityEmpty: 'Chưa có hoạt động nào.',
+      actAdd: 'đã thêm', actEdit: 'đã sửa', actDel: 'đã xóa',
+      entTransaction: 'giao dịch', entBudget: 'ngân sách', entAccount: 'ví',
+      entGoal: 'mục tiêu', entRecurring: 'khoản định kỳ', entMember: 'thành viên', entHousehold: 'hộ gia đình',
       added: 'Đã thêm', deleted: 'Đã xóa', confirmDelete: 'Xóa giao dịch này?',
       confirmEntries: 'Xác nhận giao dịch', saveAll: 'Lưu tất cả', undo: 'Hoàn tác',
       unrecognizedLines: 'dòng chưa nhận diện được', maxEntries: 'Chỉ xử lý tối đa 20 dòng mỗi lần.',
@@ -249,10 +268,25 @@
       switchHousehold: 'Active household',
       grpAccount: 'Household & Account', grpMoney: 'Money', grpGeneral: 'General', grpAdvanced: 'Advanced',
       chooseLanguage: 'Choose language', darkMode: 'Dark mode',
-      members: 'Members', roleOwner: 'Owner', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
+      members: 'Members', roleOwner: 'Owner', roleAdmin: 'Admin', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
       byPerson: 'Income & expense by person',
       confirmRemoveMember: 'Remove this member from the household?', memberRemoved: 'Member removed',
       leaveHousehold: 'Leave this household', confirmLeave: 'Leave this household?', onlyOwnerRemove: 'Only the owner can remove members.',
+      makeAdmin: 'Make admin', removeAdmin: 'Remove admin', makeOwner: 'Transfer ownership',
+      confirmMakeAdmin: 'Make this member an admin? They will be able to manage budgets, wallets, goals, recurring entries and edit any transaction.',
+      confirmRemoveAdmin: 'Remove this member’s admin rights?',
+      confirmMakeOwner: 'Transfer ownership to this member? You will become an admin and this cannot be undone.',
+      roleChanged: 'Role updated', ownerTransferred: 'Ownership transferred',
+      ownerOnlyHint: 'Only the household owner or an admin can edit this.',
+      ownerOnlyRename: 'Only the owner can rename the household.',
+      noPermission: 'You do not have permission to do this.',
+      cantEditOthersTx: 'Only the owner or an admin can edit/delete other members’ transactions.',
+      activity: 'Activity log',
+      activityHint: 'History of add / edit / delete actions by household members.',
+      activityEmpty: 'No activity yet.',
+      actAdd: 'added', actEdit: 'edited', actDel: 'deleted',
+      entTransaction: 'transaction', entBudget: 'budget', entAccount: 'wallet',
+      entGoal: 'goal', entRecurring: 'recurring entry', entMember: 'member', entHousehold: 'household',
       added: 'Added', deleted: 'Deleted', confirmDelete: 'Delete this transaction?',
       confirmEntries: 'Confirm transactions', saveAll: 'Save all', undo: 'Undo',
       unrecognizedLines: 'line(s) not recognized', maxEntries: 'Up to 20 entries at a time.',
@@ -337,6 +371,9 @@
   let currentUserId = '';
   let myHouseholds = []; // [{id, name}] households the user belongs to
   let householdMembers = []; // [{userId, email, role}] members of the household being viewed
+  let myRole = 'member'; // current user's role in the active household: 'owner' | 'admin' | 'member'
+  let activityLog = [];      // [{userEmail, action, entity, summary, createdAt}] — lazy-loaded for the Activity page
+  let activityLoading = false;
   let currentTab = 'overview';
   let settingsPage = null; // Settings sub-page key (null = root grouped menu)
   const CATS = window.Parser.CATEGORIES;
@@ -388,6 +425,23 @@
     if (m && m.email) return m.email.split('@')[0];
     return t('unknownMember');
   }
+
+  /* ============== Permissions (role-based) ==============
+   * Source of truth = the current user's row in household_members (role column),
+   * with a fallback to the household creator being the owner. Mirrors the RLS
+   * policies in supabase-schema.sql — the UI only hides what the server also blocks. */
+  function computeMyRole() {
+    const m = householdMembers.find((x) => x.userId === currentUserId);
+    if (m && m.role) return m.role;
+    if (DATA.household && DATA.household.createdBy && DATA.household.createdBy === currentUserId) return 'owner';
+    return 'member';
+  }
+  function iAmOwner() { return myRole === 'owner'; }
+  // Owners and admins can manage the household's shared config + edit any transaction.
+  function canManageConfig() { return myRole === 'owner' || myRole === 'admin'; }
+  // A member may edit/delete only their own transactions; managers may edit any.
+  function canEditTx(tx) { return canManageConfig() || (!!tx && !!tx.userId && tx.userId === currentUserId); }
+  function roleLabel(role) { return role === 'owner' ? t('roleOwner') : (role === 'admin' ? t('roleAdmin') : t('roleMember')); }
 
   /* ============== Date helpers ============== */
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -998,6 +1052,8 @@
     else if (pct >= 80) toast('⚠️ ' + t('warn80') + ': ' + cat + ' (' + Math.round(pct) + '%)', 'warn');
   }
   async function deleteTx(id) {
+    const tx = DATA.transactions.find((x) => x.id === id);
+    if (tx && !canEditTx(tx)) { toast(t('cantEditOthersTx'), 'warn'); return; }
     if (!confirm(t('confirmDelete'))) return;
     try {
       await window.Store.deleteTransaction(id);
@@ -1017,6 +1073,13 @@
       '<div class="tile-top">' + (ic ? icon(ic) : '') + '<span>' + label + '</span></div>' +
       '<div class="tile-val">' + fmtShort(Math.abs(value)) + '</div></div>';
   }
+  // Edit/delete buttons — only for transactions the current user may change
+  // (own rows for members; any row for owners/admins). Mirrors the transactions RLS.
+  function txActions(tx) {
+    if (!canEditTx(tx)) return '';
+    return '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
+      '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div>';
+  }
   function txRow(tx) {
     if (tx.type === 'transfer') {
       const from = accountById(tx.accountId);
@@ -1028,8 +1091,7 @@
         '<div class="tx-main"><div class="tx-note">' + esc(tx.note || t('transfer')) + '</div>' +
         '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '</div>' +
-        '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
-        '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div></div></div>';
+        txActions(tx) + '</div></div>';
     }
     const sign = tx.type === 'income' ? '+' : '−';
     return '<div class="tx-row" data-id="' + tx.id + '">' +
@@ -1037,8 +1099,7 @@
       '<div class="tx-main"><div class="tx-note">' + esc(tx.note || tx.rawInput) + '</div>' +
       '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
-      '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
-      '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div></div></div>';
+      txActions(tx) + '</div></div>';
   }
   // Fraction of the anchored month already elapsed (1 for past months — they're fully done).
   function monthElapsedFraction(anchor) {
@@ -1694,21 +1755,40 @@
   }
 
   /* ============== VIEW: Settings ============== */
+  // Resolve a member's effective role: the role column, with a fallback to "owner"
+  // for the household creator (covers older rows before the role backfill ran).
+  function memberRole(m) {
+    if (m.role) return m.role;
+    const ownerId = DATA.household && DATA.household.createdBy;
+    return (ownerId && ownerId === m.userId) ? 'owner' : 'member';
+  }
   function membersHtml() {
     if (!householdMembers.length) return '';
-    const ownerId = DATA.household && DATA.household.createdBy;
-    const iAmOwner = ownerId && ownerId === currentUserId;
+    const meIsOwner = iAmOwner();
     const rows = householdMembers.map((m) => {
       const isSelf = m.userId === currentUserId;
-      const isOwn = ownerId && ownerId === m.userId;
+      const role = memberRole(m);
+      const isOwn = role === 'owner';
       const label = esc(m.email || t('unknownMember')) + (isSelf ? ' <span class="member-you">(' + t('you') + ')</span>' : '');
-      const role = isOwn ? t('roleOwner') : t('roleMember');
+      const roleCls = isOwn ? 'owner' : (role === 'admin' ? 'admin' : '');
+      // Action buttons. The owner manages everyone else; a non-owner can only leave.
       let act = '';
-      if (isSelf && !isOwn) act = '<button class="icon-btn danger" data-leave="1" title="' + t('leaveHousehold') + '">' + icon('right') + '</button>';
-      else if (iAmOwner && !isSelf) act = '<button class="icon-btn danger" data-remove="' + esc(m.userId) + '" title="' + t('confirmRemoveMember') + '">' + icon('trash') + '</button>';
+      if (meIsOwner && !isSelf) {
+        const uid = esc(m.userId);
+        if (role === 'admin') {
+          act += '<button class="icon-btn" data-setrole="' + uid + '" data-role="member" title="' + t('removeAdmin') + '">' + icon('shield') + '</button>';
+        } else {
+          act += '<button class="icon-btn" data-setrole="' + uid + '" data-role="admin" title="' + t('makeAdmin') + '">' + icon('shield') + '</button>';
+        }
+        act += '<button class="icon-btn" data-makeowner="' + uid + '" title="' + t('makeOwner') + '">' + icon('crown') + '</button>';
+        act += '<button class="icon-btn danger" data-remove="' + uid + '" title="' + t('confirmRemoveMember') + '">' + icon('trash') + '</button>';
+      } else if (isSelf && !isOwn) {
+        act = '<button class="icon-btn danger" data-leave="1" title="' + t('leaveHousehold') + '">' + icon('right') + '</button>';
+      }
       return '<div class="member-row">' +
         '<div class="member-info"><div class="member-email">' + label + '</div>' +
-        '<div class="member-role ' + (isOwn ? 'owner' : '') + '">' + role + '</div></div>' + act + '</div>';
+        '<div class="member-role ' + roleCls + '">' + roleLabel(role) + '</div></div>' +
+        (act ? '<div class="member-actions">' + act + '</div>' : '') + '</div>';
     }).join('');
     return '<div class="member-list">' + rows + '</div>';
   }
@@ -1800,6 +1880,7 @@
       iosGroup([
         iosRow({ ic: 'wallet', tint: 'indigo', label: t('household'), value: esc(hh.name), page: 'household' }),
         iosRow({ ic: 'more', tint: 'blue', label: t('members'), value: householdMembers.length ? String(householdMembers.length) : '', page: 'members' }),
+        (canManageConfig() ? iosRow({ ic: 'clock', tint: 'gray', label: t('activity'), page: 'activity' }) : ''),
         iosRow({ ic: 'check', tint: 'green', label: t('account'), value: esc(currentUserEmail || ''), page: 'account' }),
       ], t('grpAccount')) +
       iosGroup([
@@ -1824,6 +1905,74 @@
       (APP_VERSION ? '<p class="ios-version">' + esc(t('appName')) + ' v' + esc(APP_VERSION) + '</p>' : '');
   }
 
+  // A read-only notice + a disabled <fieldset> wrapper. Native `disabled` greys out and
+  // blocks every form control inside, so members see the config but can't change it.
+  function lockBanner(msg) {
+    return '<div class="lock-banner">' + icon('lock') + '<span>' + (msg || t('ownerOnlyHint')) + '</span></div>';
+  }
+  function roLock(html, msg) {
+    return lockBanner(msg) + '<fieldset class="ro-lock" disabled>' + html + '</fieldset>';
+  }
+
+  /* ============== VIEW: Activity log ============== */
+  async function loadActivity() {
+    activityLoading = true;
+    try { activityLog = await window.Store.listActivity({ limit: 100 }); }
+    catch (e) { activityLog = []; }
+    activityLoading = false;
+  }
+  // Map the source-table name (stored in `entity`) to a localized noun and an icon.
+  const ENTITY_LABEL = {
+    transactions: 'entTransaction', budgets: 'entBudget', accounts: 'entAccount',
+    goals: 'entGoal', recurring: 'entRecurring', household_members: 'entMember', households: 'entHousehold',
+  };
+  const ENTITY_ICON = {
+    transactions: 'file', budgets: 'target', accounts: 'card',
+    goals: 'piggy', recurring: 'refresh', household_members: 'more', households: 'wallet',
+  };
+  function entityLabel(entity) { return t(ENTITY_LABEL[entity] || 'entTransaction'); }
+  function entityIcon(entity) { return ENTITY_ICON[entity] || 'more'; }
+  // A short, human-readable description of WHAT changed, built from the row snapshot.
+  function describeActivity(e) {
+    const d = (e.summary && e.summary.data) || {};
+    switch (e.entity) {
+      case 'transactions': {
+        if (d.type === 'transfer') return t('transfer') + (d.amount != null ? ' · ' + fmtShort(d.amount) : '');
+        const parts = [];
+        if (d.category) parts.push(catLabel(d.category));
+        if (d.amount != null) parts.push(fmtShort(d.amount));
+        let s = parts.join(' · ');
+        if (d.note) s += ' — ' + d.note;
+        return s;
+      }
+      case 'budgets': return catLabel(d.category) + ': ' + fmtShort(d.amount || 0);
+      case 'accounts':
+      case 'goals':
+      case 'recurring': return d.name || '';
+      case 'household_members': return (d.email || '') + (d.role ? ' (' + roleLabel(d.role) + ')' : '');
+      case 'households': return d.name || '';
+      default: return '';
+    }
+  }
+  function fmtDateTime(iso) {
+    const dt = new Date(iso);
+    if (isNaN(dt.getTime())) return '';
+    return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate()) + ' ' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
+  }
+  function activityRowHtml(e) {
+    const verb = e.action === 'insert' ? t('actAdd') : (e.action === 'delete' ? t('actDel') : t('actEdit'));
+    const who = e.userEmail ? e.userEmail.split('@')[0] : t('unknownMember');
+    const desc = describeActivity(e);
+    const actCls = e.action === 'insert' ? 'add' : (e.action === 'delete' ? 'del' : 'edit');
+    return '<div class="activity-row">' +
+      '<div class="act-ic ' + actCls + '">' + icon(entityIcon(e.entity)) + '</div>' +
+      '<div class="act-main">' +
+      '<div class="act-title"><b>' + esc(who) + '</b> ' + verb + ' ' + esc(entityLabel(e.entity)) + '</div>' +
+      (desc ? '<div class="act-desc">' + esc(desc) + '</div>' : '') +
+      '<div class="act-when">' + esc(fmtDateTime(e.createdAt)) + '</div>' +
+      '</div></div>';
+  }
+
   // A single Settings sub-page (reuses the existing form markup + element IDs).
   function settingsPageView(page) {
     const C = window.CONFIG;
@@ -1840,28 +1989,37 @@
       body = '<div class="ios-grp-h">' + t('budget') + ' (' + t('month').toLowerCase() + ')</div>' +
         '<div class="ios-card budget-edit">' + budgetInputs + '</div>' +
         '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>';
+      if (!canManageConfig()) body = roLock(body);
     } else if (page === 'wallets') {
       title = t('wallets');
-      body = walletsEditorHtml();
+      body = canManageConfig() ? walletsEditorHtml() : roLock(walletsEditorHtml());
     } else if (page === 'templates') {
       title = t('quickTemplates');
       body = '<div class="hint">' + t('templatesHint') + '</div>' + templatesEditorHtml();
     } else if (page === 'goals') {
       title = t('savingsGoals');
       body = '<div class="hint">' + t('goalsHint') + '</div>' + goalsEditorHtml();
+      if (!canManageConfig()) body = roLock(body);
     } else if (page === 'recurring') {
       title = t('recurring');
       body = '<div class="hint">' + t('recurringHint') + '</div>' + recurringEditorHtml();
+      if (!canManageConfig()) body = roLock(body);
     } else if (page === 'household') {
       title = t('household');
-      body = (myHouseholds.length > 1 ?
+      const switchSel = (myHouseholds.length > 1 ?
         '<div class="conn-row" style="margin-bottom:12px"><label>' + t('switchHousehold') + '</label><select id="switchHh">' +
         myHouseholds.map((h) => '<option value="' + esc(h.id) + '"' + (hh.id === h.id ? ' selected' : '') + '>' + esc(h.name) + '</option>').join('') +
-        '</select></div>' : '') +
-        '<div class="conn-form">' +
-        '<div class="conn-row"><label>' + t('householdName') + '</label><input id="hhName" type="text" value="' + esc(hh.name) + '"/></div>' +
-        '</div>' +
-        '<button id="renameHhBtn" class="ghost-btn">' + icon('edit') + ' ' + t('save') + '</button>' +
+        '</select></div>' : '');
+      // Renaming the household is owner-only; everyone can still see the name, copy the
+      // invite code, and join another household.
+      const renameBlock = iAmOwner()
+        ? '<div class="conn-form"><div class="conn-row"><label>' + t('householdName') + '</label>' +
+          '<input id="hhName" type="text" value="' + esc(hh.name) + '"/></div></div>' +
+          '<button id="renameHhBtn" class="ghost-btn">' + icon('edit') + ' ' + t('save') + '</button>'
+        : '<div class="conn-form"><div class="conn-row"><label>' + t('householdName') + '</label>' +
+          '<input type="text" value="' + esc(hh.name) + '" readonly/></div></div>' +
+          '<div class="hint">' + t('ownerOnlyRename') + '</div>';
+      body = switchSel + renameBlock +
         '<div class="conn-row" style="margin-top:16px"><label>' + t('inviteCode') + '</label>' +
         '<input id="inviteCodeBox" type="text" value="' + esc(hh.id) + '" readonly/></div>' +
         '<button id="copyCodeBtn" class="ghost-btn">' + icon('file') + ' ' + t('copyCode') + '</button>' +
@@ -1872,6 +2030,20 @@
       title = t('members');
       const m = membersHtml();
       body = m || '<div class="empty">' + t('unknownMember') + '</div>';
+    } else if (page === 'activity') {
+      title = t('activity');
+      if (!canManageConfig()) {
+        body = lockBanner();
+      } else {
+        const list = activityLoading
+          ? '<div class="empty">…</div>'
+          : (activityLog.length
+            ? '<div class="activity-list">' + activityLog.map(activityRowHtml).join('') + '</div>'
+            : '<div class="empty">' + t('activityEmpty') + '</div>');
+        body = '<div class="hint">' + t('activityHint') + '</div>' +
+          '<button id="refreshActBtn" class="ghost-btn">' + icon('refresh') + ' ' + t('refresh') + '</button>' +
+          list;
+      }
     } else if (page === 'account') {
       title = t('account');
       body = '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + '</div>' +
@@ -1952,7 +2124,8 @@
     const fromSel = ex ? ex.accountId : defaultAccountId();
     const toSel = ex ? ex.toAccountId : (accs.find((a) => a.id !== fromSel) || accs[0]).id;
     const today = ymd(new Date());
-    const opt = (a, sel) => '<option value="' + esc(a.id) + '"' + (a.id === sel ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+    // Show each wallet's current balance in the label so the user can pick at a glance.
+    const opt = (a, sel) => '<option value="' + esc(a.id) + '"' + (a.id === sel ? ' selected' : '') + '>' + esc(a.name) + ' · ' + fmtShort(accountBalance(a.id)) + '</option>';
     const fromOpts = accs.map((a) => opt(a, fromSel)).join('');
     const toOpts = accs.map((a) => opt(a, toSel)).join('');
     const wrap = document.createElement('div');
@@ -1998,6 +2171,7 @@
   /* ============== Edit modal ============== */
   function openEdit(id) {
     const tx = DATA.transactions.find((x) => x.id === id); if (!tx) return;
+    if (!canEditTx(tx)) { toast(t('cantEditOthersTx'), 'warn'); return; }
     if (tx.type === 'transfer') { openTransfer(tx); return; }
     const catOpts = CATS.map((c) => '<option value="' + c + '"' + (c === tx.category ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
     const wrap = document.createElement('div');
@@ -2346,6 +2520,27 @@
         toast(t('memberRemoved'), 'success'); render();
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     }));
+    // Promote/demote a member (owner only). RLS + the role-guard trigger reject it server-side otherwise.
+    document.querySelectorAll('[data-setrole]').forEach((b) => b.addEventListener('click', async () => {
+      const role = b.dataset.role === 'admin' ? 'admin' : 'member';
+      if (!confirm(role === 'admin' ? t('confirmMakeAdmin') : t('confirmRemoveAdmin'))) return;
+      try {
+        await window.Store.setMemberRole(b.dataset.setrole, role);
+        householdMembers = await window.Store.listMembers().catch(() => householdMembers);
+        myRole = computeMyRole();
+        toast(t('roleChanged'), 'success'); render();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
+    // Transfer ownership to another member (owner only). The acting owner becomes an admin.
+    document.querySelectorAll('[data-makeowner]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('confirmMakeOwner'))) return;
+      try {
+        await window.Store.transferOwnership(b.dataset.makeowner);
+        householdMembers = await window.Store.listMembers().catch(() => householdMembers);
+        myRole = computeMyRole();
+        toast(t('ownerTransferred'), 'success'); render();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
     // Leave household (remove yourself)
     const lv = document.querySelector('[data-leave]');
     if (lv) lv.addEventListener('click', async () => {
@@ -2363,8 +2558,18 @@
       try { await window.Store.switchHousehold(hs.value); await enterApp(); }
       catch (err) { toast(err.message, 'error'); }
     });
-    // Settings: navigate into a sub-page
-    document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', () => { settingsPage = b.dataset.page; render(); }));
+    // Settings: navigate into a sub-page (Activity lazy-loads its data on open)
+    document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', async () => {
+      settingsPage = b.dataset.page;
+      if (settingsPage === 'activity') {
+        activityLog = []; activityLoading = true; render(); // show the loading state first
+        await loadActivity();
+      }
+      render();
+    }));
+    // Activity: manual refresh
+    const refAct = document.getElementById('refreshActBtn');
+    if (refAct) refAct.addEventListener('click', async () => { await loadActivity(); render(); });
     // Settings: back from a sub-page to the root menu
     const back = document.querySelector('[data-back]');
     if (back) back.addEventListener('click', () => { settingsPage = null; render(); });
@@ -2535,6 +2740,7 @@
     if (!DATA.recurring) DATA.recurring = [];
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
+    myRole = computeMyRole();
     currentTab = 'overview';
     render();
     startAutoSync();
@@ -2554,6 +2760,8 @@
       if (!DATA.accounts) DATA.accounts = [];
     if (!DATA.goals) DATA.goals = [];
     if (!DATA.recurring) DATA.recurring = [];
+      householdMembers = await window.Store.listMembers().catch(() => householdMembers);
+      myRole = computeMyRole();
       render();
       if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
     } catch (e) { /* keep existing data */ }
