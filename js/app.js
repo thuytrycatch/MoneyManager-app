@@ -221,7 +221,7 @@
       removePhoto: 'Xóa ảnh', confirmRemovePhoto: 'Xóa ảnh này?',
       photoUploadFailed: 'Tải ảnh thất bại', txSavedPhotoFailed: 'Đã lưu giao dịch nhưng tải ảnh thất bại — thử lại trong phần Sửa.',
       noEvidence: 'Chưa có bằng chứng', viewEvidence: 'Xem bằng chứng', photoUnsupported: 'Định dạng ảnh không hỗ trợ',
-      maxPhotos: 'Tối đa {n} ảnh mỗi giao dịch', needNetworkPhoto: 'Cần kết nối mạng để tải ảnh', photoCount: '{n} ảnh',
+      maxPhotos: 'Tối đa {n} ảnh mỗi giao dịch', needNetworkPhoto: 'Cần kết nối mạng để tải ảnh', photoCount: '{n} ảnh', optional: 'tùy chọn',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -361,7 +361,7 @@
       removePhoto: 'Remove photo', confirmRemovePhoto: 'Remove this photo?',
       photoUploadFailed: 'Photo upload failed', txSavedPhotoFailed: 'Transaction saved, but the photo failed to upload — try again from Edit.',
       noEvidence: 'No evidence yet', viewEvidence: 'View evidence', photoUnsupported: 'Unsupported image format',
-      maxPhotos: 'Up to {n} photos per transaction', needNetworkPhoto: 'You need a connection to upload photos', photoCount: '{n} photos',
+      maxPhotos: 'Up to {n} photos per transaction', needNetworkPhoto: 'You need a connection to upload photos', photoCount: '{n} photos', optional: 'optional',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -943,6 +943,8 @@
         ? [await window.Store.addTransaction(drafts[0])]
         : await window.Store.addTransactions(drafts);
       DATA.transactions = saved.concat(DATA.transactions);
+      // Attach any photos chosen on the Add page to the (first) new transaction.
+      if (pendingAddFiles.length && saved.length) { setStatus(t('uploading')); await attachPendingTo(saved[0].id); }
       setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 2500);
       render();
       if (opts.undo && saved.length === 1) showUndoBar(saved[0]);
@@ -1243,6 +1245,66 @@
         addBtn.disabled = false; addBtn.innerHTML = oldHtml;
         render(); fillEvidenceBox(tx);
       });
+    }
+  }
+
+  /* ----- Entry-time photos: chosen on the Add page, attached once the tx is saved ----- */
+  let pendingAddFiles = []; // [{ file, url }]
+  function clearPendingAddFiles() {
+    pendingAddFiles.forEach((p) => { try { URL.revokeObjectURL(p.url); } catch (e) { /* ignore */ } });
+    pendingAddFiles = [];
+  }
+  // Fill the Add page's photo picker from pendingAddFiles (previews use object URLs).
+  function renderAddPhotos() {
+    const box = document.getElementById('addPhotos');
+    if (!box) return;
+    const thumbs = pendingAddFiles.map((p, i) =>
+      '<div class="attach-thumb"><img src="' + p.url + '" alt=""/>' +
+      '<button type="button" class="attach-del" data-rmadd="' + i + '" title="' + t('removePhoto') + '">' + icon('x') + '</button></div>'
+    ).join('');
+    box.innerHTML =
+      '<div class="attach-grid">' + thumbs +
+        '<button type="button" class="attach-add" id="addPhotoBtn">' + icon('camera') + '<span>' + t('addPhoto') + '</span></button>' +
+      '</div>' +
+      '<input type="file" id="addPhotoFile" accept="image/*" capture="environment" multiple hidden/>';
+    const addBtn = box.querySelector('#addPhotoBtn');
+    const file = box.querySelector('#addPhotoFile');
+    addBtn.addEventListener('click', () => file.click());
+    file.addEventListener('change', () => {
+      const files = Array.from(file.files || []); file.value = '';
+      let capped = false;
+      files.forEach((f) => {
+        if (pendingAddFiles.length < MAX_PHOTOS) pendingAddFiles.push({ file: f, url: URL.createObjectURL(f) });
+        else capped = true;
+      });
+      if (capped) toast(t('maxPhotos').replace('{n}', MAX_PHOTOS), 'warn');
+      renderAddPhotos();
+    });
+    box.querySelectorAll('[data-rmadd]').forEach((b) => b.addEventListener('click', () => {
+      const i = Number(b.dataset.rmadd); const p = pendingAddFiles[i];
+      if (p) { try { URL.revokeObjectURL(p.url); } catch (e) { /* ignore */ } pendingAddFiles.splice(i, 1); renderAddPhotos(); }
+    }));
+  }
+  // Upload all pending Add-page photos onto a freshly-saved transaction. Pushes into
+  // DATA.attachments but does NOT render (the caller renders once afterwards).
+  async function attachPendingTo(txId) {
+    if (!pendingAddFiles.length) return;
+    const files = pendingAddFiles.map((p) => p.file);
+    clearPendingAddFiles();
+    for (const f of files) {
+      try {
+        const out = await compressImage(f);
+        const path = await window.Store.uploadReceipt(txId, out.blob, 'jpg');
+        const att = await window.Store.insertAttachment({
+          transactionId: txId, storagePath: path, mime: 'image/jpeg',
+          sizeBytes: out.blob.size, width: out.width, height: out.height,
+        });
+        DATA.attachments = DATA.attachments || []; DATA.attachments.push(att);
+      } catch (err) {
+        const msg = (err && err.message === 'decode') ? t('photoUnsupported')
+          : (t('photoUploadFailed') + (err && err.message ? ': ' + err.message : ''));
+        toast(msg, 'error');
+      }
     }
   }
 
@@ -1916,6 +1978,8 @@
       '<textarea id="txInputBig" rows="3" placeholder="' + t('placeholder') + '"></textarea>' +
       dateBar('txDateBig') +
       (accountSelect('txAccountBig') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccountBig') + '</div>' : '') +
+      '<div class="add-photos-label">' + t('evidence') + ' <span class="add-photos-opt">(' + t('optional') + ')</span></div>' +
+      '<div class="add-photos" id="addPhotos"></div>' +
       '<button id="addBtnBig" class="primary-btn">' + icon('plus') + ' ' + t('add') + '</button>' +
       (activeAccounts().length >= 2 ? '<button id="transferBtn" class="ghost-btn transfer-btn">' + icon('transfer') + ' ' + t('transferBetween') + '</button>' : '') +
       templateChipsHtml() +
@@ -2410,6 +2474,7 @@
   /* ============== Render + wire ============== */
   function render() {
     rebuildAttachIndex();
+    if (currentTab !== 'add') clearPendingAddFiles(); // don't carry chosen photos to other tabs
     if (currentTab !== 'settings') settingsPage = null; // leaving Settings resets the sub-page stack
     document.getElementById('appName').textContent = t('appName');
     const view = document.getElementById('view');
@@ -2428,6 +2493,7 @@
     // add page
     const tib = document.getElementById('txInputBig');
     if (tib) document.getElementById('addBtnBig').addEventListener('click', () => addFromInput(tib.value, 'addBtnBig', 'txDateBig', 'txAccountBig'));
+    renderAddPhotos(); // Add page: photo picker (no-op elsewhere)
     document.querySelectorAll('.chip[data-ex]').forEach((c) => c.addEventListener('click', () => { if (tib) { tib.value = c.dataset.ex; tib.focus(); } }));
     // transfer between wallets
     const trBtn = document.getElementById('transferBtn');

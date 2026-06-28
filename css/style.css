@@ -858,3 +858,8 @@ main { padding: 4px 12px 92px; }
   background: rgba(255, 255, 255, .12); color: #fff; border: none; border-radius: 999px; font-size: 26px; line-height: 1; }
 .lightbox-nav.prev { left: 12px; } .lightbox-nav.next { right: 12px; }
 .lightbox-count { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; font-weight: 600; }
+
+/* Add-page photo picker */
+.add-photos-label { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin: 14px 4px 8px; }
+.add-photos-label .add-photos-opt { font-weight: 500; opacity: .7; }
+.add-photos { margin-bottom: 12px; }
