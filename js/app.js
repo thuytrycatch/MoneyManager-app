@@ -222,6 +222,10 @@
       photoUploadFailed: 'Tải ảnh thất bại', txSavedPhotoFailed: 'Đã lưu giao dịch nhưng tải ảnh thất bại — thử lại trong phần Sửa.',
       noEvidence: 'Chưa có bằng chứng', viewEvidence: 'Xem bằng chứng', photoUnsupported: 'Định dạng ảnh không hỗ trợ',
       maxPhotos: 'Tối đa {n} ảnh mỗi giao dịch', needNetworkPhoto: 'Cần kết nối mạng để tải ảnh', photoCount: '{n} ảnh', optional: 'tùy chọn',
+      scanReceipt: 'Quét hoá đơn → tự điền', scanning: 'Đang quét…',
+      ocrFailed: 'Quét hoá đơn thất bại', ocrNoAmount: 'Không đọc được số tiền — vui lòng kiểm tra & nhập tay.',
+      ocrNeedKey: 'Cần API key (Gemini hoặc Claude) trong Cài đặt để quét hoá đơn.',
+      ocrDone: 'Đã điền từ hoá đơn — kiểm tra lại trước khi lưu.',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -362,6 +366,10 @@
       photoUploadFailed: 'Photo upload failed', txSavedPhotoFailed: 'Transaction saved, but the photo failed to upload — try again from Edit.',
       noEvidence: 'No evidence yet', viewEvidence: 'View evidence', photoUnsupported: 'Unsupported image format',
       maxPhotos: 'Up to {n} photos per transaction', needNetworkPhoto: 'You need a connection to upload photos', photoCount: '{n} photos', optional: 'optional',
+      scanReceipt: 'Scan receipt → auto-fill', scanning: 'Scanning…',
+      ocrFailed: 'Receipt scan failed', ocrNoAmount: 'Couldn’t read the amount — please check & enter it manually.',
+      ocrNeedKey: 'A Gemini or Claude API key (in Settings) is required to scan receipts.',
+      ocrDone: 'Filled from the receipt — review before saving.',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -1262,10 +1270,14 @@
       '<div class="attach-thumb"><img src="' + p.url + '" alt=""/>' +
       '<button type="button" class="attach-del" data-rmadd="' + i + '" title="' + t('removePhoto') + '">' + icon('x') + '</button></div>'
     ).join('');
+    // Offer "scan receipt → auto-fill" once at least one photo is chosen.
+    const scanBtn = pendingAddFiles.length
+      ? '<button type="button" class="ghost-btn ocr-btn" id="ocrBtn">' + icon('camera') + ' ' + t('scanReceipt') + '</button>'
+      : '';
     box.innerHTML =
       '<div class="attach-grid">' + thumbs +
         '<button type="button" class="attach-add" id="addPhotoBtn">' + icon('camera') + '<span>' + t('addPhoto') + '</span></button>' +
-      '</div>' +
+      '</div>' + scanBtn +
       '<input type="file" id="addPhotoFile" accept="image/*" capture="environment" multiple hidden/>';
     const addBtn = box.querySelector('#addPhotoBtn');
     const file = box.querySelector('#addPhotoFile');
@@ -1284,6 +1296,43 @@
       const i = Number(b.dataset.rmadd); const p = pendingAddFiles[i];
       if (p) { try { URL.revokeObjectURL(p.url); } catch (e) { /* ignore */ } pendingAddFiles.splice(i, 1); renderAddPhotos(); }
     }));
+    const ocrBtn = box.querySelector('#ocrBtn');
+    if (ocrBtn) ocrBtn.addEventListener('click', () => scanFirstReceipt(ocrBtn));
+  }
+
+  // OCR the first chosen photo and open the confirm sheet prefilled with the result.
+  // The photo stays in pendingAddFiles, so saving also attaches it as evidence.
+  async function scanFirstReceipt(btn) {
+    const first = pendingAddFiles[0];
+    if (!first) return;
+    if (!window.Parser.imageOcrAvailable()) { toast(t('ocrNeedKey'), 'warn'); return; }
+    if (!navigator.onLine) { toast(t('needNetworkPhoto'), 'warn'); return; }
+    const oldHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = icon('clock') + ' ' + t('scanning');
+    try {
+      let blob = first.file;
+      try {
+        const out = await compressImage(first.file);
+        blob = out.blob;
+      } catch (e) {
+        // Can't decode (e.g. HEIC) → the API can't read it either; bail with a clear message.
+        if (e && e.message === 'decode') { toast(t('photoUnsupported'), 'warn'); return; }
+        // Other (encode) failure: fall back to the raw file.
+      }
+      const parsed = await window.Parser.parseImageReceipt(blob);
+      const today = ymd(new Date());
+      const acctSel = document.getElementById('txAccountBig');
+      const accountId = (acctSel ? acctSel.value : defaultAccountId()) || '';
+      const dateInput = document.getElementById('txDateBig');
+      const picked = dateInput ? dateInput.value : '';
+      const draft = buildDraft(parsed, picked, today, accountId);
+      openEntryPreview([draft], accountId, 0);
+      toast(draft.amount ? t('ocrDone') : t('ocrNoAmount'), draft.amount ? 'success' : 'warn');
+    } catch (err) {
+      toast(t('ocrFailed') + (err && err.message ? ': ' + err.message : ''), 'error');
+    } finally {
+      btn.disabled = false; btn.innerHTML = oldHtml;
+    }
   }
   // Upload all pending Add-page photos onto a freshly-saved transaction. Pushes into
   // DATA.attachments but does NOT render (the caller renders once afterwards).

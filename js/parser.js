@@ -256,6 +256,103 @@
   }
 
   /* ---------------------------------------------------------------
+   *  Receipt OCR — extract one transaction from a photo of a receipt.
+   *  Reuses the same browser-direct API calls as the text parser, but with an
+   *  image content block. Returns the normalized {amount,type,category,note,date}.
+   * --------------------------------------------------------------- */
+  const OCR_PROMPT =
+    'Đây là ảnh hoá đơn / biên lai. Trích ra MỘT giao dịch, trả về JSON: ' +
+    '{"amount": number, "type": "expense"|"income", "category": string, "note": string, "date": string|null}.\n' +
+    '- amount: TỔNG TIỀN THANH TOÁN CUỐI CÙNG (TỔNG CỘNG / THÀNH TIỀN / TỔNG TIỀN / TỔNG THANH TOÁN), đơn vị VND, số nguyên. ' +
+    'TUYỆT ĐỐI KHÔNG lấy tạm tính, thuế/VAT, tiền khách đưa, hay tiền thối lại.\n' +
+    '- type: "expense" cho hoá đơn mua hàng/dịch vụ (mặc định); "income" chỉ khi rõ là phiếu thu/nhận tiền.\n' +
+    '- category: một trong [Ăn uống, Di chuyển, Mua sắm, Giải trí, Sức khỏe, Hóa đơn, Thu nhập, Khác] — suy từ tên cửa hàng/mặt hàng.\n' +
+    '- note: tên cửa hàng hoặc mô tả ngắn (tiếng Việt).\n' +
+    '- date: ngày trên hoá đơn dạng "YYYY-MM-DD"; không thấy thì null.\n' +
+    'Chỉ trả về JSON, không giải thích.';
+
+  // Read a Blob/File as a bare base64 string (strips the "data:...;base64," prefix).
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => { const s = String(r.result || ''); resolve(s.slice(s.indexOf(',') + 1)); };
+      r.onerror = () => reject(r.error || new Error('Không đọc được ảnh'));
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function parseImageWithClaude(blob, apiKey) {
+    const b64 = await blobToBase64(blob);
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 256,
+        system: 'Hôm nay là ' + ymdOf(new Date()) + '.',
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: blob.type || 'image/jpeg', data: b64 } },
+          { type: 'text', text: OCR_PROMPT },
+        ] }],
+      }),
+    });
+    if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Claude API ' + resp.status + ': ' + e); }
+    const data = await resp.json();
+    const textBlock = (data.content || []).find((b) => b.type === 'text');
+    return normalizeParsed(extractJson(textBlock ? textBlock.text : '', 'Claude'), '');
+  }
+
+  async function parseImageWithGemini(blob, apiKey) {
+    const b64 = await blobToBase64(blob);
+    const model = 'gemini-2.0-flash';
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: 'Hôm nay là ' + ymdOf(new Date()) + '.' }] },
+        contents: [{ role: 'user', parts: [
+          { inline_data: { mime_type: blob.type || 'image/jpeg', data: b64 } },
+          { text: OCR_PROMPT },
+        ] }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+      }),
+    });
+    if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Gemini API ' + resp.status + ': ' + e); }
+    const data = await resp.json();
+    const cand = (data.candidates || [])[0];
+    const parts = cand && cand.content && cand.content.parts ? cand.content.parts : [];
+    return normalizeParsed(extractJson(parts.map((p) => p.text || '').join(''), 'Gemini'), '');
+  }
+
+  // True when a vision-capable API key is configured (Gemini or Claude).
+  function imageOcrAvailable() {
+    const cfg = window.CONFIG || {};
+    return !!(cfg.GEMINI_API_KEY || cfg.ANTHROPIC_API_KEY);
+  }
+
+  // Extract a transaction draft from a receipt image. Gemini → Claude (no regex
+  // fallback — there's no text to fall back on). Throws if no key or all fail.
+  async function parseImageReceipt(blob) {
+    const cfg = window.CONFIG || {};
+    let lastErr = null;
+    if (cfg.GEMINI_API_KEY) {
+      try { return { ...(await parseImageWithGemini(blob, cfg.GEMINI_API_KEY)), source: 'gemini' }; }
+      catch (err) { lastErr = err; console.warn('Gemini OCR lỗi, thử cách khác:', err.message); }
+    }
+    if (cfg.ANTHROPIC_API_KEY) {
+      try { return { ...(await parseImageWithClaude(blob, cfg.ANTHROPIC_API_KEY)), source: 'claude' }; }
+      catch (err) { lastErr = err; console.warn('Claude OCR lỗi:', err.message); }
+    }
+    throw lastErr || new Error('Chưa cấu hình API key để quét hoá đơn');
+  }
+
+  /* ---------------------------------------------------------------
    *  Main function: automatically picks Claude or regex
    * --------------------------------------------------------------- */
   async function parseTransaction(raw) {
@@ -314,6 +411,8 @@
     parseDate,
     splitEntries,
     parseMany,
+    parseImageReceipt,
+    imageOcrAvailable,
     MAX_ENTRIES,
     CATEGORIES,
   };

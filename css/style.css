@@ -863,3 +863,6 @@ main { padding: 4px 12px 92px; }
 .add-photos-label { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin: 14px 4px 8px; }
 .add-photos-label .add-photos-opt { font-weight: 500; opacity: .7; }
 .add-photos { margin-bottom: 12px; }
+.ocr-btn { width: 100%; margin-top: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.ocr-btn .ic { width: 16px; height: 16px; }
+.ocr-btn:disabled { opacity: .6; cursor: default; }
