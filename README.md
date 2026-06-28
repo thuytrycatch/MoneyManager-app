@@ -37,6 +37,10 @@ Open **SQL Editor → New query**, paste the entire contents of
 
 This creates the `households`, `household_members`, `transactions`, and
 `budgets` tables and enables **RLS** so each household only sees its own data.
+It also creates the private **`receipts`** Storage bucket used for photo
+evidence on transactions (image files live in Storage; the database only stores
+a pointer). If your project blocks creating buckets from SQL, create it manually
+in **Storage → New bucket** named `receipts` with **Public = OFF**.
 
 ### 3. Get the connection info
 

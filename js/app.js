@@ -67,6 +67,10 @@
     clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
     crown: '<path d="M2 18h20l-2-9-5 4-3-7-3 7-5-4-2 9z"/>',
+    paperclip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+    camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+    x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -212,6 +216,12 @@
       utilization: 'Đã dùng hạn mức', minPayment: 'Trả tối thiểu', dueDate: 'Đến hạn', owed: 'Đang nợ',
       dueInDays: 'còn {n} ngày', dueTodayLabel: 'đến hạn hôm nay',
       liabilityHint: 'Với thẻ tín dụng / khoản vay: nhập số dư âm nếu đang nợ (vd −4.500.000). Hạn mức và ngày sao kê/đến hạn là tùy chọn.',
+      // Attachments (photo evidence)
+      evidence: 'Bằng chứng', addPhoto: 'Thêm ảnh', uploading: 'Đang tải lên…',
+      removePhoto: 'Xóa ảnh', confirmRemovePhoto: 'Xóa ảnh này?',
+      photoUploadFailed: 'Tải ảnh thất bại', txSavedPhotoFailed: 'Đã lưu giao dịch nhưng tải ảnh thất bại — thử lại trong phần Sửa.',
+      noEvidence: 'Chưa có bằng chứng', viewEvidence: 'Xem bằng chứng', photoUnsupported: 'Định dạng ảnh không hỗ trợ',
+      maxPhotos: 'Tối đa {n} ảnh mỗi giao dịch', needNetworkPhoto: 'Cần kết nối mạng để tải ảnh', photoCount: '{n} ảnh',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -346,6 +356,12 @@
       utilization: 'Utilization', minPayment: 'Min. payment', dueDate: 'Due', owed: 'Owed',
       dueInDays: 'in {n} days', dueTodayLabel: 'due today',
       liabilityHint: 'For credit cards / loans: enter a negative balance if you owe (e.g. −4,500,000). Limit and statement/due days are optional.',
+      // Attachments (photo evidence)
+      evidence: 'Evidence', addPhoto: 'Add photo', uploading: 'Uploading…',
+      removePhoto: 'Remove photo', confirmRemovePhoto: 'Remove this photo?',
+      photoUploadFailed: 'Photo upload failed', txSavedPhotoFailed: 'Transaction saved, but the photo failed to upload — try again from Edit.',
+      noEvidence: 'No evidence yet', viewEvidence: 'View evidence', photoUnsupported: 'Unsupported image format',
+      maxPhotos: 'Up to {n} photos per transaction', needNetworkPhoto: 'You need a connection to upload photos', photoCount: '{n} photos',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -364,7 +380,8 @@
   function catLabel(c) { return (CAT_LABELS[lang] && CAT_LABELS[lang][c]) || c; }
 
   /* ============== State ============== */
-  let DATA = { household: null, budgets: {}, transactions: [], accounts: [], goals: [], recurring: [] };
+  let DATA = { household: null, budgets: {}, transactions: [], accounts: [], goals: [], recurring: [], attachments: [] };
+  let attachByTx = {}; // { [transactionId]: [attachment] } — rebuilt each render
   let authMode = 'login'; // 'config' | 'login'
   let authIsSignup = false;
   let currentUserEmail = '';
@@ -1075,6 +1092,160 @@
   }
   // Edit/delete buttons — only for transactions the current user may change
   // (own rows for members; any row for owners/admins). Mirrors the transactions RLS.
+  /* ============== Attachments (photo evidence) ============== */
+  function rebuildAttachIndex() {
+    attachByTx = {};
+    (DATA.attachments || []).forEach((a) => {
+      (attachByTx[a.transactionId] || (attachByTx[a.transactionId] = [])).push(a);
+    });
+  }
+  function attachmentsFor(txId) { return attachByTx[txId] || []; }
+
+  // Small "📎 n" badge shown on a transaction row when it has evidence.
+  function attachBadge(txId) {
+    const n = attachmentsFor(txId).length;
+    if (!n) return '';
+    return '<button type="button" class="tx-attach" data-attview="' + txId + '" title="' + t('viewEvidence') + '">' +
+      icon('paperclip') + '<span>' + n + '</span></button>';
+  }
+
+  // Resize the longest edge to <= maxDim and re-encode as JPEG to shrink phone photos.
+  // Returns { blob, width, height }. Throws Error('decode') if the file can't be decoded (e.g. HEIC).
+  async function compressImage(file, maxDim, quality) {
+    maxDim = maxDim || 1600; quality = quality || 0.82;
+    let bmp;
+    try { bmp = await createImageBitmap(file); }
+    catch (e) { throw new Error('decode'); }
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', quality));
+    if (!blob) throw new Error('encode');
+    return { blob: blob, width: w, height: h };
+  }
+
+  // Point an <img> at a private file via a signed URL, re-signing once on load error.
+  function loadSignedImg(img, path) {
+    let retried = false;
+    img.addEventListener('error', () => {
+      if (retried) return; retried = true;
+      // Force a fresh signature (bypass cache) in case the served URL was stale/broken.
+      window.Store.signedUrl(path, 3600, true).then((u) => { if (u) img.src = u; }).catch(() => {});
+    });
+    window.Store.signedUrl(path).then((u) => { if (u) img.src = u; }).catch(() => {});
+  }
+
+  // Full-screen viewer for a transaction's evidence (read-only; anyone in the household).
+  function openAttachmentViewer(txId, startIdx) {
+    const list = attachmentsFor(txId);
+    if (!list.length) return;
+    let idx = startIdx || 0;
+    const multi = list.length > 1;
+    const wrap = document.createElement('div');
+    wrap.className = 'lightbox-backdrop'; wrap.id = 'lightbox';
+    wrap.innerHTML =
+      '<button class="lightbox-close" id="lbClose" aria-label="' + t('cancel') + '">' + icon('x') + '</button>' +
+      (multi ? '<button class="lightbox-nav prev" id="lbPrev" aria-label="prev">‹</button>' : '') +
+      '<img class="lightbox-img" id="lbImg" alt="' + t('evidence') + '"/>' +
+      (multi ? '<button class="lightbox-nav next" id="lbNext" aria-label="next">›</button>' : '') +
+      (multi ? '<div class="lightbox-count" id="lbCount"></div>' : '');
+    document.body.appendChild(wrap);
+    const img = wrap.querySelector('#lbImg');
+    const countEl = wrap.querySelector('#lbCount');
+    const show = () => {
+      idx = (idx + list.length) % list.length;
+      loadSignedImg(img, list[idx].storagePath);
+      if (countEl) countEl.textContent = (idx + 1) + ' / ' + list.length;
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowLeft' && multi) { idx--; show(); }
+      else if (e.key === 'ArrowRight' && multi) { idx++; show(); }
+    };
+    function close() { const m = document.getElementById('lightbox'); if (m) m.remove(); document.removeEventListener('keydown', onKey); }
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+    wrap.querySelector('#lbClose').addEventListener('click', close);
+    const prev = wrap.querySelector('#lbPrev'); if (prev) prev.addEventListener('click', () => { idx--; show(); });
+    const next = wrap.querySelector('#lbNext'); if (next) next.addEventListener('click', () => { idx++; show(); });
+    document.addEventListener('keydown', onKey);
+    show();
+  }
+
+  // Render/refresh the evidence grid inside the Edit modal (caller has edit rights).
+  const MAX_PHOTOS = 5;
+  function fillEvidenceBox(tx) {
+    const box = document.getElementById('evidenceBox');
+    if (!box) return;
+    const list = attachmentsFor(tx.id);
+    const thumbs = list.map((a) =>
+      '<div class="attach-thumb">' +
+        '<img alt="" data-path="' + esc(a.storagePath) + '"/>' +
+        '<button type="button" class="attach-del" data-delatt="' + a.id + '" title="' + t('removePhoto') + '">' + icon('x') + '</button>' +
+      '</div>').join('');
+    box.innerHTML =
+      '<label>' + t('evidence') + '</label>' +
+      '<div class="attach-grid">' + thumbs +
+        '<button type="button" class="attach-add" id="attachAdd">' + icon('camera') + '<span>' + t('addPhoto') + '</span></button>' +
+      '</div>' +
+      '<input type="file" id="attachFile" accept="image/*" capture="environment" multiple hidden/>';
+    box.querySelectorAll('img[data-path]').forEach((img, i) => {
+      loadSignedImg(img, img.dataset.path);
+      img.addEventListener('click', () => openAttachmentViewer(tx.id, i));
+    });
+    box.querySelectorAll('[data-delatt]').forEach((b) => b.addEventListener('click', async () => {
+      const att = attachmentsFor(tx.id).find((x) => x.id === b.dataset.delatt);
+      if (!att || !confirm(t('confirmRemovePhoto'))) return;
+      try {
+        await window.Store.deleteAttachment(att);
+        DATA.attachments = (DATA.attachments || []).filter((x) => x.id !== att.id);
+        render(); fillEvidenceBox(tx);
+      } catch (err) { toast(t('photoUploadFailed') + ': ' + err.message, 'error'); }
+    }));
+    const addBtn = box.querySelector('#attachAdd');
+    const fileInput = box.querySelector('#attachFile');
+    if (addBtn && fileInput) {
+      addBtn.addEventListener('click', () => {
+        if (!navigator.onLine) { toast(t('needNetworkPhoto'), 'warn'); return; }
+        fileInput.click();
+      });
+      fileInput.addEventListener('change', async () => {
+        const files = Array.from(fileInput.files || []);
+        fileInput.value = '';
+        if (!files.length) return;
+        const have = attachmentsFor(tx.id).length;
+        let allow = files;
+        if (have + files.length > MAX_PHOTOS) {
+          allow = files.slice(0, Math.max(0, MAX_PHOTOS - have));
+          toast(t('maxPhotos').replace('{n}', MAX_PHOTOS), 'warn');
+        }
+        if (!allow.length) return;
+        addBtn.disabled = true;
+        const oldHtml = addBtn.innerHTML;
+        addBtn.innerHTML = icon('clock') + '<span>' + t('uploading') + '</span>';
+        for (const f of allow) {
+          try {
+            const out = await compressImage(f);
+            const path = await window.Store.uploadReceipt(tx.id, out.blob, 'jpg');
+            const att = await window.Store.insertAttachment({
+              transactionId: tx.id, storagePath: path, mime: 'image/jpeg',
+              sizeBytes: out.blob.size, width: out.width, height: out.height,
+            });
+            DATA.attachments = DATA.attachments || []; DATA.attachments.push(att);
+          } catch (err) {
+            const msg = (err && err.message === 'decode') ? t('photoUnsupported')
+              : (t('photoUploadFailed') + (err && err.message ? ': ' + err.message : ''));
+            toast(msg, 'error');
+          }
+        }
+        addBtn.disabled = false; addBtn.innerHTML = oldHtml;
+        render(); fillEvidenceBox(tx);
+      });
+    }
+  }
+
   function txActions(tx) {
     if (!canEditTx(tx)) return '';
     return '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
@@ -1088,7 +1259,7 @@
       const toN = to ? to.name : t('unassignedWallet');
       return '<div class="tx-row" data-id="' + tx.id + '">' +
         '<div class="tx-ic transfer">' + icon('transfer') + '</div>' +
-        '<div class="tx-main"><div class="tx-note">' + esc(tx.note || t('transfer')) + '</div>' +
+        '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || t('transfer')) + '</span>' + attachBadge(tx.id) + '</div>' +
         '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '</div>' +
         txActions(tx) + '</div></div>';
@@ -1096,7 +1267,7 @@
     const sign = tx.type === 'income' ? '+' : '−';
     return '<div class="tx-row" data-id="' + tx.id + '">' +
       '<div class="tx-ic ' + tx.type + '">' + catIcon(tx.category) + '</div>' +
-      '<div class="tx-main"><div class="tx-note">' + esc(tx.note || tx.rawInput) + '</div>' +
+      '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || tx.rawInput) + '</span>' + attachBadge(tx.id) + '</div>' +
       '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
       txActions(tx) + '</div></div>';
@@ -2185,10 +2356,12 @@
       (activeAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('eAccount', tx.accountId) : '') +
       '<div class="seg" style="margin-top:10px"><button class="seg-btn ' + (tx.type === 'expense' ? 'active' : '') + '" data-type="expense">' + t('expense') + '</button>' +
       '<button class="seg-btn ' + (tx.type === 'income' ? 'active' : '') + '" data-type="income">' + t('income') + '</button></div>' +
+      '<div class="edit-evidence" id="evidenceBox"></div>' +
       '<div class="modal-actions"><button class="ghost-btn" id="eCancel">' + t('cancel') + '</button>' +
       '<button class="primary-btn" id="eSave">' + t('save') + '</button></div></div></div>';
     document.body.appendChild(wrap.firstChild);
     if (window.CustomSelect) window.CustomSelect.enhanceAll();
+    fillEvidenceBox(tx);
     let newType = tx.type;
     document.querySelectorAll('#modalBackdrop .seg-btn').forEach((b) => b.addEventListener('click', () => {
       newType = b.dataset.type;
@@ -2236,6 +2409,7 @@
 
   /* ============== Render + wire ============== */
   function render() {
+    rebuildAttachIndex();
     if (currentTab !== 'settings') settingsPage = null; // leaving Settings resets the sub-page stack
     document.getElementById('appName').textContent = t('appName');
     const view = document.getElementById('view');
@@ -2266,6 +2440,8 @@
     const ft = document.getElementById('fType'); if (ft) ft.addEventListener('change', () => { filterType = ft.value; render(); });
     // tx actions
     document.querySelectorAll('.tx-actions .icon-btn').forEach((b) => b.addEventListener('click', () => { b.dataset.act === 'del' ? deleteTx(b.dataset.id) : openEdit(b.dataset.id); }));
+    // evidence badge → open the read-only photo viewer (anyone in the household)
+    document.querySelectorAll('[data-attview]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); openAttachmentViewer(b.dataset.attview, 0); }));
     // goto links
     document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => { currentTab = b.dataset.goto; render(); }));
     // privacy: toggle balance visibility (eye icon on the hero)
@@ -2738,6 +2914,7 @@
     if (!DATA.accounts) DATA.accounts = [];
     if (!DATA.goals) DATA.goals = [];
     if (!DATA.recurring) DATA.recurring = [];
+    if (!DATA.attachments) DATA.attachments = [];
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     myRole = computeMyRole();
@@ -2760,6 +2937,7 @@
       if (!DATA.accounts) DATA.accounts = [];
     if (!DATA.goals) DATA.goals = [];
     if (!DATA.recurring) DATA.recurring = [];
+    if (!DATA.attachments) DATA.attachments = [];
       householdMembers = await window.Store.listMembers().catch(() => householdMembers);
       myRole = computeMyRole();
       render();

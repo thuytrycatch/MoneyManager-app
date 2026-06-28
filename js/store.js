@@ -337,6 +337,19 @@
       dueDate: g.due_date || null,
     };
   }
+  function mapAttachment(a) {
+    return {
+      id: a.id,
+      transactionId: a.transaction_id,
+      storagePath: a.storage_path,
+      mime: a.mime || null,
+      sizeBytes: a.size_bytes != null ? Number(a.size_bytes) : null,
+      width: a.width != null ? Number(a.width) : null,
+      height: a.height != null ? Number(a.height) : null,
+      uploadedBy: a.uploaded_by || null,
+      createdAt: a.created_at,
+    };
+  }
 
   /* ---------------- Read all of the household's data ---------------- */
   async function loadData() {
@@ -380,8 +393,10 @@
       .then((r) => (r.error ? [] : (r.data || []).map(mapGoal))).catch(() => []);
     const recurring = await sb.from('recurring').select('*').eq('household_id', hid)
       .then((r) => (r.error ? [] : (r.data || []).map(mapRecurring))).catch(() => []);
+    const attachments = await sb.from('transaction_attachments').select('*').eq('household_id', hid)
+      .then((r) => (r.error ? [] : (r.data || []).map(mapAttachment))).catch(() => []);
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments };
     idbSet('data', data).catch(() => {});
     return data;
   }
@@ -470,8 +485,95 @@
 
   async function deleteTransaction(id) {
     const sb = getClient();
+    // Clean up any evidence FILES on Storage BEFORE deleting the transaction row.
+    // Order matters: the receipts_delete storage policy checks the parent transaction
+    // still exists, and deleting the row cascades the attachment rows away anyway.
+    try {
+      const { data: atts } = await sb.from('transaction_attachments')
+        .select('storage_path').eq('transaction_id', id);
+      const paths = (atts || []).map((a) => a.storage_path).filter(Boolean);
+      if (paths.length) await removeReceipts(paths);
+    } catch (e) { /* best-effort cleanup; never block the delete */ }
     const { error } = await sb.from('transactions').delete().eq('id', id);
     if (error) throw new Error(error.message);
+  }
+
+  /* ---------------- Attachments (photo evidence) ----------------
+   * Files live in the private Storage bucket 'receipts' at
+   * '<household_id>/<transaction_id>/<uuid>.<ext>'; this table row is a pointer. */
+  const RECEIPTS_BUCKET = 'receipts';
+  const signedCache = new Map(); // storage_path -> { url, exp }
+
+  // Upload one image blob for a transaction. Returns the storage path.
+  async function uploadReceipt(txId, blob, ext) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const path = household.id + '/' + txId + '/' + cryptoUuid() + '.' + (ext || 'jpg');
+    const { error } = await sb.storage.from(RECEIPTS_BUCKET)
+      .upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: false });
+    if (error) throw new Error(error.message);
+    return path;
+  }
+
+  // Record an uploaded file in the metadata table. Returns the mapped attachment.
+  async function insertAttachment(meta) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { data, error } = await sb.from('transaction_attachments').insert({
+      household_id: household.id,
+      transaction_id: meta.transactionId,
+      storage_path: meta.storagePath,
+      mime: meta.mime || null,
+      size_bytes: meta.sizeBytes != null ? Math.round(meta.sizeBytes) : null,
+      width: meta.width || null,
+      height: meta.height || null,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return mapAttachment(data);
+  }
+
+  // A time-limited URL to view a private file. Cached until shortly before expiry.
+  // Pass force=true to bypass the cache and request a fresh signature (used when a
+  // previously-served URL failed to load).
+  async function signedUrl(path, ttl, force) {
+    ttl = ttl || 3600;
+    const now = Date.now();
+    if (force) signedCache.delete(path);
+    const hit = signedCache.get(path);
+    if (hit && hit.exp > now) return hit.url;
+    const sb = getClient();
+    const { data, error } = await sb.storage.from(RECEIPTS_BUCKET).createSignedUrl(path, ttl);
+    if (error) throw new Error(error.message);
+    const url = data && data.signedUrl;
+    // Only cache a real URL — never poison the cache with an empty result.
+    if (url) signedCache.set(path, { url: url, exp: now + (ttl - 60) * 1000 });
+    return url;
+  }
+
+  // Best-effort: drop files from Storage (never throws — used in cleanup paths).
+  async function removeReceipts(paths) {
+    if (!Array.isArray(paths) || !paths.length) return;
+    try {
+      await getClient().storage.from(RECEIPTS_BUCKET).remove(paths);
+      paths.forEach((p) => signedCache.delete(p));
+    } catch (e) { /* ignore */ }
+  }
+
+  // Remove one attachment: its metadata row, then its file (row first is fine — the
+  // transaction still exists either way, so the storage policy is satisfied).
+  async function deleteAttachment(att) {
+    const sb = getClient();
+    const { error } = await sb.from('transaction_attachments').delete().eq('id', att.id);
+    if (error) throw new Error(error.message);
+    await removeReceipts([att.storagePath]);
+  }
+
+  // Local helper so this section doesn't depend on app.js's uuid().
+  function cryptoUuid() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) { /* ignore */ }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
   }
 
   /* ---------------- Budgets ---------------- */
@@ -658,6 +760,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_attachments', filter: 'household_id=eq.' + hid }, onChange)
       .subscribe();
     return channel;
   }
@@ -690,6 +793,11 @@
     addTransactions,
     updateTransaction,
     deleteTransaction,
+    uploadReceipt,
+    insertAttachment,
+    signedUrl,
+    deleteAttachment,
+    removeReceipts,
     saveBudgets,
     addAccount,
     updateAccount,

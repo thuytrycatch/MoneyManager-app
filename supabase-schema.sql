@@ -510,3 +510,127 @@ alter table public.activity_log enable row level security;
 drop policy if exists activity_select on public.activity_log;
 create policy activity_select on public.activity_log for select
   using (public.is_household_admin(household_id));
+
+-- =====================================================================
+--  Transaction attachments — photo evidence (receipts, invoices) for a
+--  transaction. The image FILES live in Supabase Storage (private bucket
+--  'receipts'); this table only stores a pointer (storage_path) + metadata.
+--  Path convention: '<household_id>/<transaction_id>/<uuid>.<ext>' so the
+--  Storage RLS below can read the household & transaction straight from the
+--  folder names. Who can attach/remove mirrors who can edit the transaction
+--  (its owner, or an owner/admin). Everyone in the household can view.
+--  Safe to re-run.
+-- =====================================================================
+
+-- The private bucket. (You can also create it in Dashboard → Storage:
+-- name 'receipts', Public OFF.) Re-running keeps it private + refreshes limits.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('receipts', 'receipts', false, 5242880,
+        array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update
+  set public             = false,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+create table if not exists public.transaction_attachments (
+  id             uuid primary key default gen_random_uuid(),
+  household_id   uuid not null references public.households(id)   on delete cascade,
+  transaction_id uuid not null references public.transactions(id) on delete cascade,
+  storage_path   text not null,           -- '<household_id>/<transaction_id>/<uuid>.<ext>' in bucket 'receipts'
+  mime           text,
+  size_bytes     bigint,
+  width          int,
+  height         int,
+  uploaded_by    uuid references auth.users(id) on delete set null,
+  created_at     timestamptz not null default now()
+);
+create index if not exists idx_attach_tx on public.transaction_attachments (transaction_id);
+create index if not exists idx_attach_hh on public.transaction_attachments (household_id, created_at desc);
+
+-- Stamp the uploader server-side (like set_tx_actor) so uploaded_by is always real.
+create or replace function public.set_attachment_actor()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin new.uploaded_by := auth.uid(); return new; end $$;
+drop trigger if exists trg_set_attachment_actor on public.transaction_attachments;
+create trigger trg_set_attachment_actor before insert on public.transaction_attachments
+  for each row execute function public.set_attachment_actor();
+
+alter table public.transaction_attachments enable row level security;
+
+-- READ: anyone in the household.
+drop policy if exists attach_select on public.transaction_attachments;
+create policy attach_select on public.transaction_attachments for select
+  using (household_id in (select public.user_households()));
+
+-- INSERT: only attach to a transaction you may edit (its owner, or an owner/admin).
+drop policy if exists attach_insert on public.transaction_attachments;
+create policy attach_insert on public.transaction_attachments for insert
+  with check (
+    household_id in (select public.user_households())
+    and exists (
+      select 1 from public.transactions t
+       where t.id = transaction_id
+         and t.household_id = transaction_attachments.household_id
+         and (t.user_id = auth.uid() or public.is_household_admin(t.household_id))
+    )
+  );
+
+-- DELETE: same condition as insert.
+drop policy if exists attach_delete on public.transaction_attachments;
+create policy attach_delete on public.transaction_attachments for delete
+  using (
+    household_id in (select public.user_households())
+    and exists (
+      select 1 from public.transactions t
+       where t.id = transaction_id
+         and (t.user_id = auth.uid() or public.is_household_admin(t.household_id))
+    )
+  );
+
+-- Realtime (sync new evidence across members) + activity log (audit trail).
+do $$ begin
+  begin alter publication supabase_realtime add table public.transaction_attachments;
+  exception when duplicate_object then null; end;
+end $$;
+drop trigger if exists trg_log_attachments on public.transaction_attachments;
+create trigger trg_log_attachments after insert or update or delete on public.transaction_attachments
+  for each row execute function public.log_activity();
+
+-- ---------------------------------------------------------------------
+-- Storage RLS for the 'receipts' bucket. Path = '<household_id>/<transaction_id>/<file>',
+-- so (storage.foldername(name))[1] = household_id and [2] = transaction_id.
+-- ---------------------------------------------------------------------
+-- READ: anyone in the household (used by createSignedUrl).
+drop policy if exists receipts_read on storage.objects;
+create policy receipts_read on storage.objects for select to authenticated
+using (
+  bucket_id = 'receipts'
+  and (storage.foldername(name))[1]::uuid in (select public.user_households())
+);
+
+-- UPLOAD: only onto a transaction you may edit (its owner, or an owner/admin).
+drop policy if exists receipts_insert on storage.objects;
+create policy receipts_insert on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'receipts'
+  and (storage.foldername(name))[1]::uuid in (select public.user_households())
+  and exists (
+    select 1 from public.transactions t
+     where t.id = (storage.foldername(name))[2]::uuid
+       and t.household_id = (storage.foldername(name))[1]::uuid
+       and (t.user_id = auth.uid() or public.is_household_admin(t.household_id))
+  )
+);
+
+-- DELETE: same condition as upload (cleanup when a transaction/attachment is removed).
+drop policy if exists receipts_delete on storage.objects;
+create policy receipts_delete on storage.objects for delete to authenticated
+using (
+  bucket_id = 'receipts'
+  and (storage.foldername(name))[1]::uuid in (select public.user_households())
+  and exists (
+    select 1 from public.transactions t
+     where t.id = (storage.foldername(name))[2]::uuid
+       and (t.user_id = auth.uid() or public.is_household_admin(t.household_id))
+  )
+);
