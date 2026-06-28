@@ -232,7 +232,7 @@
    *  Get a key at https://aistudio.google.com/app/apikey
    * --------------------------------------------------------------- */
   async function parseWithGemini(raw, apiKey) {
-    const model = 'gemini-2.0-flash';
+    const model = 'gemini-2.5-flash';
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
     const resp = await fetch(url, {
       method: 'POST',
@@ -309,7 +309,7 @@
 
   async function parseImageWithGemini(blob, apiKey) {
     const b64 = await blobToBase64(blob);
-    const model = 'gemini-2.0-flash';
+    const model = 'gemini-2.5-flash';
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
     const resp = await fetch(url, {
       method: 'POST',
