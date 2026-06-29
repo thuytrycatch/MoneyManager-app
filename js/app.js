@@ -226,6 +226,7 @@
       ocrFailed: 'Quét hoá đơn thất bại', ocrNoAmount: 'Không đọc được số tiền — vui lòng kiểm tra & nhập tay.',
       ocrNeedKey: 'Cần API key (Gemini hoặc Claude) trong Cài đặt để quét hoá đơn.',
       ocrDone: 'Đã điền từ hoá đơn — kiểm tra lại trước khi lưu.',
+      checkAmount: 'Đã điền — số tiền chưa chắc chắn, hãy kiểm tra kỹ trước khi lưu.',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -370,6 +371,7 @@
       ocrFailed: 'Receipt scan failed', ocrNoAmount: 'Couldn’t read the amount — please check & enter it manually.',
       ocrNeedKey: 'A Gemini or Claude API key (in Settings) is required to scan receipts.',
       ocrDone: 'Filled from the receipt — review before saving.',
+      checkAmount: 'Filled — the amount is uncertain, double-check it before saving.',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -1165,19 +1167,95 @@
     document.body.appendChild(wrap);
     const img = wrap.querySelector('#lbImg');
     const countEl = wrap.querySelector('#lbCount');
+
+    /* --- Zoom & pan state (pinch / double-tap / wheel + drag), vanilla, no library --- */
+    let scale = 1, tx = 0, ty = 0;
+    function applyT() {
+      img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+      img.style.cursor = scale > 1 ? 'grab' : 'zoom-in';
+    }
+    function clampPan() {
+      const ox = Math.max(0, (img.offsetWidth * scale - window.innerWidth) / 2);
+      const oy = Math.max(0, (img.offsetHeight * scale - window.innerHeight) / 2);
+      tx = Math.max(-ox, Math.min(ox, tx));
+      ty = Math.max(-oy, Math.min(oy, ty));
+    }
+    // Zoom to `ns` keeping the content point under (cx,cy) fixed on screen.
+    function zoomAround(cx, cy, ns) {
+      ns = Math.max(1, Math.min(5, ns));
+      const r = img.getBoundingClientRect();
+      const dx = cx - (r.left + r.width / 2);
+      const dy = cy - (r.top + r.height / 2);
+      const k = ns / scale;
+      tx -= dx * (k - 1); ty -= dy * (k - 1); scale = ns;
+      if (scale <= 1.001) { scale = 1; tx = 0; ty = 0; }
+      clampPan(); applyT();
+    }
+    function resetZoom() { scale = 1; tx = 0; ty = 0; applyT(); }
+
     const show = () => {
       idx = (idx + list.length) % list.length;
+      resetZoom();
       loadSignedImg(img, list[idx].storagePath);
       if (countEl) countEl.textContent = (idx + 1) + ' / ' + list.length;
     };
+
+    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    let mode = null, startDist = 0, startScale = 1, startX = 0, startY = 0, baseTx = 0, baseTy = 0, lastTap = 0;
+    img.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        mode = 'pinch'; startDist = dist(e.touches[0], e.touches[1]) || 1; startScale = scale; e.preventDefault();
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTap < 300) { // double-tap → toggle zoom at the tapped point
+          zoomAround(e.touches[0].clientX, e.touches[0].clientY, scale > 1 ? 1 : 2.5);
+          lastTap = 0; mode = null; e.preventDefault(); return;
+        }
+        lastTap = now;
+        mode = scale > 1 ? 'pan' : null;
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY; baseTx = tx; baseTy = ty;
+      }
+    }, { passive: false });
+    img.addEventListener('touchmove', (e) => {
+      if (mode === 'pinch' && e.touches.length === 2) {
+        e.preventDefault();
+        const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        zoomAround(mx, my, startScale * (dist(e.touches[0], e.touches[1]) / startDist));
+      } else if (mode === 'pan' && e.touches.length === 1) {
+        e.preventDefault();
+        tx = baseTx + (e.touches[0].clientX - startX);
+        ty = baseTy + (e.touches[0].clientY - startY);
+        clampPan(); applyT();
+      }
+    }, { passive: false });
+    img.addEventListener('touchend', (e) => {
+      if (!e.touches.length) { mode = null; }
+      else if (e.touches.length === 1) { mode = scale > 1 ? 'pan' : null; startX = e.touches[0].clientX; startY = e.touches[0].clientY; baseTx = tx; baseTy = ty; }
+    });
+    img.addEventListener('wheel', (e) => { e.preventDefault(); zoomAround(e.clientX, e.clientY, scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
+    img.addEventListener('dblclick', (e) => { e.preventDefault(); zoomAround(e.clientX, e.clientY, scale > 1 ? 1 : 2.5); });
+    let dragging = false, dragX = 0, dragY = 0, dragTx = 0, dragTy = 0;
+    img.addEventListener('mousedown', (e) => { if (scale <= 1) return; e.preventDefault(); dragging = true; dragX = e.clientX; dragY = e.clientY; dragTx = tx; dragTy = ty; img.style.cursor = 'grabbing'; });
+    const onMouseMove = (e) => { if (!dragging) return; tx = dragTx + (e.clientX - dragX); ty = dragTy + (e.clientY - dragY); clampPan(); applyT(); };
+    const onMouseUp = () => { if (!dragging) return; dragging = false; img.style.cursor = scale > 1 ? 'grab' : 'zoom-in'; };
+    // On `wrap` (the full-viewport backdrop), not `window`, so they're removed with the
+    // node and never leak even if the lightbox is torn down without calling close().
+    wrap.addEventListener('mousemove', onMouseMove);
+    wrap.addEventListener('mouseup', onMouseUp);
+
     const onKey = (e) => {
       if (e.key === 'Escape') close();
       else if (e.key === 'ArrowLeft' && multi) { idx--; show(); }
       else if (e.key === 'ArrowRight' && multi) { idx++; show(); }
     };
-    function close() { const m = document.getElementById('lightbox'); if (m) m.remove(); document.removeEventListener('keydown', onKey); }
+    function close() {
+      const m = document.getElementById('lightbox'); if (m) m.remove();
+      document.removeEventListener('keydown', onKey); // the only listener on a node that outlives the lightbox
+    }
     // Close on backdrop tap OR anywhere inside the × button (covers taps landing on
     // the inner <svg>/<path>, which is why a plain target===button check missed them).
+    // Tapping the image (zoom/pan target) never closes.
     wrap.addEventListener('click', (e) => {
       if (e.target === wrap || (e.target.closest && e.target.closest('#lbClose'))) close();
     });
@@ -1315,7 +1393,8 @@
     try {
       let blob = first.file;
       try {
-        const out = await compressImage(first.file);
+        // Smaller/lighter than the evidence copy → faster OCR (receipts are mostly text).
+        const out = await compressImage(first.file, 1280, 0.7);
         blob = out.blob;
       } catch (e) {
         // Can't decode (e.g. HEIC) → the API can't read it either; bail with a clear message.
@@ -1330,7 +1409,8 @@
       const picked = dateInput ? dateInput.value : '';
       const draft = buildDraft(parsed, picked, today, accountId);
       openEntryPreview([draft], accountId, 0);
-      toast(draft.amount ? t('ocrDone') : t('ocrNoAmount'), draft.amount ? 'success' : 'warn');
+      const msg = !draft.amount ? t('ocrNoAmount') : (parsed.lowConfidence ? t('checkAmount') : t('ocrDone'));
+      toast(msg, draft.amount && !parsed.lowConfidence ? 'success' : 'warn');
     } catch (err) {
       toast(t('ocrFailed') + (err && err.message ? ': ' + err.message : ''), 'error');
     } finally {

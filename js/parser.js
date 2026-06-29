@@ -177,9 +177,17 @@
     return { amount, type, category, note, date };
   }
 
+  // VND integer from a number OR a formatted string ("1.234.000", "185,000", "12.000đ").
+  // Number("1.234.000") is NaN and Number("185.000") is 185 — both wrong — so strip to digits.
+  function toIntAmount(v) {
+    if (typeof v === 'number' && isFinite(v)) return Math.round(v);
+    const digits = String(v == null ? '' : v).replace(/[^\d]/g, '');
+    return digits ? parseInt(digits, 10) : 0;
+  }
+
   // Normalize a model's raw JSON into the app's transaction shape (shared by Claude & Gemini).
   function normalizeParsed(parsed, raw) {
-    const amount = Math.round(Number(parsed.amount) || 0);
+    const amount = toIntAmount(parsed.amount);
     const type = parsed.type === 'income' ? 'income' : 'expense';
     let category = String(parsed.category || '').trim();
     if (!CATEGORIES.includes(category)) category = type === 'income' ? 'Thu nhập' : 'Khác';
@@ -261,15 +269,60 @@
    *  image content block. Returns the normalized {amount,type,category,note,date}.
    * --------------------------------------------------------------- */
   const OCR_PROMPT =
-    'Đây là ảnh hoá đơn / biên lai. Trích ra MỘT giao dịch, trả về JSON: ' +
-    '{"amount": number, "type": "expense"|"income", "category": string, "note": string, "date": string|null}.\n' +
-    '- amount: TỔNG TIỀN THANH TOÁN CUỐI CÙNG (TỔNG CỘNG / THÀNH TIỀN / TỔNG TIỀN / TỔNG THANH TOÁN), đơn vị VND, số nguyên. ' +
-    'TUYỆT ĐỐI KHÔNG lấy tạm tính, thuế/VAT, tiền khách đưa, hay tiền thối lại.\n' +
+    'Đây là ảnh hoá đơn / biên lai. Trích ra MỘT giao dịch, trả về JSON:\n' +
+    '{"total": number, "tendered": number|null, "change": number|null, "subtotal": number|null, "tax": number|null, ' +
+    '"type": "expense"|"income", "category": string, "note": string, "date": string|null}.\n' +
+    'Mọi số là SỐ NGUYÊN VND, KHÔNG dấu phân cách (vd 185000, không phải "185.000").\n' +
+    '- total: SỐ TIỀN THỰC PHẢI TRẢ (THÀNH TIỀN / TỔNG CỘNG / TỔNG THANH TOÁN / KHÁCH PHẢI TRẢ). Đây là số tiền giao dịch.\n' +
+    '- tendered: TỔNG TIỀN KHÁCH ĐƯA/GỬI (TIỀN KHÁCH ĐƯA / TIỀN MẶT / KHÁCH TRẢ); không có thì null.\n' +
+    '- change: TIỀN THỐI LẠI (TIỀN THỐI / TRẢ LẠI / THỪA); không có thì null.\n' +
+    '- subtotal: TẠM TÍNH; tax: THUẾ/VAT; không có thì null.\n' +
+    'QUAN TRỌNG: total là số PHẢI TRẢ, TUYỆT ĐỐI không nhầm với tendered (tiền khách đưa). ' +
+    'Nếu không thấy dòng tổng nhưng có tendered và change thì total = tendered − change.\n' +
     '- type: "expense" cho hoá đơn mua hàng/dịch vụ (mặc định); "income" chỉ khi rõ là phiếu thu/nhận tiền.\n' +
     '- category: một trong [Ăn uống, Di chuyển, Mua sắm, Giải trí, Sức khỏe, Hóa đơn, Thu nhập, Khác] — suy từ tên cửa hàng/mặt hàng.\n' +
     '- note: tên cửa hàng hoặc mô tả ngắn (tiếng Việt).\n' +
     '- date: ngày trên hoá đơn dạng "YYYY-MM-DD"; không thấy thì null.\n' +
     'Chỉ trả về JSON, không giải thích.';
+
+  // Gemini structured-output schema → guarantees valid JSON + correct types (faster, no parse retry).
+  const OCR_SCHEMA = {
+    type: 'OBJECT',
+    properties: {
+      total: { type: 'INTEGER' },
+      tendered: { type: 'INTEGER', nullable: true },
+      change: { type: 'INTEGER', nullable: true },
+      subtotal: { type: 'INTEGER', nullable: true },
+      tax: { type: 'INTEGER', nullable: true },
+      type: { type: 'STRING', enum: ['expense', 'income'] },
+      category: { type: 'STRING' },
+      note: { type: 'STRING' },
+      date: { type: 'STRING', nullable: true },
+    },
+    required: ['total', 'type', 'category', 'note'],
+  };
+
+  // Turn the rich receipt JSON into the app shape. Picks the amount actually PAYABLE
+  // (total), never the amount tendered; cross-checks against tendered − change.
+  function normalizeReceipt(parsed) {
+    parsed = parsed || {};
+    const total = toIntAmount(parsed.total != null ? parsed.total : parsed.amount); // tolerate older {amount}
+    const tendered = parsed.tendered != null ? toIntAmount(parsed.tendered) : 0;
+    const change = parsed.change != null ? toIntAmount(parsed.change) : 0;
+    const subtotal = parsed.subtotal != null ? toIntAmount(parsed.subtotal) : 0;
+    const tax = parsed.tax != null ? toIntAmount(parsed.tax) : 0;
+    const derived = (tendered > 0 && change >= 0 && tendered - change > 0) ? tendered - change : 0;
+    let amount = total, lowConfidence = false;
+    if (amount <= 0 && derived > 0) amount = derived;                 // no total line → derive
+    else if (amount > 0 && derived > 0 && Math.abs(derived - amount) > 1000) lowConfidence = true; // mismatch
+    const type = parsed.type === 'income' ? 'income' : 'expense';
+    let category = String(parsed.category || '').trim();
+    if (!CATEGORIES.includes(category)) category = type === 'income' ? 'Thu nhập' : 'Khác';
+    const note = String(parsed.note || '').trim();
+    const date = normDate(parsed.date);
+    return { amount, type, category, note, date,
+      candidates: { total, tendered, change, subtotal, tax }, lowConfidence };
+  }
 
   // Read a Blob/File as a bare base64 string (strips the "data:...;base64," prefix).
   function blobToBase64(blob) {
@@ -293,7 +346,7 @@
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 256,
+        max_tokens: 384,
         system: 'Hôm nay là ' + ymdOf(new Date()) + '.',
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: blob.type || 'image/jpeg', data: b64 } },
@@ -304,7 +357,7 @@
     if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Claude API ' + resp.status + ': ' + e); }
     const data = await resp.json();
     const textBlock = (data.content || []).find((b) => b.type === 'text');
-    return normalizeParsed(extractJson(textBlock ? textBlock.text : '', 'Claude'), '');
+    return normalizeReceipt(extractJson(textBlock ? textBlock.text : '', 'Claude'));
   }
 
   async function parseImageWithGemini(blob, apiKey) {
@@ -320,14 +373,14 @@
           { inline_data: { mime_type: blob.type || 'image/jpeg', data: b64 } },
           { text: OCR_PROMPT },
         ] }],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+        generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: OCR_SCHEMA },
       }),
     });
     if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Gemini API ' + resp.status + ': ' + e); }
     const data = await resp.json();
     const cand = (data.candidates || [])[0];
     const parts = cand && cand.content && cand.content.parts ? cand.content.parts : [];
-    return normalizeParsed(extractJson(parts.map((p) => p.text || '').join(''), 'Gemini'), '');
+    return normalizeReceipt(extractJson(parts.map((p) => p.text || '').join(''), 'Gemini'));
   }
 
   // True when a vision-capable API key is configured (Gemini or Claude).

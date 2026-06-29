@@ -850,7 +850,8 @@ main { padding: 4px 12px 92px; }
 /* Full-screen lightbox viewer */
 .lightbox-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, .88); padding: 24px; }
-.lightbox-img { max-width: 92vw; max-height: 86vh; border-radius: 8px; object-fit: contain; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
+.lightbox-img { max-width: 92vw; max-height: 86vh; border-radius: 8px; object-fit: contain; box-shadow: 0 10px 40px rgba(0, 0, 0, .6);
+  touch-action: none; user-select: none; -webkit-user-select: none; will-change: transform; }
 /* Sit clear of the iPhone notch/status bar (viewport-fit=cover) so the tap target
    isn't swallowed by the safe area, and stay above the image/zoom layer. */
 .lightbox-close { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px);
