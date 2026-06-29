@@ -1157,10 +1157,10 @@
     const wrap = document.createElement('div');
     wrap.className = 'lightbox-backdrop'; wrap.id = 'lightbox';
     wrap.innerHTML =
-      '<button class="lightbox-close" id="lbClose" aria-label="' + t('cancel') + '">' + icon('x') + '</button>' +
-      (multi ? '<button class="lightbox-nav prev" id="lbPrev" aria-label="prev">‹</button>' : '') +
+      '<button type="button" class="lightbox-close" id="lbClose" aria-label="' + t('cancel') + '">' + icon('x') + '</button>' +
+      (multi ? '<button type="button" class="lightbox-nav prev" id="lbPrev" aria-label="prev">‹</button>' : '') +
       '<img class="lightbox-img" id="lbImg" alt="' + t('evidence') + '"/>' +
-      (multi ? '<button class="lightbox-nav next" id="lbNext" aria-label="next">›</button>' : '') +
+      (multi ? '<button type="button" class="lightbox-nav next" id="lbNext" aria-label="next">›</button>' : '') +
       (multi ? '<div class="lightbox-count" id="lbCount"></div>' : '');
     document.body.appendChild(wrap);
     const img = wrap.querySelector('#lbImg');
@@ -1176,8 +1176,11 @@
       else if (e.key === 'ArrowRight' && multi) { idx++; show(); }
     };
     function close() { const m = document.getElementById('lightbox'); if (m) m.remove(); document.removeEventListener('keydown', onKey); }
-    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
-    wrap.querySelector('#lbClose').addEventListener('click', close);
+    // Close on backdrop tap OR anywhere inside the × button (covers taps landing on
+    // the inner <svg>/<path>, which is why a plain target===button check missed them).
+    wrap.addEventListener('click', (e) => {
+      if (e.target === wrap || (e.target.closest && e.target.closest('#lbClose'))) close();
+    });
     const prev = wrap.querySelector('#lbPrev'); if (prev) prev.addEventListener('click', () => { idx--; show(); });
     const next = wrap.querySelector('#lbNext'); if (next) next.addEventListener('click', () => { idx++; show(); });
     document.addEventListener('keydown', onKey);
@@ -1200,7 +1203,7 @@
       '<div class="attach-grid">' + thumbs +
         '<button type="button" class="attach-add" id="attachAdd">' + icon('camera') + '<span>' + t('addPhoto') + '</span></button>' +
       '</div>' +
-      '<input type="file" id="attachFile" accept="image/*" capture="environment" multiple hidden/>';
+      '<input type="file" id="attachFile" accept="image/*" multiple hidden/>';
     box.querySelectorAll('img[data-path]').forEach((img, i) => {
       loadSignedImg(img, img.dataset.path);
       img.addEventListener('click', () => openAttachmentViewer(tx.id, i));
@@ -1278,7 +1281,7 @@
       '<div class="attach-grid">' + thumbs +
         '<button type="button" class="attach-add" id="addPhotoBtn">' + icon('camera') + '<span>' + t('addPhoto') + '</span></button>' +
       '</div>' + scanBtn +
-      '<input type="file" id="addPhotoFile" accept="image/*" capture="environment" multiple hidden/>';
+      '<input type="file" id="addPhotoFile" accept="image/*" multiple hidden/>';
     const addBtn = box.querySelector('#addPhotoBtn');
     const file = box.querySelector('#addPhotoFile');
     addBtn.addEventListener('click', () => file.click());
