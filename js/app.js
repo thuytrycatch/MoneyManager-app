@@ -105,6 +105,9 @@
       transfer: 'Chuyển khoản', transferBetween: 'Chuyển tiền giữa ví', fromWallet: 'Từ ví', toWallet: 'Đến ví',
       transferDone: 'Đã chuyển khoản', needTwoWallets: 'Cần ít nhất 2 ví để chuyển khoản.',
       sameWallet: 'Ví nguồn và ví đích phải khác nhau.', needAmount: 'Nhập số tiền.',
+      adjustBalance: 'Đổi số dư', realBalance: 'Số dư thực tế', balanceAdjustLabel: 'Điều chỉnh số dư',
+      balanceAdjusted: 'Đã cập nhật số dư', adjustHint: 'App sẽ ghi một khoản điều chỉnh cho phần chênh lệch.',
+      walletHistory: 'Lịch sử ví', balanceAfter: 'Số dư sau', noWalletHistory: 'Ví chưa có giao dịch nào.',
       showBalance: 'Hiện số dư', hideBalance: 'Ẩn số dư',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
       budgetNotSet: 'Chưa thiết lập ngân sách.', noExpenseData: 'Chưa có dữ liệu chi tiêu.',
@@ -155,6 +158,8 @@
       activity: 'Nhật ký hoạt động',
       activityHint: 'Lịch sử các thao tác thêm / sửa / xóa của thành viên trong hộ.',
       activityEmpty: 'Chưa có hoạt động nào.',
+      searchAct: 'Tìm theo người, loại, nội dung…', activityDetail: 'Chi tiết hoạt động',
+      noFieldChanges: 'Không có thay đổi trường nào.', noActMatch: 'Không tìm thấy hoạt động phù hợp.', role: 'Vai trò',
       actAdd: 'đã thêm', actEdit: 'đã sửa', actDel: 'đã xóa',
       entTransaction: 'giao dịch', entBudget: 'ngân sách', entAccount: 'ví',
       entGoal: 'mục tiêu', entRecurring: 'khoản định kỳ', entMember: 'thành viên', entHousehold: 'hộ gia đình',
@@ -250,6 +255,9 @@
       transfer: 'Transfer', transferBetween: 'Transfer between wallets', fromWallet: 'From wallet', toWallet: 'To wallet',
       transferDone: 'Transfer done', needTwoWallets: 'You need at least 2 wallets to transfer.',
       sameWallet: 'Source and destination must differ.', needAmount: 'Enter an amount.',
+      adjustBalance: 'Adjust balance', realBalance: 'Actual balance', balanceAdjustLabel: 'Balance adjustment',
+      balanceAdjusted: 'Balance updated', adjustHint: 'The app records an adjustment for the difference.',
+      walletHistory: 'Wallet history', balanceAfter: 'Balance after', noWalletHistory: 'No transactions in this wallet yet.',
       showBalance: 'Show balances', hideBalance: 'Hide balances',
       allCats: 'All categories', allTypes: 'Income & expense',
       budgetNotSet: 'No budget set yet.', noExpenseData: 'No expense data yet.',
@@ -300,6 +308,8 @@
       activity: 'Activity log',
       activityHint: 'History of add / edit / delete actions by household members.',
       activityEmpty: 'No activity yet.',
+      searchAct: 'Search by person, type, content…', activityDetail: 'Activity detail',
+      noFieldChanges: 'No field changes.', noActMatch: 'No matching activity found.', role: 'Role',
       actAdd: 'added', actEdit: 'edited', actDel: 'deleted',
       entTransaction: 'transaction', entBudget: 'budget', entAccount: 'wallet',
       entGoal: 'goal', entRecurring: 'recurring entry', entMember: 'member', entHousehold: 'household',
@@ -402,6 +412,7 @@
   let myRole = 'member'; // current user's role in the active household: 'owner' | 'admin' | 'member'
   let activityLog = [];      // [{userEmail, action, entity, summary, createdAt}] — lazy-loaded for the Activity page
   let activityLoading = false;
+  let activitySearch = '';   // client-side filter text for the Activity page
   let currentTab = 'overview';
   let settingsPage = null; // Settings sub-page key (null = root grouped menu)
   const CATS = window.Parser.CATEGORIES;
@@ -492,10 +503,16 @@
   }
 
   /* ============== Aggregations ============== */
+  // Balance-reconciliation entries: a normal income/expense whose only purpose is to snap a
+  // wallet's balance to reality. They MUST stay in balance math (accountBalance/allTimeBalance)
+  // but are excluded from every spending/income report so reconciliations don't distort stats.
+  const ADJUST_CATEGORY = '__balance_adjust__';
+  function isAdjust(tx) { return !!tx && tx.category === ADJUST_CATEGORY; }
   function inRange(s, e) { const a = ymd(s), b = ymd(e); return DATA.transactions.filter((tx) => tx.date >= a && tx.date <= b); }
   function totals(txs) {
     let income = 0, expense = 0;
     txs.forEach((tx) => {
+      if (isAdjust(tx)) return;                         // balance adjustments aren't real income/expense
       if (tx.type === 'income') income += tx.amount;
       else if (tx.type === 'expense') expense += tx.amount;
       // transfers move money between wallets — neither income nor expense
@@ -504,10 +521,19 @@
   }
   function byCategory(txs) {
     const o = {};
-    txs.forEach((tx) => { if (tx.type === 'expense') o[tx.category] = (o[tx.category] || 0) + tx.amount; });
+    txs.forEach((tx) => { if (tx.type === 'expense' && !isAdjust(tx)) o[tx.category] = (o[tx.category] || 0) + tx.amount; });
     return o;
   }
-  function allTimeBalance() { return totals(DATA.transactions).net; }
+  // Net of every transaction ever (for total balance). Includes balance adjustments (they DO
+  // move money) but not transfers (net zero) — kept independent of totals() on purpose.
+  function allTimeBalance() {
+    let net = 0;
+    DATA.transactions.forEach((tx) => {
+      if (tx.type === 'income') net += tx.amount;
+      else if (tx.type === 'expense') net -= tx.amount;
+    });
+    return net;
+  }
   function totalBudget() { return Object.values(DATA.budgets).reduce((a, b) => a + (b || 0), 0); }
 
   /* ============== Streak & reminders ============== */
@@ -1459,10 +1485,20 @@
 
   function txActions(tx) {
     if (!canEditTx(tx)) return '';
-    return '<div class="tx-actions"><button class="icon-btn" data-act="edit" data-id="' + tx.id + '">' + icon('edit') + '</button>' +
+    // The whole row is tappable to edit now, so we only surface delete here (declutters the list).
+    return '<div class="tx-actions">' +
       '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div>';
   }
   function txRow(tx) {
+    if (isAdjust(tx)) {
+      const sign = tx.type === 'income' ? '+' : '−';
+      return '<div class="tx-row" data-id="' + tx.id + '">' +
+        '<div class="tx-ic ' + tx.type + '">' + icon('edit') + '</div>' +
+        '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + t('balanceAdjustLabel') + '</span></div>' +
+        '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+        '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
+        txActions(tx) + '</div></div>';
+    }
     if (tx.type === 'transfer') {
       const from = accountById(tx.accountId);
       const to = accountById(tx.toAccountId);
@@ -1545,7 +1581,7 @@
     if (!accs.length) return '';
     const cards = accs.map((a) => {
       const b = accountBalance(a.id);
-      return '<div class="wallet-card">' +
+      return '<div class="wallet-card" role="button" tabindex="0" data-wallethist="' + esc(a.id) + '" title="' + t('walletHistory') + '">' +
         '<div class="wallet-top">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
         '<div class="wallet-bal ' + (b < 0 ? 'neg' : '') + '">' + mask(fmtShort(b)) + '</div></div>';
     }).join('');
@@ -1563,7 +1599,7 @@
     const remain = budget - mt.expense;
     const daysInMonth = endOfMonth(now).getDate();
     const dayNow = now.getDate();
-    const todayTx = DATA.transactions.filter((x) => x.date === ymd(now) && x.type === 'expense');
+    const todayTx = DATA.transactions.filter((x) => x.date === ymd(now) && x.type === 'expense' && !isAdjust(x));
     const spentToday = todayTx.reduce((a, b) => a + b.amount, 0);
     const avgDay = dayNow ? mt.expense / dayNow : 0;
 
@@ -1670,7 +1706,7 @@
     if (wkExp > lastWkExp && lastWkExp > 0) out.push(alertItem('warn', 'trendUp', t('overspentWeek')));
     else if (wkExp < lastWkExp) out.push(alertItem('good', 'piggy', t('savedWell')));
     // biggest expense this week
-    const big = wkTx.filter((x) => x.type === 'expense').sort((a, b) => b.amount - a.amount)[0];
+    const big = wkTx.filter((x) => x.type === 'expense' && !isAdjust(x)).sort((a, b) => b.amount - a.amount)[0];
     if (big) out.push(alertItem('info', 'spark', t('biggestWeek') + ': <b>' + esc(big.note) + '</b> · ' + fmtShort(big.amount)));
     if (!out.length) out.push(alertItem('good', 'check', t('noAlerts')));
     return out.join('');
@@ -1751,7 +1787,7 @@
   function autoInsights(anchor) {
     const out = [];
     const mk = monthKey(anchor);
-    const catOf = (key) => { const o = {}; DATA.transactions.forEach((x) => { if (x.type === 'expense' && x.date.slice(0, 7) === key) o[x.category] = (o[x.category] || 0) + x.amount; }); return o; };
+    const catOf = (key) => { const o = {}; DATA.transactions.forEach((x) => { if (x.type === 'expense' && !isAdjust(x) && x.date.slice(0, 7) === key) o[x.category] = (o[x.category] || 0) + x.amount; }); return o; };
     const cur = catOf(mk);
     const monthExp = Object.values(cur).reduce((a, b) => a + b, 0);
     if (!monthExp) return out;
@@ -1766,7 +1802,7 @@
     }
     // 2) weekend vs weekday daily average
     const byDay = {};
-    DATA.transactions.forEach((x) => { if (x.type === 'expense' && x.date.slice(0, 7) === mk) byDay[x.date] = (byDay[x.date] || 0) + x.amount; });
+    DATA.transactions.forEach((x) => { if (x.type === 'expense' && !isAdjust(x) && x.date.slice(0, 7) === mk) byDay[x.date] = (byDay[x.date] || 0) + x.amount; });
     let we = 0, wec = 0, wd = 0, wdc = 0;
     Object.keys(byDay).forEach((d) => { const g = new Date(d + 'T00:00:00').getDay(); if (g === 0 || g === 6) { we += byDay[d]; wec++; } else { wd += byDay[d]; wdc++; } });
     if (wec && wdc) { const r = (we / wec) / (wd / wdc); if (r >= 1.3) out.push({ kind: 'info', ic: 'calendar', text: t('insWeekend').replace('{n}', r.toFixed(1)) }); }
@@ -1791,7 +1827,7 @@
     const days = endOfMonth(anchor).getDate();
     const byDay = {}; let maxv = 0;
     DATA.transactions.forEach((tx) => {
-      if (tx.type !== 'expense' || tx.date.slice(0, 7) !== mk) return;
+      if (tx.type !== 'expense' || isAdjust(tx) || tx.date.slice(0, 7) !== mk) return;
       const d = parseInt(tx.date.slice(8, 10), 10);
       byDay[d] = (byDay[d] || 0) + tx.amount;
       if (byDay[d] > maxv) maxv = byDay[d];
@@ -1827,7 +1863,7 @@
     } else {
       const days = endOfMonth(reportAnchor).getDate(); const weeks = Math.ceil(days / 7);
       for (let w = 0; w < weeks; w++) { labels.push(t('weekLabel') + ' ' + (w + 1)); inc.push(0); exp.push(0); }
-      txs.forEach((x) => { const day = parseInt(x.date.slice(8, 10), 10); const wi = Math.min(weeks - 1, Math.floor((day - 1) / 7)); if (x.type === 'income') inc[wi] += x.amount; else exp[wi] += x.amount; });
+      txs.forEach((x) => { if (isAdjust(x)) return; const day = parseInt(x.date.slice(8, 10), 10); const wi = Math.min(weeks - 1, Math.floor((day - 1) / 7)); if (x.type === 'income') inc[wi] += x.amount; else exp[wi] += x.amount; });
     }
     return { labels, inc, exp };
   }
@@ -1841,7 +1877,7 @@
       const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
       const ym = d.getFullYear() + '-' + pad(d.getMonth() + 1);
       const expense = DATA.transactions
-        .filter((x) => x.type === 'expense' && x.date.slice(0, 7) === ym)
+        .filter((x) => x.type === 'expense' && !isAdjust(x) && x.date.slice(0, 7) === ym)
         .reduce((a, b) => a + b.amount, 0);
       out.push({ ym: ym, label: t('moPrefix') + (d.getMonth() + 1), expense: expense });
     }
@@ -1991,7 +2027,7 @@
   function beneficiaryTotals(txs) {
     const by = {};
     txs.forEach((tx) => {
-      if (tx.type === 'transfer') return;
+      if (tx.type === 'transfer' || isAdjust(tx)) return;
       const k = tx.beneficiaryId || '';
       const b = by[k] || (by[k] = { expense: 0, income: 0 }); // unknown id (left household) still counted
       if (tx.type === 'income') b.income += tx.amount; else b.expense += tx.amount;
@@ -2037,7 +2073,7 @@
     const pp = beneficiaryTotals(txs);
     const incColor = getComputedStyle(document.body).getPropertyValue('--income').trim() || '#10b981';
     const expColor = getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444';
-    const top = txs.filter((x) => x.type === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const top = txs.filter((x) => x.type === 'expense' && !isAdjust(x)).sort((a, b) => b.amount - a.amount).slice(0, 5);
 
     setTimeout(() => {
       window.Charts.donut('repDonut', 'repLegend', byCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); currentTab = 'transactions'; render(); }, catLabel);
@@ -2117,7 +2153,7 @@
     const dates = Object.keys(groups).sort().reverse();
     if (!dates.length) body = '<div class="empty">' + t('noTx') + '</div>';
     else dates.forEach((d) => {
-      const dayExp = groups[d].filter((x) => x.type === 'expense').reduce((a, b) => a + b.amount, 0);
+      const dayExp = groups[d].filter((x) => x.type === 'expense' && !isAdjust(x)).reduce((a, b) => a + b.amount, 0);
       body += '<div class="day-head"><span>' + d + '</span><span class="day-sum">−' + fmtShort(dayExp) + '</span></div>';
       body += groups[d].map(txRow).join('');
     });
@@ -2201,6 +2237,13 @@
     const a = acc || { id: '', name: '', type: 'cash', openingBalance: 0 };
     const typeOpts = ACCOUNT_TYPES.map((ty) => '<option value="' + ty + '"' + (ty === a.type ? ' selected' : '') + '>' + accountTypeLabel(ty) + '</option>').join('');
     const balHtml = acc ? '<span class="w-bal">= ' + fmtShort(accountBalance(a.id)) + '</span>' : '';
+    // Existing wallets get quick actions: snap balance to reality, and view this wallet's history.
+    // "Đổi số dư" is asset-only — the positive-only money input can't express a liability's owed amount.
+    const wAdjustBtn = (acc && !LIABILITY_TYPES.includes(a.type))
+      ? '<button type="button" class="ghost-btn sm w-adjust" data-acc="' + esc(a.id) + '">' + icon('edit') + ' ' + t('adjustBalance') + '</button>' : '';
+    const wActs = acc ? '<div class="wallet-edit-acts">' + wAdjustBtn +
+      '<button type="button" class="ghost-btn sm w-history" data-acc="' + esc(a.id) + '">' + icon('clock') + ' ' + t('walletHistory') + '</button>' +
+      '</div>' : '';
     const isLia = LIABILITY_TYPES.includes(a.type);
     // Star toggles this wallet as the household default (the one pre-selected on entry).
     // The chosen default is applied on Save. New (unsaved) rows can't be default yet.
@@ -2217,6 +2260,7 @@
       '<div class="wallet-edit-sub"><label>' + t('openingBalance') + '</label>' +
       '<input type="text" inputmode="numeric" class="w-open js-money" value="' + groupMoney(a.openingBalance || 0) + '"/>' + balHtml +
       '</div>' +
+      wActs +
       '<div class="wallet-credit-fields' + (isLia ? '' : ' hidden') + '">' +
       '<div class="wc-grid">' +
       '<label>' + t('creditLimit') + '<input type="text" inputmode="numeric" class="w-limit js-money" value="' + groupMoney(a.creditLimit != null ? a.creditLimit : '') + '"/></label>' +
@@ -2342,7 +2386,7 @@
       case 'transactions': {
         if (d.type === 'transfer') return t('transfer') + (d.amount != null ? ' · ' + fmtShort(d.amount) : '');
         const parts = [];
-        if (d.category) parts.push(catLabel(d.category));
+        if (d.category) parts.push(d.category === ADJUST_CATEGORY ? t('balanceAdjustLabel') : catLabel(d.category));
         if (d.amount != null) parts.push(fmtShort(d.amount));
         let s = parts.join(' · ');
         if (d.note) s += ' — ' + d.note;
@@ -2362,18 +2406,82 @@
     if (isNaN(dt.getTime())) return '';
     return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate()) + ' ' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
   }
+  // ----- Activity detail: turn a row snapshot into readable field/value lines -----
+  const ACT_HIDE_KEYS = new Set(['id', 'household_id', 'created_at', 'updated_at', 'recurring_id', 'raw_input', 'sort_order', 'user_id', 'created_by']);
+  const ACT_MONEY_KEYS = new Set(['amount', 'opening_balance', 'target_amount', 'credit_limit', 'current_amount', 'saved_amount']);
+  function actFieldLabel(key) {
+    const m = {
+      amount: t('amount'), type: t('walletType'), category: t('category'), note: t('note'),
+      date: t('date'), time: t('time'), name: t('walletName'), role: t('role'), email: 'Email',
+      opening_balance: t('openingBalance'), target_amount: t('amount'), credit_limit: t('creditLimit'),
+      account_id: t('fromWallet'), to_account_id: t('toWallet'), beneficiary_id: t('spentFor'),
+    };
+    return m[key] || key;
+  }
+  function actFieldValue(key, val) {
+    if (val == null || val === '') return '—';
+    if (ACT_MONEY_KEYS.has(key)) return fmtShort(Number(val) || 0);
+    if (key === 'category') return val === ADJUST_CATEGORY ? t('balanceAdjustLabel') : catLabel(val);
+    if (key === 'account_id' || key === 'to_account_id') { const a = accountById(val); return a ? a.name : String(val).slice(0, 8); }
+    if (key === 'beneficiary_id') return memberName(val);
+    if (key === 'type') return val === 'income' ? t('income') : (val === 'expense' ? t('expense') : t('transfer'));
+    if (key === 'role') return roleLabel(val);
+    if (typeof val === 'boolean') return val ? '✓' : '—';
+    return String(val);
+  }
+  // Field/value rows for one log entry: changed fields (before → after) for edits, else the full snapshot.
+  function activityDetailHtml(e) {
+    const after = (e.summary && e.summary.data) || {};
+    const before = (e.summary && e.summary.prev) || null;
+    const keys = Object.keys(after).filter((k) => !ACT_HIDE_KEYS.has(k));
+    const rows = [];
+    if (e.action === 'update' && before) {
+      keys.forEach((k) => {
+        if (String(after[k]) === String(before[k])) return;
+        rows.push('<div class="act-d-row"><span class="act-d-k">' + esc(actFieldLabel(k)) + '</span>' +
+          '<span class="act-d-v"><s>' + esc(actFieldValue(k, before[k])) + '</s> → ' + esc(actFieldValue(k, after[k])) + '</span></div>');
+      });
+      if (!rows.length) return '<div class="act-d-row"><span class="act-d-k">' + t('noFieldChanges') + '</span></div>';
+    } else {
+      keys.forEach((k) => {
+        if (after[k] == null || after[k] === '') return;
+        rows.push('<div class="act-d-row"><span class="act-d-k">' + esc(actFieldLabel(k)) + '</span>' +
+          '<span class="act-d-v">' + esc(actFieldValue(k, after[k])) + '</span></div>');
+      });
+    }
+    return rows.join('') || '<div class="act-d-row"><span class="act-d-k">—</span></div>';
+  }
+  function openActivityDetail(id) {
+    const e = activityLog.find((x) => x.id === id); if (!e) return;
+    const verb = e.action === 'insert' ? t('actAdd') : (e.action === 'delete' ? t('actDel') : t('actEdit'));
+    const who = e.userEmail ? e.userEmail.split('@')[0] : t('unknownMember');
+    const actCls = e.action === 'insert' ? 'add' : (e.action === 'delete' ? 'del' : 'edit');
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
+      '<div class="card-title">' + icon(entityIcon(e.entity)) + ' ' + t('activityDetail') + '</div>' +
+      '<div class="act-d-head"><span class="act-badge ' + actCls + '">' + verb + '</span> ' + esc(entityLabel(e.entity)) +
+      ' · <b>' + esc(who) + '</b> · ' + esc(fmtDateTime(e.createdAt)) + '</div>' +
+      '<div class="act-d-body">' + activityDetailHtml(e) + '</div>' +
+      '<div class="modal-actions"><button class="ghost-btn" id="adClose">' + t('cancel') + '</button></div>' +
+      '</div></div>';
+    document.body.appendChild(wrap.firstChild);
+    const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
+    document.getElementById('adClose').addEventListener('click', close);
+    document.getElementById('modalBackdrop').addEventListener('click', (ev) => { if (ev.target.id === 'modalBackdrop') close(); });
+  }
   function activityRowHtml(e) {
     const verb = e.action === 'insert' ? t('actAdd') : (e.action === 'delete' ? t('actDel') : t('actEdit'));
     const who = e.userEmail ? e.userEmail.split('@')[0] : t('unknownMember');
     const desc = describeActivity(e);
     const actCls = e.action === 'insert' ? 'add' : (e.action === 'delete' ? 'del' : 'edit');
-    return '<div class="activity-row">' +
+    const search = (who + ' ' + entityLabel(e.entity) + ' ' + verb + ' ' + (desc || '')).toLowerCase();
+    return '<div class="activity-row" data-actentry="' + esc(e.id) + '" data-search="' + esc(search) + '">' +
       '<div class="act-ic ' + actCls + '">' + icon(entityIcon(e.entity)) + '</div>' +
       '<div class="act-main">' +
       '<div class="act-title"><b>' + esc(who) + '</b> ' + verb + ' ' + esc(entityLabel(e.entity)) + '</div>' +
       (desc ? '<div class="act-desc">' + esc(desc) + '</div>' : '') +
       '<div class="act-when">' + esc(fmtDateTime(e.createdAt)) + '</div>' +
-      '</div></div>';
+      '</div><span class="ios-row-chev">' + icon('right') + '</span></div>';
   }
 
   // A single Settings sub-page (reuses the existing form markup + element IDs).
@@ -2441,10 +2549,14 @@
         const list = activityLoading
           ? '<div class="empty">…</div>'
           : (activityLog.length
-            ? '<div class="activity-list">' + activityLog.map(activityRowHtml).join('') + '</div>'
+            ? '<div class="activity-list">' + activityLog.map(activityRowHtml).join('') + '</div>' +
+              '<div class="empty" id="actNoMatch" style="display:none">' + t('noActMatch') + '</div>'
             : '<div class="empty">' + t('activityEmpty') + '</div>');
         body = '<div class="hint">' + t('activityHint') + '</div>' +
-          '<button id="refreshActBtn" class="ghost-btn">' + icon('refresh') + ' ' + t('refresh') + '</button>' +
+          '<div class="act-toolbar">' +
+          '<input id="actSearch" type="text" class="act-search" placeholder="' + t('searchAct') + '" value="' + esc(activitySearch) + '"/>' +
+          '<button id="refreshActBtn" class="ghost-btn sm" title="' + t('refresh') + '">' + icon('refresh') + '</button>' +
+          '</div>' +
           list;
       }
     } else if (page === 'account') {
@@ -2571,10 +2683,119 @@
     });
   }
 
+  /* ============== Adjust balance & wallet history ============== */
+  // "Đổi số dư": snap an asset wallet to its real balance by recording an adjustment transaction
+  // for the difference (income when up, expense when down). Keeps the ledger intact, dated and
+  // attributed, reversible, and excluded from spending reports (category = ADJUST_CATEGORY).
+  function openAdjustBalance(id) {
+    const acc = accountById(id); if (!acc) return;
+    if (!canManageConfig()) { toast(t('cantEditOthersTx'), 'warn'); return; }
+    const cur = accountBalance(id);
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
+      '<div class="card-title">' + icon('edit') + ' ' + t('adjustBalance') + ' · ' + esc(acc.name) + '</div>' +
+      '<label>' + t('realBalance') + '</label><input id="abAmount" type="text" inputmode="numeric" class="js-money" value="' + groupMoney(cur > 0 ? cur : 0) + '"/>' +
+      '<div class="wc-hint">' + t('adjustHint') + '</div>' +
+      '<div class="modal-actions"><button class="ghost-btn" id="abCancel">' + t('cancel') + '</button>' +
+      '<button class="primary-btn" id="abSave">' + t('save') + '</button></div></div></div>';
+    document.body.appendChild(wrap.firstChild);
+    const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
+    document.getElementById('abCancel').addEventListener('click', close);
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
+    document.getElementById('abSave').addEventListener('click', async () => {
+      const target = readMoney(document.getElementById('abAmount'));
+      const delta = target - cur;
+      if (!delta) { close(); return; }              // already correct — nothing to record
+      const today = ymd(new Date());
+      try {
+        const saved = await window.Store.addTransaction({
+          date: today, time: new Date().toTimeString().slice(0, 5),
+          type: delta > 0 ? 'income' : 'expense', category: ADJUST_CATEGORY,
+          note: t('balanceAdjustLabel'), amount: Math.abs(delta), accountId: id, rawInput: '',
+        });
+        DATA.transactions.unshift(saved);
+        close(); toast(t('balanceAdjusted'), 'success'); render();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
+  }
+
+  // Every transaction that touched a wallet, oldest→newest, each stamped with the running
+  // balance after it. Returned newest-first for display. delta: money into (+) / out of (−) the wallet.
+  function walletHistory(id) {
+    const acc = accountById(id);
+    const rows = DATA.transactions.filter((tx) =>
+      tx.accountId === id || (tx.type === 'transfer' && tx.toAccountId === id));
+    rows.sort((a, b) => {
+      const ka = a.date + (a.time || '') + (a.createdAt || '');
+      const kb = b.date + (b.time || '') + (b.createdAt || '');
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+    let bal = acc ? (acc.openingBalance || 0) : 0;
+    const out = rows.map((tx) => {
+      let delta;
+      if (tx.type === 'transfer') delta = tx.toAccountId === id ? tx.amount : -tx.amount;
+      else delta = tx.type === 'income' ? tx.amount : -tx.amount;
+      bal += delta;
+      return { tx: tx, delta: delta, balanceAfter: bal };
+    });
+    return out.reverse();
+  }
+
+  function walletHistoryRow(h, id) {
+    const tx = h.tx;
+    const sign = h.delta >= 0 ? '+' : '−';
+    const amtCls = h.delta >= 0 ? 'income' : 'expense';
+    let label, ic;
+    if (tx.type === 'transfer') {
+      const other = accountById(tx.toAccountId === id ? tx.accountId : tx.toAccountId);
+      const arrow = tx.toAccountId === id ? '← ' : '→ ';
+      label = arrow + esc(other ? other.name : t('unassignedWallet'));
+      ic = 'transfer';
+    } else if (isAdjust(tx)) {
+      label = t('balanceAdjustLabel'); ic = 'edit';
+    } else {
+      label = esc(catLabel(tx.category)); ic = null;
+    }
+    const editable = !isAdjust(tx) && canEditTx(tx);
+    return '<div class="tx-row wh-row' + (editable ? ' wh-edit' : '') + '"' + (editable ? ' data-whedit="' + tx.id + '"' : '') + '>' +
+      '<div class="tx-ic ' + (h.delta >= 0 ? 'income' : 'expense') + '">' + (ic ? icon(ic) : catIcon(tx.category)) + '</div>' +
+      '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + label + '</span></div>' +
+      '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+      '<div class="tx-right"><div class="tx-amount ' + amtCls + '">' + sign + mask(fmtShort(Math.abs(h.delta))) + '</div>' +
+      '<div class="wh-after">' + t('balanceAfter') + ' ' + mask(fmtShort(h.balanceAfter)) + '</div></div></div>';
+  }
+
+  // "Lịch sử ví": a drawer listing every movement of one wallet with who/when and running balance.
+  function openWalletHistory(id) {
+    const acc = accountById(id); if (!acc) return;
+    const hist = walletHistory(id);
+    const canAdjust = canManageConfig() && !LIABILITY_TYPES.includes(acc.type);
+    const body = hist.length
+      ? hist.map((h) => walletHistoryRow(h, id)).join('')
+      : '<div class="empty">' + t('noWalletHistory') + '</div>';
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal wh-modal">' +
+      '<div class="wh-head"><div class="wh-title">' + accountTypeIcon(acc.type) + ' <span>' + esc(acc.name) + '</span></div>' +
+      '<div class="wh-bal ' + (accountBalance(id) < 0 ? 'neg' : '') + '">' + mask(fmtShort(accountBalance(id))) + '</div></div>' +
+      (canAdjust ? '<div class="wh-actions"><button type="button" class="ghost-btn sm" id="whAdjust">' + icon('edit') + ' ' + t('adjustBalance') + '</button></div>' : '') +
+      '<div class="tx-list wh-list">' + body + '</div>' +
+      '<div class="modal-actions"><button class="ghost-btn" id="whClose">' + t('cancel') + '</button></div>' +
+      '</div></div>';
+    document.body.appendChild(wrap.firstChild);
+    const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
+    document.getElementById('whClose').addEventListener('click', close);
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
+    const adj = document.getElementById('whAdjust');
+    if (adj) adj.addEventListener('click', () => { close(); openAdjustBalance(id); });
+    document.querySelectorAll('#modalBackdrop [data-whedit]').forEach((r) =>
+      r.addEventListener('click', () => { close(); openEdit(r.dataset.whedit); }));
+  }
+
   /* ============== Edit modal ============== */
   function openEdit(id) {
     const tx = DATA.transactions.find((x) => x.id === id); if (!tx) return;
     if (!canEditTx(tx)) { toast(t('cantEditOthersTx'), 'warn'); return; }
+    if (isAdjust(tx)) return;                          // balance adjustments have no editable fields
     if (tx.type === 'transfer') { openTransfer(tx); return; }
     const catOpts = CATS.map((c) => '<option value="' + c + '"' + (c === tx.category ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
     const wrap = document.createElement('div');
@@ -2677,10 +2898,22 @@
     const ft = document.getElementById('fType'); if (ft) ft.addEventListener('change', () => { filterType = ft.value; render(); });
     // tx actions
     document.querySelectorAll('.tx-actions .icon-btn').forEach((b) => b.addEventListener('click', () => { b.dataset.act === 'del' ? deleteTx(b.dataset.id) : openEdit(b.dataset.id); }));
+    // tap a transaction row (anywhere but its delete button / attachment badge) to open its editor
+    document.querySelectorAll('.tx-row[data-id]').forEach((row) => row.addEventListener('click', (e) => {
+      if (e.target.closest('.tx-actions') || e.target.closest('[data-attview]')) return;
+      const tx = DATA.transactions.find((x) => x.id === row.dataset.id);
+      if (!tx || isAdjust(tx) || !canEditTx(tx)) return;
+      openEdit(row.dataset.id);
+    }));
     // evidence badge → open the read-only photo viewer (anyone in the household)
     document.querySelectorAll('[data-attview]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); openAttachmentViewer(b.dataset.attview, 0); }));
     // goto links
     document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => { currentTab = b.dataset.goto; render(); }));
+    // overview wallet cards → open that wallet's history
+    document.querySelectorAll('[data-wallethist]').forEach((c) => {
+      c.addEventListener('click', () => openWalletHistory(c.dataset.wallethist));
+      c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWalletHistory(c.dataset.wallethist); } });
+    });
     // privacy: toggle balance visibility (eye icon on the hero)
     const eye = document.getElementById('eyeToggle');
     if (eye) eye.addEventListener('click', () => {
@@ -2714,6 +2947,13 @@
         const cf = row && row.querySelector('.wallet-credit-fields');
         if (cf) cf.classList.toggle('hidden', !LIABILITY_TYPES.includes(e.target.value));
       }
+    });
+    // wallets: quick actions on a row — adjust balance / view history
+    if (weBox) weBox.addEventListener('click', (e) => {
+      const adj = e.target && e.target.closest('.w-adjust');
+      if (adj) { openAdjustBalance(adj.dataset.acc); return; }
+      const his = e.target && e.target.closest('.w-history');
+      if (his) { openWalletHistory(his.dataset.acc); return; }
     });
     // wallets: tap the star to choose the default wallet (single selection, applied on Save)
     if (weBox) weBox.addEventListener('click', (e) => {
@@ -2975,7 +3215,7 @@
     document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', async () => {
       settingsPage = b.dataset.page;
       if (settingsPage === 'activity') {
-        activityLog = []; activityLoading = true; render(); // show the loading state first
+        activityLog = []; activityLoading = true; activitySearch = ''; render(); // show the loading state first
         await loadActivity();
       }
       render();
@@ -2983,6 +3223,23 @@
     // Activity: manual refresh
     const refAct = document.getElementById('refreshActBtn');
     if (refAct) refAct.addEventListener('click', async () => { await loadActivity(); render(); });
+    // Activity: live search filter (in-place DOM filter → keeps input focus, no re-render)
+    const actSearch = document.getElementById('actSearch');
+    const applyActFilter = () => {
+      const q = (actSearch ? actSearch.value : '').trim().toLowerCase();
+      activitySearch = actSearch ? actSearch.value : '';
+      let shown = 0;
+      document.querySelectorAll('.activity-row').forEach((r) => {
+        const match = !q || (r.dataset.search || '').indexOf(q) >= 0;
+        r.style.display = match ? '' : 'none';
+        if (match) shown++;
+      });
+      const nm = document.getElementById('actNoMatch');
+      if (nm) nm.style.display = shown ? 'none' : '';
+    };
+    if (actSearch) { actSearch.addEventListener('input', applyActFilter); if (activitySearch) applyActFilter(); }
+    // Activity: tap an entry to see exactly what was added / edited / deleted
+    document.querySelectorAll('[data-actentry]').forEach((r) => r.addEventListener('click', () => openActivityDetail(r.dataset.actentry)));
     // Settings: back from a sub-page to the root menu
     const back = document.querySelector('[data-back]');
     if (back) back.addEventListener('click', () => { settingsPage = null; render(); });
