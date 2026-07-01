@@ -338,6 +338,16 @@
       dueDate: g.due_date || null,
     };
   }
+  function mapMonthlyReport(r) {
+    return {
+      id: r.id,
+      period: r.period,
+      metrics: r.metrics || {},
+      aiReview: r.ai_review || null,
+      closedBy: r.closed_by || null,
+      closedAt: r.closed_at,
+    };
+  }
   function mapAttachment(a) {
     return {
       id: a.id,
@@ -396,8 +406,11 @@
       .then((r) => (r.error ? [] : (r.data || []).map(mapRecurring))).catch(() => []);
     const attachments = await sb.from('transaction_attachments').select('*').eq('household_id', hid)
       .then((r) => (r.error ? [] : (r.data || []).map(mapAttachment))).catch(() => []);
+    const monthlyReports = await sb.from('monthly_reports').select('*').eq('household_id', hid)
+      .order('period', { ascending: false })
+      .then((r) => (r.error ? [] : (r.data || []).map(mapMonthlyReport))).catch(() => []);
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports };
     idbSet('data', data).catch(() => {});
     return data;
   }
@@ -725,6 +738,24 @@
     if (error) throw new Error(error.message);
   }
 
+  /* ---------------- Monthly close (chốt sổ) ---------------- */
+  // Chốt / chốt lại một tháng: upsert theo (household_id, period). Ghi đè bản cũ.
+  async function upsertMonthlyReport({ period, metrics, aiReview }) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const user = await getUser();
+    const { data, error } = await sb.from('monthly_reports').upsert({
+      household_id: household.id,
+      period: period,
+      metrics: metrics || {},
+      ai_review: aiReview || null,
+      closed_by: user ? user.id : null,
+      closed_at: new Date().toISOString(),
+    }, { onConflict: 'household_id,period' }).select().single();
+    if (error) throw new Error(error.message);
+    return mapMonthlyReport(data);
+  }
+
   /* ---------------- Activity log (audit trail) ---------------- */
   // Read the household's activity log (newest first). Owners/admins only — RLS returns
   // nothing for plain members. Tolerates the table being absent (before the schema re-run).
@@ -765,6 +796,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_attachments', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports', filter: 'household_id=eq.' + hid }, onChange)
       .subscribe();
     return channel;
   }
@@ -813,6 +845,7 @@
     addRecurring,
     updateRecurring,
     deleteRecurring,
+    upsertMonthlyReport,
     subscribeChanges,
     unsubscribeChanges,
     DEFAULT_BUDGETS,

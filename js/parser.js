@@ -456,6 +456,110 @@
     }));
   }
 
+  /* ---------------------------------------------------------------
+   *  Monthly close AI review — takes AGGREGATED figures (never raw
+   *  transactions), returns {summary, observations[], suggestions[]}.
+   *  Grounding rules live in REVIEW_SYSTEM; JSON is guaranteed by the
+   *  Gemini responseSchema (Claude falls back to extractJson).
+   * --------------------------------------------------------------- */
+  const REVIEW_SYSTEM =
+    'Bạn là trợ lý tài chính gia đình, nói tiếng Việt, thân thiện và thực tế.\n' +
+    'Bạn nhận SỐ LIỆU ĐÃ TỔNG HỢP của một tháng (đơn vị VND). Nhiệm vụ: diễn giải + đề xuất.\n' +
+    'TUYỆT ĐỐI KHÔNG tự tính lại hay bịa thêm con số/danh mục nào ngoài dữ liệu được cấp.\n' +
+    'KHÔNG phán xét ("lãng phí"). Gọi các khoản có thể giảm là "khoản linh hoạt có thể cân nhắc".\n' +
+    'observations: 2–4 nhận xét NGẮN, cụ thể, gắn với số liệu thật (vd "chi Ăn uống +18% so tháng trước").\n' +
+    'suggestions: 2–3 hành động KHẢ THI, ưu tiên rõ; estSaving là số nguyên VND ước tính (có thể null nếu không chắc).\n' +
+    'Ngắn gọn, không sáo rỗng. Chỉ trả về JSON đúng schema.';
+
+  const REVIEW_SCHEMA = {
+    type: 'OBJECT',
+    properties: {
+      summary: { type: 'STRING' },
+      observations: { type: 'ARRAY', items: { type: 'STRING' } },
+      suggestions: { type: 'ARRAY', items: {
+        type: 'OBJECT',
+        properties: {
+          action: { type: 'STRING' },
+          category: { type: 'STRING', nullable: true },
+          estSaving: { type: 'INTEGER', nullable: true },
+          priority: { type: 'STRING', enum: ['high', 'medium', 'low'] },
+        },
+        required: ['action', 'priority'],
+      } },
+    },
+    required: ['summary', 'observations', 'suggestions'],
+  };
+
+  function normalizeReview(parsed) {
+    parsed = parsed || {};
+    const obs = Array.isArray(parsed.observations) ? parsed.observations.map((x) => String(x).trim()).filter(Boolean).slice(0, 4) : [];
+    const sug = Array.isArray(parsed.suggestions) ? parsed.suggestions.slice(0, 3).map((s) => ({
+      action: String((s && s.action) || '').trim(),
+      category: s && s.category ? String(s.category) : null,
+      estSaving: s && s.estSaving != null ? toIntAmount(s.estSaving) : null,
+      priority: s && ['high', 'medium', 'low'].includes(s.priority) ? s.priority : 'medium',
+    })).filter((s) => s.action) : [];
+    return { summary: String(parsed.summary || '').trim(), observations: obs, suggestions: sug };
+  }
+
+  async function reviewMonthGemini(summary, apiKey) {
+    const model = 'gemini-2.5-flash';
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: REVIEW_SYSTEM }] },
+        contents: [{ role: 'user', parts: [{ text: 'SỐ LIỆU THÁNG (VND):\n' + JSON.stringify(summary) }] }],
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json', responseSchema: REVIEW_SCHEMA },
+      }),
+    });
+    if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Gemini API ' + resp.status + ': ' + e); }
+    const data = await resp.json();
+    const cand = (data.candidates || [])[0];
+    const parts = cand && cand.content && cand.content.parts ? cand.content.parts : [];
+    return normalizeReview(extractJson(parts.map((p) => p.text || '').join(''), 'Gemini'));
+  }
+
+  async function reviewMonthClaude(summary, apiKey) {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json', 'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5', max_tokens: 700, system: REVIEW_SYSTEM,
+        messages: [{ role: 'user', content: 'SỐ LIỆU THÁNG (VND):\n' + JSON.stringify(summary) + '\nChỉ trả về JSON.' }],
+      }),
+    });
+    if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Claude API ' + resp.status + ': ' + e); }
+    const data = await resp.json();
+    const tb = (data.content || []).find((b) => b.type === 'text');
+    return normalizeReview(extractJson(tb ? tb.text : '', 'Claude'));
+  }
+
+  // True when any AI key is configured (Gemini or Claude).
+  function aiReviewAvailable() {
+    const cfg = window.CONFIG || {};
+    return !!(cfg.GEMINI_API_KEY || cfg.ANTHROPIC_API_KEY);
+  }
+
+  // Gemini (free) → Claude. Throws if no key or all fail (UI shows a toast).
+  async function reviewMonth(summary) {
+    const cfg = window.CONFIG || {};
+    let lastErr = null;
+    if (cfg.GEMINI_API_KEY) {
+      try { return await reviewMonthGemini(summary, cfg.GEMINI_API_KEY); }
+      catch (err) { lastErr = err; console.warn('Gemini review lỗi, thử cách khác:', err.message); }
+    }
+    if (cfg.ANTHROPIC_API_KEY) {
+      try { return await reviewMonthClaude(summary, cfg.ANTHROPIC_API_KEY); }
+      catch (err) { lastErr = err; console.warn('Claude review lỗi:', err.message); }
+    }
+    throw lastErr || new Error('Chưa cấu hình API key để tạo nhận xét');
+  }
+
   // Export to global
   window.Parser = {
     parseTransaction,
@@ -466,6 +570,8 @@
     parseMany,
     parseImageReceipt,
     imageOcrAvailable,
+    reviewMonth,
+    aiReviewAvailable,
     MAX_ENTRIES,
     CATEGORIES,
   };

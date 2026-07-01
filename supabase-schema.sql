@@ -407,6 +407,38 @@ begin
 end $$;
 
 -- =====================================================================
+--  Monthly close — một snapshot "chốt sổ" cho mỗi (hộ, tháng).
+--  metrics: số liệu do app tính (nguồn sự thật để render lại báo cáo đã chốt).
+--  ai_review: nhận xét & đề xuất từ AI (có thể null).
+--  Soft close: KHÔNG khóa giao dịch; "chốt lại" = upsert ghi đè theo (household_id, period).
+--  Mọi thành viên đọc; chỉ owner/admin chốt/chốt lại. An toàn chạy lại.
+-- =====================================================================
+create table if not exists public.monthly_reports (
+  id            uuid primary key default gen_random_uuid(),
+  household_id  uuid not null references public.households(id) on delete cascade,
+  period        text not null,                 -- 'YYYY-MM'
+  metrics       jsonb not null default '{}'::jsonb,
+  ai_review     jsonb,
+  closed_by     uuid references auth.users(id) on delete set null,
+  closed_at     timestamptz not null default now(),
+  created_at    timestamptz not null default now(),
+  unique (household_id, period)
+);
+create index if not exists idx_monthly_reports_hh on public.monthly_reports (household_id, period desc);
+alter table public.monthly_reports enable row level security;
+drop policy if exists monthly_reports_select on public.monthly_reports;
+create policy monthly_reports_select on public.monthly_reports for select
+  using (household_id in (select public.user_households()));
+drop policy if exists monthly_reports_write on public.monthly_reports;
+create policy monthly_reports_write on public.monthly_reports for all
+  using (public.is_household_admin(household_id))
+  with check (public.is_household_admin(household_id));
+do $$
+begin
+  begin alter publication supabase_realtime add table public.monthly_reports; exception when duplicate_object then null; end;
+end $$;
+
+-- =====================================================================
 --  Activity log — an immutable audit trail of every add/edit/delete a member
 --  performs across the household's data. Written ONLY by the log_activity()
 --  trigger (SECURITY DEFINER), so clients can never forge, change, or delete

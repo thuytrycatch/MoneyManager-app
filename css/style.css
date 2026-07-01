@@ -920,3 +920,42 @@ main { padding: 4px 12px 92px; }
 .ocr-btn { width: 100%; margin-top: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .ocr-btn .ic { width: 16px; height: 16px; }
 .ocr-btn:disabled { opacity: .6; cursor: default; }
+
+/* ============== Monthly close (chốt sổ) ============== */
+.close-card { display: flex; flex-direction: column; gap: 10px; }
+.close-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.close-actions button { flex: 1 1 auto; }
+/* Modal: scroll the report body, keep the footer pinned */
+.close-modal { max-height: 88vh; display: flex; flex-direction: column; }
+.close-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.close-body .section-title { margin-top: 18px; }
+.close-cmp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; }
+.close-cats, .close-budget, .close-rec { display: flex; flex-direction: column; gap: 8px; }
+.close-cat-row { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.close-cat-row .ic { width: 16px; height: 16px; color: var(--text-secondary); flex-shrink: 0; }
+.close-cat-row .cc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.close-cat-row .cc-amt { font-weight: 700; white-space: nowrap; }
+.close-movers { display: flex; flex-direction: column; gap: 6px; }
+.close-mover { font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+.close-mover .ic { width: 15px; height: 15px; flex-shrink: 0; }
+.close-mover.up b { color: var(--expense); }
+.close-mover.down b { color: var(--income); }
+.close-bud-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); }
+.close-bud-row.warning { border-color: rgba(245, 158, 11, .4); color: var(--warning); }
+.close-bud-row.critical { border-color: var(--expense); color: var(--expense); }
+.close-rec-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--text-secondary); }
+.close-rec-row span:last-child { font-weight: 700; color: var(--text-primary); }
+/* AI review block */
+.ai-review { display: flex; flex-direction: column; gap: 10px; }
+.ai-summary { font-size: 14px; line-height: 1.55; margin: 0; }
+.ai-obs { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; line-height: 1.5; }
+.ai-sugs { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.ai-sug { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-elev); box-shadow: var(--shadow); }
+.ai-sug .sug-action { flex: 1; font-size: 13.5px; line-height: 1.5; }
+.ai-sug .sug-save { display: inline-block; margin-left: 4px; color: var(--income); white-space: nowrap; }
+.prio { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .3px; }
+.prio.high { color: var(--expense); background: rgba(239, 68, 68, .1); }
+.prio.medium { color: var(--warning); background: rgba(245, 158, 11, .12); }
+.prio.low { color: var(--text-secondary); background: var(--border); }
+.ai-empty { display: flex; flex-direction: column; gap: 4px; }
+.ai-empty button { align-self: flex-start; }

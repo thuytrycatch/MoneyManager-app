@@ -233,6 +233,19 @@
       ocrNeedKey: 'Cần API key (Gemini hoặc Claude) trong Cài đặt để quét hoá đơn.',
       ocrDone: 'Đã điền từ hoá đơn — kiểm tra lại trước khi lưu.',
       checkAmount: 'Đã điền — số tiền chưa chắc chắn, hãy kiểm tra kỹ trước khi lưu.',
+      // Monthly close (chốt sổ)
+      monthlyClose: 'Chốt sổ tháng', closeThisMonth: 'Chốt sổ {m}', reclose: 'Chốt lại',
+      closedOn: 'Đã chốt ngày {d}', notClosedYet: 'Tháng này chưa được chốt sổ.', viewReport: 'Xem báo cáo',
+      monthOverview: 'Tổng quan tháng', closeReport: 'Đóng',
+      vsPrevMonth: 'So tháng trước', vs3mAvg: 'So TB 3 tháng',
+      movers: 'Biến động lớn nhất', recurringDetected: 'Khoản định kỳ (cân nhắc)', wins: 'Điểm sáng',
+      aiReviewTitle: '🤖 Nhận xét & đề xuất từ AI', genAiReview: 'Tạo nhận xét AI', closeGenerating: 'Đang tạo nhận xét…',
+      aiNeedKey: 'Cần API key (Gemini hoặc Claude) trong Cài đặt để tạo nhận xét AI.',
+      aiPrivacyNote: 'Chỉ số liệu tổng hợp (không gồm ghi chú từng giao dịch) được gửi tới dịch vụ AI.',
+      aiFailed: 'Không tạo được nhận xét AI.', noAiReview: 'Chưa có nhận xét AI cho tháng này.',
+      closeSaved: 'Đã chốt sổ tháng.', estSaving: 'Ước tính tiết kiệm',
+      prioHigh: 'Ưu tiên cao', prioMedium: 'Trung bình', prioLow: 'Thấp',
+      winSavingsUp: 'Tỷ lệ tiết kiệm cao hơn tháng trước 🎉', winBelowAvg: 'Chi thấp hơn trung bình 3 tháng.', winCatDown: 'Giảm chi ở {c}.',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -383,6 +396,19 @@
       ocrNeedKey: 'A Gemini or Claude API key (in Settings) is required to scan receipts.',
       ocrDone: 'Filled from the receipt — review before saving.',
       checkAmount: 'Filled — the amount is uncertain, double-check it before saving.',
+      // Monthly close
+      monthlyClose: 'Monthly close', closeThisMonth: 'Close {m}', reclose: 'Re-close',
+      closedOn: 'Closed on {d}', notClosedYet: 'This month has not been closed yet.', viewReport: 'View report',
+      monthOverview: 'Month overview', closeReport: 'Close',
+      vsPrevMonth: 'vs last month', vs3mAvg: 'vs 3-mo avg',
+      movers: 'Biggest movers', recurringDetected: 'Recurring items (review)', wins: 'Wins',
+      aiReviewTitle: '🤖 AI review & suggestions', genAiReview: 'Generate AI review', closeGenerating: 'Generating…',
+      aiNeedKey: 'A Gemini or Claude API key (in Settings) is required for AI review.',
+      aiPrivacyNote: 'Only aggregated figures (no per-transaction notes) are sent to the AI service.',
+      aiFailed: 'Could not generate AI review.', noAiReview: 'No AI review for this month yet.',
+      closeSaved: 'Month closed.', estSaving: 'Est. saving',
+      prioHigh: 'High', prioMedium: 'Medium', prioLow: 'Low',
+      winSavingsUp: 'Savings rate up vs last month 🎉', winBelowAvg: 'Spending below the 3-month average.', winCatDown: 'Lower spending on {c}.',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -2061,6 +2087,202 @@
       '<div class="ben-list">' + rows + '</div></div>';
   }
 
+  /* ============== Monthly close (chốt sổ) ============== */
+  function anchorFromPeriod(p) { const parts = String(p || '').split('-'); return new Date(Number(parts[0]), (Number(parts[1]) || 1) - 1, 1); }
+
+  // Compute ALL numbers for the month containing `anchor`. This object is what gets
+  // stored in monthly_reports.metrics and re-rendered — reuses totals/byCategory/etc.
+  function buildMonthlyClose(anchor) {
+    const cur = inRange(startOfMonth(anchor), endOfMonth(anchor));
+    const prevA = addMonths(anchor, -1);
+    const prev = inRange(startOfMonth(prevA), endOfMonth(prevA));
+    const tt = totals(cur), pt = totals(prev);
+    const curCat = byCategory(cur), prevCat = byCategory(prev);
+    const rate = tt.income ? Math.round(tt.net / tt.income * 100) : 0;
+
+    const cats = Object.keys(curCat).map((c) => {
+      const p = prevCat[c] || 0;
+      return { category: c, amount: curCat[c], pct: tt.expense ? Math.round(curCat[c] / tt.expense * 100) : 0,
+        prevAmount: p, deltaPct: p ? Math.round((curCat[c] - p) / p * 100) : null };
+    }).sort((a, b) => b.amount - a.amount);
+
+    const allCats = {}; Object.keys(curCat).forEach((c) => { allCats[c] = 1; }); Object.keys(prevCat).forEach((c) => { allCats[c] = 1; });
+    const movers = Object.keys(allCats).map((c) => {
+      const a = curCat[c] || 0, p = prevCat[c] || 0;
+      return { category: c, deltaAbs: a - p, deltaPct: p ? Math.round((a - p) / p * 100) : null };
+    }).filter((m) => m.deltaAbs !== 0).sort((a, b) => Math.abs(b.deltaAbs) - Math.abs(a.deltaAbs)).slice(0, 3);
+
+    const budget = Object.keys(DATA.budgets || {}).filter((c) => DATA.budgets[c] > 0).map((c) => {
+      const spent = curCat[c] || 0, b = DATA.budgets[c];
+      return { category: c, budget: b, spent: spent, pctUsed: Math.round(spent / b * 100),
+        status: spent >= b ? 'critical' : (spent >= b * 0.8 ? 'warning' : 'ok') };
+    }).sort((a, b) => b.pctUsed - a.pctUsed);
+
+    const recurring = (DATA.recurring || []).filter((r) => r.active !== false && r.type !== 'income')
+      .map((r) => ({ name: r.name, amount: r.amount, category: r.category }));
+    const recurringTotal = recurring.reduce((a, r) => a + (r.amount || 0), 0);
+
+    const prior = monthlyExpenseSeries(4, anchor).slice(0, 3).map((s) => s.expense).filter((v) => v > 0);
+    const avg3m = prior.length ? Math.round(prior.reduce((a, b) => a + b, 0) / prior.length) : null;
+
+    const wins = [];
+    if (pt.income && rate > Math.round(pt.net / pt.income * 100)) wins.push('savingsUp');
+    if (avg3m && tt.expense < avg3m) wins.push('belowAvg');
+    const cutCat = cats.find((c) => c.deltaPct != null && c.deltaPct <= -15);
+    if (cutCat) wins.push('catDown:' + cutCat.category);
+
+    return { period: monthKey(anchor), income: tt.income, expense: tt.expense, net: tt.net, savingsRate: rate,
+      prev: { income: pt.income, expense: pt.expense, net: pt.net }, avg3m: avg3m,
+      categories: cats, movers: movers, budget: budget, recurring: recurring, recurringTotal: recurringTotal, wins: wins };
+  }
+
+  // Safe, aggregated payload for the AI — NO per-transaction notes, NO beneficiary names.
+  function aiPayload(m) {
+    return { period: m.period, income: m.income, expense: m.expense, net: m.net, savingsRate: m.savingsRate,
+      prevExpense: m.prev.expense, avg3mExpense: m.avg3m,
+      topCategories: m.categories.slice(0, 8).map((c) => ({ name: c.category, amount: c.amount, pct: c.pct, deltaPct: c.deltaPct })),
+      movers: m.movers.map((x) => ({ name: x.category, deltaAbs: x.deltaAbs, deltaPct: x.deltaPct })),
+      overBudget: m.budget.filter((b) => b.status !== 'ok').map((b) => ({ name: b.category, budget: b.budget, spent: b.spent })),
+      recurring: m.recurring.map((r) => ({ name: r.name, amount: r.amount })), recurringTotal: m.recurringTotal };
+  }
+
+  // Card shown at the top of Reports (month view only): close / view / re-close.
+  function monthlyCloseCardHtml() {
+    const pk = monthKey(reportAnchor);
+    const saved = (DATA.monthlyReports || []).find((r) => r.period === pk);
+    const canClose = canManageConfig();
+    let action;
+    if (saved) {
+      action = '<button class="ghost-btn" data-openclose="' + pk + '">' + icon('chart') + ' ' + t('viewReport') + '</button>' +
+        (canClose ? '<button class="ghost-btn" data-reclose="' + pk + '">' + icon('refresh') + ' ' + t('reclose') + '</button>' : '');
+    } else if (canClose) {
+      action = '<button class="primary-btn" data-openclose="' + pk + '">' + icon('check') + ' ' + t('closeThisMonth').replace('{m}', pk) + '</button>';
+    } else {
+      action = '<div class="hint">' + t('notClosedYet') + '</div>';
+    }
+    const status = saved ? '<div class="hint">' + t('closedOn').replace('{d}', new Date(saved.closedAt).toLocaleDateString()) + '</div>' : '';
+    return '<div class="section-title">' + t('monthlyClose') + '</div><div class="card close-card">' + status +
+      '<div class="close-actions">' + action + '</div></div>';
+  }
+
+  // Pure render of a month report (used both live and for saved snapshots).
+  function renderMonthlyReport(m, ai, editable) {
+    const netCls = m.net >= 0 ? 'income' : 'expense';
+    let h = '<div class="summary-grid">' +
+      '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + mask(fmtShort(m.income)) + '</b>' + deltaChip(m.income, m.prev.income, true) + '</div>' +
+      '<div class="sum-cell expense"><span>' + t('expense') + '</span><b>' + mask(fmtShort(m.expense)) + '</b>' + deltaChip(m.expense, m.prev.expense, false) + '</div>' +
+      '<div class="sum-cell ' + netCls + '"><span>' + t('savings') + '</span><b>' + mask(fmtShort(m.net)) + '</b>' + deltaChip(m.net, m.prev.net, true) + '</div>' +
+      '<div class="sum-cell neutral"><span>' + t('savingsRate') + '</span><b>' + m.savingsRate + '%</b></div></div>';
+
+    const cmp = [];
+    if (m.prev.expense) { const d = Math.round((m.expense - m.prev.expense) / m.prev.expense * 100); cmp.push(t('vsPrevMonth') + ': ' + (d > 0 ? '+' : '') + d + '%'); }
+    if (m.avg3m) { const d = Math.round((m.expense - m.avg3m) / m.avg3m * 100); cmp.push(t('vs3mAvg') + ': ' + (d > 0 ? '+' : '') + d + '%'); }
+    if (cmp.length) h += '<div class="close-cmp hint">' + cmp.join('  ·  ') + '</div>';
+
+    if (m.categories.length) {
+      h += '<div class="section-title">' + t('byCategory') + '</div><div class="close-cats">' +
+        m.categories.map((c) => '<div class="close-cat-row">' + catIcon(c.category) +
+          '<span class="cc-name">' + esc(catLabel(c.category)) + '</span>' +
+          '<span class="cc-amt">' + mask(fmtShort(c.amount)) + ' · ' + c.pct + '%</span>' +
+          (c.deltaPct != null ? deltaChip(c.amount, c.prevAmount, false) : '') + '</div>').join('') + '</div>';
+    }
+    if (m.movers.length) {
+      h += '<div class="section-title">' + t('movers') + '</div><div class="close-movers">' +
+        m.movers.map((x) => '<div class="close-mover ' + (x.deltaAbs > 0 ? 'up' : 'down') + '">' + catIcon(x.category) + ' ' +
+          esc(catLabel(x.category)) + ' <b>' + (x.deltaAbs > 0 ? '+' : '−') + mask(fmtShort(Math.abs(x.deltaAbs))) + '</b>' +
+          (x.deltaPct != null ? ' (' + (x.deltaPct > 0 ? '+' : '') + x.deltaPct + '%)' : '') + '</div>').join('') + '</div>';
+    }
+    if (m.budget.length) {
+      h += '<div class="section-title">' + t('budgetProgress') + '</div><div class="close-budget">' +
+        m.budget.map((b) => '<div class="close-bud-row ' + b.status + '"><span>' + esc(catLabel(b.category)) + '</span>' +
+          '<span>' + mask(fmtShort(b.spent)) + ' / ' + mask(fmtShort(b.budget)) + ' · ' + b.pctUsed + '%</span></div>').join('') + '</div>';
+    }
+    if (m.recurring.length) {
+      h += '<div class="section-title">' + t('recurringDetected') + ' · ' + mask(fmtShort(m.recurringTotal)) + t('perMonth') + '</div><div class="close-rec">' +
+        m.recurring.map((r) => '<div class="close-rec-row"><span>' + esc(r.name) + '</span><span>' + mask(fmtShort(r.amount)) + '</span></div>').join('') + '</div>';
+    }
+    if (m.wins && m.wins.length) {
+      h += '<div class="section-title">' + t('wins') + '</div><div class="alerts">' +
+        m.wins.map((w) => {
+          let txt = w;
+          if (w === 'savingsUp') txt = t('winSavingsUp');
+          else if (w === 'belowAvg') txt = t('winBelowAvg');
+          else if (w.indexOf('catDown:') === 0) txt = t('winCatDown').replace('{c}', catLabel(w.slice(8)));
+          return alertItem('good', 'trendDown', txt);
+        }).join('') + '</div>';
+    }
+
+    h += '<div class="section-title">' + t('aiReviewTitle') + '</div>';
+    if (ai) {
+      h += '<div class="ai-review">';
+      if (ai.summary) h += '<p class="ai-summary">' + esc(ai.summary) + '</p>';
+      if (ai.observations && ai.observations.length) h += '<ul class="ai-obs">' + ai.observations.map((o) => '<li>' + esc(o) + '</li>').join('') + '</ul>';
+      if (ai.suggestions && ai.suggestions.length) h += '<div class="ai-sugs">' + ai.suggestions.map((s) =>
+        '<div class="ai-sug"><span class="prio ' + s.priority + '">' + t('prio' + s.priority.charAt(0).toUpperCase() + s.priority.slice(1)) + '</span>' +
+        '<span class="sug-action">' + esc(s.action) + (s.estSaving ? ' <b class="sug-save">' + t('estSaving') + ' ' + mask(fmtShort(s.estSaving)) + '</b>' : '') + '</span></div>').join('') + '</div>';
+      h += '</div>';
+    } else if (editable) {
+      h += '<div class="ai-empty"><button class="ghost-btn" id="mcGenAi">' + icon('target') + ' ' + t('genAiReview') + '</button>' +
+        '<div class="hint">' + t('aiPrivacyNote') + '</div></div>';
+    } else {
+      h += '<div class="hint">' + t('noAiReview') + '</div>';
+    }
+    return h;
+  }
+
+  // Open the month report modal. View saved snapshot, or compute live to close / re-close.
+  function openMonthlyClose(period, opts) {
+    opts = opts || {};
+    const saved = (DATA.monthlyReports || []).find((r) => r.period === period);
+    const viewOnly = !!saved && !opts.reclose;
+    const metrics = viewOnly ? saved.metrics : buildMonthlyClose(anchorFromPeriod(period));
+    let curReview = viewOnly ? saved.aiReview : null;
+    const canClose = canManageConfig();
+
+    const footer = viewOnly
+      ? '<button class="ghost-btn" id="mcClose">' + t('closeReport') + '</button>' +
+        (canClose ? '<button class="ghost-btn" id="mcReclose">' + icon('refresh') + ' ' + t('reclose') + '</button>' : '')
+      : '<button class="ghost-btn" id="mcClose">' + t('cancel') + '</button>' +
+        (canClose ? '<button class="primary-btn" id="mcSave">' + icon('check') + ' ' + t('monthlyClose') + '</button>' : '');
+
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal close-modal">' +
+      '<div class="card-title">' + icon('chart') + ' ' + t('monthOverview') + ' · ' + esc(period) + '</div>' +
+      '<div class="close-body" id="mcBody">' + renderMonthlyReport(metrics, curReview, !viewOnly) + '</div>' +
+      '<div class="modal-actions">' + footer + '</div></div></div>';
+    document.body.appendChild(wrap.firstChild);
+
+    const close = () => { const mo = document.getElementById('modalBackdrop'); if (mo) mo.remove(); };
+    const wireBody = () => {
+      const gen = document.getElementById('mcGenAi');
+      if (gen) gen.addEventListener('click', async () => {
+        if (!window.Parser.aiReviewAvailable()) { toast(t('aiNeedKey'), 'error'); return; }
+        gen.disabled = true; gen.innerHTML = icon('refresh') + ' ' + t('closeGenerating');
+        try {
+          curReview = await window.Parser.reviewMonth(aiPayload(metrics));
+          const b = document.getElementById('mcBody'); if (b) b.innerHTML = renderMonthlyReport(metrics, curReview, !viewOnly);
+          wireBody();
+        } catch (e) { toast(e.message || t('aiFailed'), 'error'); gen.disabled = false; gen.innerHTML = icon('target') + ' ' + t('genAiReview'); }
+      });
+    };
+
+    document.getElementById('mcClose').addEventListener('click', close);
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
+    const reclose = document.getElementById('mcReclose');
+    if (reclose) reclose.addEventListener('click', () => { close(); openMonthlyClose(period, { reclose: true }); });
+    const save = document.getElementById('mcSave');
+    if (save) save.addEventListener('click', async () => {
+      save.disabled = true;
+      try {
+        const s2 = await window.Store.upsertMonthlyReport({ period: metrics.period, metrics: metrics, aiReview: curReview || null });
+        const i = DATA.monthlyReports.findIndex((r) => r.period === s2.period);
+        if (i >= 0) DATA.monthlyReports[i] = s2; else DATA.monthlyReports.push(s2);
+        toast(t('closeSaved'), 'success'); close(); render();
+      } catch (e) { toast(e.message, 'error'); save.disabled = false; }
+    });
+    wireBody();
+  }
+
   function viewReports() {
     const { s, e } = reportRange();
     const txs = inRange(s, e);
@@ -2097,6 +2319,8 @@
       '<button class="nav-arrow" data-shift="1">' + icon('right') + '</button></div>' +
 
       reportWrapUpHtml(tt, pt, byCat) +
+
+      (reportPeriod === 'month' ? reportCard(monthlyCloseCardHtml()) : '') +
 
       '<div class="summary-grid">' +
       '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + fmtShort(tt.income) + '</b>' + deltaChip(tt.income, pt.income, true) + '</div>' +
@@ -2909,6 +3133,9 @@
     document.querySelectorAll('[data-attview]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); openAttachmentViewer(b.dataset.attview, 0); }));
     // goto links
     document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => { currentTab = b.dataset.goto; render(); }));
+    // monthly close card: open / re-close
+    document.querySelectorAll('[data-openclose]').forEach((b) => b.addEventListener('click', () => openMonthlyClose(b.dataset.openclose)));
+    document.querySelectorAll('[data-reclose]').forEach((b) => b.addEventListener('click', () => openMonthlyClose(b.dataset.reclose, { reclose: true })));
     // overview wallet cards → open that wallet's history
     document.querySelectorAll('[data-wallethist]').forEach((c) => {
       c.addEventListener('click', () => openWalletHistory(c.dataset.wallethist));
@@ -3409,6 +3636,7 @@
     if (!DATA.goals) DATA.goals = [];
     if (!DATA.recurring) DATA.recurring = [];
     if (!DATA.attachments) DATA.attachments = [];
+    if (!DATA.monthlyReports) DATA.monthlyReports = [];
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     myRole = computeMyRole();
@@ -3432,6 +3660,7 @@
     if (!DATA.goals) DATA.goals = [];
     if (!DATA.recurring) DATA.recurring = [];
     if (!DATA.attachments) DATA.attachments = [];
+    if (!DATA.monthlyReports) DATA.monthlyReports = [];
       householdMembers = await window.Store.listMembers().catch(() => householdMembers);
       myRole = computeMyRole();
       render();
