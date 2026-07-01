@@ -292,6 +292,7 @@
       note: r.note || '',
       rawInput: r.raw_input || '',
       userId: r.user_id || null,
+      beneficiaryId: r.beneficiary_id || null,
       accountId: r.account_id || null,
       toAccountId: r.to_account_id || null,
       recurringId: r.recurring_id || null,
@@ -433,6 +434,7 @@
       raw_input: tx.rawInput || null,
       account_id: tx.accountId || null,
       to_account_id: tx.toAccountId || null,
+      beneficiary_id: tx.beneficiaryId || null,
     };
     // Only reference recurring_id when set — keeps inserts working even before the
     // schema with that column has been re-run (a plain add never sends it).
@@ -462,6 +464,7 @@
       raw_input: tx.rawInput || null,
       account_id: tx.accountId || null,
       to_account_id: tx.toAccountId || null,
+      beneficiary_id: tx.beneficiaryId || null,
     }));
     const { data, error } = await sb.from('transactions').insert(rows).select();
     if (error) throw new Error(error.message);
@@ -479,6 +482,7 @@
     if ('time' in fields) patch.time = fields.time || null;
     if ('accountId' in fields) patch.account_id = fields.accountId || null;
     if ('toAccountId' in fields) patch.to_account_id = fields.toAccountId || null;
+    if ('beneficiaryId' in fields) patch.beneficiary_id = fields.beneficiaryId || null;
     const { error } = await sb.from('transactions').update(patch).eq('id', id);
     if (error) throw new Error(error.message);
   }

@@ -94,6 +94,11 @@ alter table public.transactions add column if not exists to_account_id uuid refe
 alter table public.transactions drop constraint if exists transactions_type_check;
 alter table public.transactions add constraint transactions_type_check check (type in ('income','expense','transfer'));
 
+-- "Chi cho ai": người thụ hưởng của giao dịch. NULL = chi chung cho cả nhà.
+-- Non-null = user_id của một thành viên hộ. on delete set null: xoá user → về "chung".
+alter table public.transactions add column if not exists beneficiary_id uuid references auth.users(id) on delete set null;
+create index if not exists transactions_beneficiary_idx on public.transactions(household_id, beneficiary_id);
+
 -- Wealth/asset reporting: classify each account as an asset or a liability, plus
 -- optional credit-card / loan cycle metadata. Safe to re-run.
 alter table public.accounts add column if not exists class text not null default 'asset';

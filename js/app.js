@@ -53,6 +53,7 @@
     heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
     more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
     bank: '<line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
     phone: '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
@@ -139,7 +140,7 @@
       grpAccount: 'Hộ gia đình & Tài khoản', grpMoney: 'Quản lý tiền', grpGeneral: 'Cài đặt chung', grpAdvanced: 'Nâng cao',
       chooseLanguage: 'Chọn ngôn ngữ', darkMode: 'Chế độ tối',
       members: 'Thành viên', roleOwner: 'Chủ hộ', roleAdmin: 'Quản trị viên', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
-      byPerson: 'Thu chi theo người',
+      spentFor: 'Chi cho', spentForShort: 'cho', beneficiaryShared: 'Chung (cả nhà)', byBeneficiary: 'Chi theo thành viên',
       confirmRemoveMember: 'Xóa thành viên này khỏi hộ?', memberRemoved: 'Đã xóa thành viên',
       leaveHousehold: 'Rời hộ này', confirmLeave: 'Rời khỏi hộ này?', onlyOwnerRemove: 'Chỉ chủ hộ mới xóa được thành viên.',
       makeAdmin: 'Đặt làm quản trị viên', removeAdmin: 'Bỏ quyền quản trị', makeOwner: 'Chuyển quyền chủ hộ',
@@ -284,7 +285,7 @@
       grpAccount: 'Household & Account', grpMoney: 'Money', grpGeneral: 'General', grpAdvanced: 'Advanced',
       chooseLanguage: 'Choose language', darkMode: 'Dark mode',
       members: 'Members', roleOwner: 'Owner', roleAdmin: 'Admin', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
-      byPerson: 'Income & expense by person',
+      spentFor: 'Spent for', spentForShort: 'for', beneficiaryShared: 'Shared (whole family)', byBeneficiary: 'Spending by member',
       confirmRemoveMember: 'Remove this member from the household?', memberRemoved: 'Member removed',
       leaveHousehold: 'Leave this household', confirmLeave: 'Leave this household?', onlyOwnerRemove: 'Only the owner can remove members.',
       makeAdmin: 'Make admin', removeAdmin: 'Remove admin', makeOwner: 'Transfer ownership',
@@ -872,6 +873,16 @@
     const def = accs.find((a) => a.isDefault);
     return def ? def.id : accs[0].id;
   }
+  // <select> "Chi cho ai": first option = Chung (value ''), then each household member.
+  // selectedId = the current beneficiaryId ('' / null = shared for the whole family).
+  function beneficiarySelect(id, selectedId) {
+    const sel = selectedId || '';
+    let opts = '<option value=""' + (sel === '' ? ' selected' : '') + '>' + t('beneficiaryShared') + '</option>';
+    opts += householdMembers.map((m) =>
+      '<option value="' + esc(m.userId) + '"' + (m.userId === sel ? ' selected' : '') + '>' +
+      esc(memberName(m.userId)) + '</option>').join('');
+    return '<select id="' + id + '" class="acct-select">' + opts + '</select>';
+  }
   // <select> of wallets for the entry forms; empty string when the household has no wallets.
   function accountSelect(id, selectedId) {
     const accs = activeAccounts();
@@ -921,8 +932,10 @@
     const picked = dateInput ? dateInput.value : '';
     const acctSel = accountSelectId && document.getElementById(accountSelectId);
     const accountId = (acctSel ? acctSel.value : defaultAccountId()) || '';
+    const benSel = document.getElementById('txBeneficiaryBig');
+    const beneficiaryId = (benSel ? benSel.value : '') || null;
 
-    const drafts = recognized.map((p) => buildDraft(p, picked, today, accountId));
+    const drafts = recognized.map((p) => buildDraft(p, picked, today, accountId, beneficiaryId));
 
     // Single entry → fast save with an Undo bar. Multiple → confirm sheet first.
     if (drafts.length === 1) await saveDrafts(drafts, accountId, { undo: true });
@@ -930,7 +943,7 @@
   }
 
   // Assemble a parsed result into a storable draft, applying the date priority.
-  function buildDraft(parsed, picked, today, accountId) {
+  function buildDraft(parsed, picked, today, accountId, beneficiaryId) {
     let date = picked || today;
     if (parsed.date && (!picked || picked === today)) date = parsed.date;
     // Keep a real clock time only for today's entries; past days get no misleading time.
@@ -941,6 +954,7 @@
       type: parsed.type === 'income' ? 'income' : 'expense',
       category: parsed.category, note: parsed.note,
       accountId: accountId || null,
+      beneficiaryId: beneficiaryId || null,
     };
   }
 
@@ -1028,11 +1042,12 @@
   function openEntryPreview(drafts, accountId, dropped) {
     const rows = drafts.map((d) => entryPreviewRow(d)).join('');
     const walletSel = activeAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('epAccount', accountId) : '';
+    const benSel = '<label>' + t('spentFor') + '</label>' + beneficiarySelect('epBeneficiary', drafts[0] ? drafts[0].beneficiaryId : '');
     const wrap = document.createElement('div');
     wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal entry-modal">' +
       '<div class="card-title">' + icon('check') + ' ' + t('confirmEntries') + ' (' + drafts.length + ')</div>' +
       (dropped ? '<div class="warn-hint">' + icon('alert') + ' ' + dropped + ' ' + t('unrecognizedLines') + '</div>' : '') +
-      '<div class="entry-list" id="entryList">' + rows + '</div>' + walletSel +
+      '<div class="entry-list" id="entryList">' + rows + '</div>' + walletSel + benSel +
       '<div class="modal-actions"><button class="ghost-btn" id="epCancel">' + t('cancel') + '</button>' +
       '<button class="primary-btn" id="epSave">' + icon('check') + ' ' + t('saveAll') + ' (' + drafts.length + ')</button></div>' +
       '</div></div>';
@@ -1057,6 +1072,7 @@
       })));
     document.getElementById('epSave').addEventListener('click', async () => {
       const acct = (document.getElementById('epAccount') ? document.getElementById('epAccount').value : accountId) || '';
+      const ben = (document.getElementById('epBeneficiary') ? document.getElementById('epBeneficiary').value : '') || null;
       const out = [];
       Array.from(document.querySelectorAll('#entryList .entry-row')).forEach((r) => {
         const amount = readMoney(r.querySelector('.ep-amount'));
@@ -1066,6 +1082,7 @@
           amount: amount, type: r.querySelector('.ep-type').dataset.type === 'income' ? 'income' : 'expense',
           category: r.querySelector('.ep-cat').value, note: (r.querySelector('.ep-note').value || '').trim(),
           accountId: acct || null,
+          beneficiaryId: ben || null,
         });
       });
       if (!out.length) { toast(t('needAmount'), 'warn'); return; }
@@ -1462,7 +1479,8 @@
     return '<div class="tx-row" data-id="' + tx.id + '">' +
       '<div class="tx-ic ' + tx.type + '">' + catIcon(tx.category) + '</div>' +
       '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || tx.rawInput) + '</span>' + attachBadge(tx.id) + '</div>' +
-      '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+      '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) +
+        (tx.beneficiaryId ? ' · ' + t('spentForShort') + ' ' + esc(memberName(tx.beneficiaryId)) : '') + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
       txActions(tx) + '</div></div>';
   }
@@ -1966,30 +1984,45 @@
   // grid never gets blank cells). See .report-grid / .dash-card in style.css.
   function reportCard(inner) { return inner ? '<section class="dash-card">' + inner + '</section>' : ''; }
 
-  // Aggregate income/expense per person (who entered each tx) for the given period.
-  // Returns parallel arrays ready for a grouped bar chart, sorted by total activity.
-  function personTotals(txs) {
+  // Aggregate spending by WHO IT WAS SPENT FOR (beneficiary) for the given period.
+  // NULL beneficiary = "Chung (cả nhà)". Only buckets that actually have activity are
+  // returned (idle members are omitted — the full roster lives in the add/edit picker).
+  // "Chung" is pinned first, the rest sorted by expense desc. Transfers are ignored.
+  function beneficiaryTotals(txs) {
     const by = {};
     txs.forEach((tx) => {
       if (tx.type === 'transfer') return;
-      const k = tx.userId || '';
-      const p = by[k] || (by[k] = { income: 0, expense: 0 });
-      if (tx.type === 'income') p.income += tx.amount; else p.expense += tx.amount;
+      const k = tx.beneficiaryId || '';
+      const b = by[k] || (by[k] = { expense: 0, income: 0 }); // unknown id (left household) still counted
+      if (tx.type === 'income') b.income += tx.amount; else b.expense += tx.amount;
     });
-    const keys = Object.keys(by).sort((a, b) => (by[b].income + by[b].expense) - (by[a].income + by[a].expense));
+    const keys = Object.keys(by).sort((a, b) => {
+      if (a === '') return -1; if (b === '') return 1;   // "Chung" always first
+      return by[b].expense - by[a].expense;              // then most-spent-for first
+    });
     return {
-      labels: keys.map((k) => memberName(k || null)),
-      inc: keys.map((k) => by[k].income),
+      keys: keys,
+      labels: keys.map((k) => (k === '' ? t('beneficiaryShared') : memberName(k))),
       exp: keys.map((k) => by[k].expense),
+      inc: keys.map((k) => by[k].income),
     };
   }
 
-  // Per-person income/expense, shown as grouped bars (chart id 'repPerson') like the trend card.
-  // The chart itself is drawn in viewReports() once the canvas is in the DOM.
-  function byPersonHtml(pp) {
-    if (!pp.labels.length) return '';
-    return '<div class="section-title">' + t('byPerson') + '</div>' +
-      '<div class="card"><div class="chart-box tall"><canvas id="repPerson"></canvas></div></div>';
+  // Spending by beneficiary: an expense bar chart (id 'repBeneficiary') + a numeric
+  // breakdown list (amount · %). The chart itself is drawn in viewReports() once the
+  // canvas is in the DOM. Skipped entirely when there's no expense in the period.
+  function byBeneficiaryHtml(pp) {
+    const totalExp = pp.exp.reduce((a, b) => a + b, 0);
+    if (!totalExp) return '';
+    const rows = pp.keys.map((k, i) => {
+      if (!pp.exp[i]) return '';
+      const pct = Math.round(pp.exp[i] / totalExp * 100);
+      return '<div class="ben-row"><span class="ben-name">' + esc(pp.labels[i]) + '</span>' +
+        '<span class="ben-amt">' + mask(fmtShort(pp.exp[i])) + ' · ' + pct + '%</span></div>';
+    }).join('');
+    return '<div class="section-title">' + t('byBeneficiary') + '</div>' +
+      '<div class="card"><div class="chart-box tall"><canvas id="repBeneficiary"></canvas></div>' +
+      '<div class="ben-list">' + rows + '</div></div>';
   }
 
   function viewReports() {
@@ -2001,7 +2034,7 @@
     const pr = prevReportRange();
     const pt = totals(inRange(pr.s, pr.e));
     const td = trendData(txs, { s, e });
-    const pp = personTotals(txs);
+    const pp = beneficiaryTotals(txs);
     const incColor = getComputedStyle(document.body).getPropertyValue('--income').trim() || '#10b981';
     const expColor = getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444';
     const top = txs.filter((x) => x.type === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 5);
@@ -2012,9 +2045,10 @@
         { label: t('income'), data: td.inc, color: incColor },
         { label: t('expense'), data: td.exp, color: expColor },
       ]);
-      if (pp.labels.length) window.Charts.bars('repPerson', pp.labels, [
-        { label: t('income'), data: pp.inc, color: incColor },
-        { label: t('expense'), data: pp.exp, color: expColor },
+      const benL = [], benE = [];
+      pp.keys.forEach((k, i) => { if (pp.exp[i]) { benL.push(pp.labels[i]); benE.push(pp.exp[i]); } });
+      if (benE.length) window.Charts.bars('repBeneficiary', benL, [
+        { label: t('expense'), data: benE, color: expColor },
       ]);
     }, 0);
 
@@ -2055,8 +2089,8 @@
       reportCard(trendsForecastHtml()) +
       // Net worth: assets vs liabilities (current snapshot)
       reportCard(netWorthHtml()) +
-      // Income/expense split by who entered each transaction (grouped bar chart)
-      reportCard(byPersonHtml(pp)) +
+      // Spending split by who each transaction was spent for (beneficiary)
+      reportCard(byBeneficiaryHtml(pp)) +
       reportCard('<div class="section-title">' + t('topSpending') + '</div>' +
         '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>') +
       '</div>'
@@ -2110,6 +2144,8 @@
       '<textarea id="txInputBig" rows="3" placeholder="' + t('placeholder') + '"></textarea>' +
       dateBar('txDateBig') +
       (accountSelect('txAccountBig') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccountBig') + '</div>' : '') +
+      '<div class="acct-row">' + icon('user') +
+        '<label class="sr-only" for="txBeneficiaryBig">' + t('spentFor') + '</label>' + beneficiarySelect('txBeneficiaryBig', '') + '</div>' +
       '<div class="add-photos-label">' + t('evidence') + ' <span class="add-photos-opt">(' + t('optional') + ')</span></div>' +
       '<div class="add-photos" id="addPhotos"></div>' +
       '<button id="addBtnBig" class="primary-btn">' + icon('plus') + ' ' + t('add') + '</button>' +
@@ -2550,6 +2586,7 @@
       '<div class="edit-datetime"><div><label>' + t('date') + '</label><input id="eDate" type="date" value="' + esc(tx.date) + '" max="' + ymd(new Date()) + '"/></div>' +
       '<div><label>' + t('time') + '</label><input id="eTime" type="time" value="' + esc(tx.time || '') + '"/></div></div>' +
       (activeAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('eAccount', tx.accountId) : '') +
+      '<label>' + t('spentFor') + '</label>' + beneficiarySelect('eBeneficiary', tx.beneficiaryId) +
       '<div class="seg" style="margin-top:10px"><button class="seg-btn ' + (tx.type === 'expense' ? 'active' : '') + '" data-type="expense">' + t('expense') + '</button>' +
       '<button class="seg-btn ' + (tx.type === 'income' ? 'active' : '') + '" data-type="income">' + t('income') + '</button></div>' +
       '<div class="edit-evidence" id="evidenceBox"></div>' +
@@ -2577,6 +2614,8 @@
       };
       const eAcct = document.getElementById('eAccount');
       if (eAcct) fields.accountId = eAcct.value || null;
+      const eBen = document.getElementById('eBeneficiary');
+      if (eBen) fields.beneficiaryId = eBen.value || null;
       try {
         await window.Store.updateTransaction(tx.id, fields);
         Object.assign(tx, fields);
