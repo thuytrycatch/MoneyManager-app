@@ -671,3 +671,75 @@ using (
        and (t.user_id = auth.uid() or public.is_household_admin(t.household_id))
   )
 );
+
+-- =====================================================================
+--  GOLD wallets — a wallet of type='gold' is an independently valued asset:
+--  value (VND) = gold_weight_chi × market buy price per chỉ × gold_factor.
+--  It receives NO transactions; opening_balance is unused. The market price
+--  lives in the shared gold_prices cache below. Safe to re-run.
+-- =====================================================================
+alter table public.accounts add column if not exists gold_weight_chi  numeric(12,3); -- weight in CHỈ (1 lượng = 10 chỉ)
+alter table public.accounts add column if not exists gold_kind        text;          -- sjc | ring9999 | jewelry | custom
+alter table public.accounts add column if not exists gold_factor      numeric(6,4) not null default 1; -- % of reference price (0.98 = 98%)
+alter table public.accounts add column if not exists gold_custom_buy  bigint;        -- (kind='custom') manual buy price / chỉ
+-- Cost basis for unrealized P&L: what was actually paid per chỉ (includes the
+-- shop's buy/sell spread), so P&L = current value − weight × this price.
+alter table public.accounts add column if not exists gold_buy_per_chi bigint;        -- average price actually paid / chỉ
+alter table public.accounts add column if not exists gold_buy_date    date;          -- (optional) purchase date
+
+-- Shared VN gold price cache: readable by every signed-in user, written ONLY
+-- by the gold-price Edge Function (service role) or manual seed — there is no
+-- client write policy on purpose. buy_per_chi = dealer BUY-BACK price / chỉ
+-- (what you'd actually receive when selling), used for asset valuation.
+create table if not exists public.gold_prices (
+  kind         text primary key,          -- sjc | ring9999 | jewelry
+  buy_per_chi  bigint not null,           -- dealer buys from you (VND / chỉ)
+  sell_per_chi bigint,                    -- dealer sells to you (reference)
+  source       text,                      -- e.g. 'sjc.com.vn', 'seed'
+  fetched_at   timestamptz not null default now()
+);
+alter table public.gold_prices enable row level security;
+drop policy if exists gold_prices_select on public.gold_prices;
+create policy gold_prices_select on public.gold_prices for select
+  using (auth.role() = 'authenticated');
+do $$
+begin
+  begin alter publication supabase_realtime add table public.gold_prices; exception when duplicate_object then null; end;
+end $$;
+
+-- Seed so Phase 1 works immediately (Edge Function or manual updates overwrite these).
+insert into public.gold_prices (kind, buy_per_chi, sell_per_chi, source) values
+  ('sjc',      11500000, 11700000, 'seed'),
+  ('ring9999', 11000000, 11200000, 'seed'),
+  ('jewelry',  10500000, 10800000, 'seed')
+on conflict (kind) do nothing;
+
+-- =====================================================================
+--  Household settings — cấu hình dùng chung cả hộ (một hàng / hộ).
+--  settings jsonb: tên key trùng window.CONFIG (GEMINI_API_KEY,
+--  ANTHROPIC_API_KEY, …) để client merge 1:1. Supabase URL/anon key
+--  KHÔNG lưu ở đây (app cần chúng để kết nối DB — con gà quả trứng),
+--  chúng ở lại localStorage của từng thiết bị.
+--  Quyền: mọi thành viên đọc (parser cần key AI); chỉ owner/admin ghi.
+--  Cố ý KHÔNG gắn trigger log_activity: log chụp snapshot hàng, tức là
+--  sao chép API key sang activity_log — không rò secret ra bảng thứ hai.
+--  An toàn chạy lại.
+-- =====================================================================
+create table if not exists public.household_settings (
+  household_id uuid primary key references public.households(id) on delete cascade,
+  settings     jsonb not null default '{}'::jsonb,
+  updated_by   uuid references auth.users(id) on delete set null,
+  updated_at   timestamptz not null default now()
+);
+alter table public.household_settings enable row level security;
+drop policy if exists hh_settings_select on public.household_settings;
+create policy hh_settings_select on public.household_settings for select
+  using (household_id in (select public.user_households()));
+drop policy if exists hh_settings_write on public.household_settings;
+create policy hh_settings_write on public.household_settings for all
+  using (public.is_household_admin(household_id))
+  with check (public.is_household_admin(household_id));
+do $$
+begin
+  begin alter publication supabase_realtime add table public.household_settings; exception when duplicate_object then null; end;
+end $$;

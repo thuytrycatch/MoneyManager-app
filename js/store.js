@@ -324,6 +324,12 @@
       statementDay: a.statement_day != null ? Number(a.statement_day) : null,
       dueDay: a.due_day != null ? Number(a.due_day) : null,
       minPaymentPct: a.min_payment_pct != null ? Number(a.min_payment_pct) : null,
+      goldWeightChi: a.gold_weight_chi != null ? Number(a.gold_weight_chi) : null,
+      goldKind: a.gold_kind || null,
+      goldFactor: a.gold_factor != null ? Number(a.gold_factor) : 1,
+      goldCustomBuy: a.gold_custom_buy != null ? Number(a.gold_custom_buy) : null,
+      goldBuyPerChi: a.gold_buy_per_chi != null ? Number(a.gold_buy_per_chi) : null,
+      goldBuyDate: a.gold_buy_date || null,
       archived: !!a.archived,
       sortOrder: a.sort_order || 0,
       isDefault: !!a.is_default,
@@ -409,8 +415,27 @@
     const monthlyReports = await sb.from('monthly_reports').select('*').eq('household_id', hid)
       .order('period', { ascending: false })
       .then((r) => (r.error ? [] : (r.data || []).map(mapMonthlyReport))).catch(() => []);
+    // Household-wide shared settings (AI keys…). null = no row/table yet (fall back
+    // to this browser's localStorage) — distinct from {} (row exists but empty).
+    const aiConfig = await sb.from('household_settings').select('settings').eq('household_id', hid).limit(1)
+      .then((r) => (r.error || !r.data || !r.data.length ? null : (r.data[0].settings || {}))).catch(() => null);
+    // Shared gold price cache — no household_id (one row per kind, written by the
+    // gold-price Edge Function / seed). Keyed by kind for O(1) lookup in the app.
+    const goldPrices = await sb.from('gold_prices').select('*')
+      .then((r) => {
+        const out = {};
+        if (!r.error) (r.data || []).forEach((p) => {
+          out[p.kind] = {
+            buyPerChi: Number(p.buy_per_chi),
+            sellPerChi: p.sell_per_chi != null ? Number(p.sell_per_chi) : null,
+            source: p.source || '',
+            fetchedAt: p.fetched_at,
+          };
+        });
+        return out;
+      }).catch(() => ({}));
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, goldPrices, aiConfig };
     idbSet('data', data).catch(() => {});
     return data;
   }
@@ -612,7 +637,7 @@
   async function addAccount(acc) {
     if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
     const sb = getClient();
-    const { data, error } = await sb.from('accounts').insert({
+    const row = {
       household_id: household.id,
       name: acc.name,
       type: acc.type || 'cash',
@@ -623,7 +648,16 @@
       due_day: acc.dueDay || null,
       min_payment_pct: acc.minPaymentPct != null ? acc.minPaymentPct : null,
       sort_order: acc.sortOrder || 0,
-    }).select().single();
+    };
+    // Gold metadata is only sent when present, so wallets keep saving on databases
+    // that haven't re-run supabase-schema.sql yet (the columns may not exist there).
+    if ('goldWeightChi' in acc) row.gold_weight_chi = acc.goldWeightChi;
+    if ('goldKind' in acc) row.gold_kind = acc.goldKind;
+    if ('goldFactor' in acc) row.gold_factor = acc.goldFactor != null ? acc.goldFactor : 1;
+    if ('goldCustomBuy' in acc) row.gold_custom_buy = acc.goldCustomBuy != null ? Math.round(acc.goldCustomBuy) : null;
+    if ('goldBuyPerChi' in acc) row.gold_buy_per_chi = acc.goldBuyPerChi != null ? Math.round(acc.goldBuyPerChi) : null;
+    if ('goldBuyDate' in acc) row.gold_buy_date = acc.goldBuyDate || null;
+    const { data, error } = await sb.from('accounts').insert(row).select().single();
     if (error) throw new Error(error.message);
     return mapAccount(data);
   }
@@ -639,6 +673,12 @@
     if ('statementDay' in fields) patch.statement_day = fields.statementDay || null;
     if ('dueDay' in fields) patch.due_day = fields.dueDay || null;
     if ('minPaymentPct' in fields) patch.min_payment_pct = fields.minPaymentPct != null ? fields.minPaymentPct : null;
+    if ('goldWeightChi' in fields) patch.gold_weight_chi = fields.goldWeightChi;
+    if ('goldKind' in fields) patch.gold_kind = fields.goldKind;
+    if ('goldFactor' in fields) patch.gold_factor = fields.goldFactor != null ? fields.goldFactor : 1;
+    if ('goldCustomBuy' in fields) patch.gold_custom_buy = fields.goldCustomBuy != null ? Math.round(fields.goldCustomBuy) : null;
+    if ('goldBuyPerChi' in fields) patch.gold_buy_per_chi = fields.goldBuyPerChi != null ? Math.round(fields.goldBuyPerChi) : null;
+    if ('goldBuyDate' in fields) patch.gold_buy_date = fields.goldBuyDate || null;
     if ('sortOrder' in fields) patch.sort_order = fields.sortOrder || 0;
     if ('archived' in fields) patch.archived = !!fields.archived;
     if ('isDefault' in fields) patch.is_default = !!fields.isDefault;
@@ -797,11 +837,32 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_attachments', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports', filter: 'household_id=eq.' + hid }, onChange)
+      // gold_prices is a shared cache with no household_id — subscribe unfiltered
+      // so a price refresh from any member (or the cron) updates everyone live.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gold_prices' }, onChange)
       .subscribe();
     return channel;
   }
   function unsubscribeChanges() {
     if (channel) { try { getClient().removeChannel(channel); } catch (e) { /* ignore */ } channel = null; }
+  }
+
+  /* ---------------- Gold prices ---------------- */
+  // Ask the gold-price Edge Function to refresh the shared price cache. The new
+  // prices land in public.gold_prices and are pushed back over realtime, so the
+  // caller only needs to reload data (or wait for the realtime event).
+  // Throws when the function isn't deployed / network fails — callers that
+  // auto-refresh in the background should swallow the error (stale badge covers it).
+  async function refreshGoldPrices() {
+    const c = cfg();
+    if (!isConfigured()) throw new Error(tr('errNotConfigured', 'Chưa cấu hình Supabase (thiếu URL hoặc anon key).'));
+    const url = normalizeUrl(c.SUPABASE_URL) + '/functions/v1/gold-price';
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + c.SUPABASE_ANON_KEY, apikey: c.SUPABASE_ANON_KEY },
+    });
+    if (!resp.ok) throw new Error('gold-price HTTP ' + resp.status);
+    return resp.json();
   }
 
   /* ---------------- Global export ---------------- */
@@ -846,6 +907,7 @@
     updateRecurring,
     deleteRecurring,
     upsertMonthlyReport,
+    refreshGoldPrices,
     subscribeChanges,
     unsubscribeChanges,
     DEFAULT_BUDGETS,

@@ -72,6 +72,7 @@
     image: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
     camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
     x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    gold: '<path d="M9 4h6l2 5H7l2-5z"/><path d="M4.5 13h6l2 5h-10l2-5z"/><path d="M13.5 13h6l2 5h-10l2-5z"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -222,6 +223,20 @@
       utilization: 'Đã dùng hạn mức', minPayment: 'Trả tối thiểu', dueDate: 'Đến hạn', owed: 'Đang nợ',
       dueInDays: 'còn {n} ngày', dueTodayLabel: 'đến hạn hôm nay',
       liabilityHint: 'Với thẻ tín dụng / khoản vay: nhập số dư âm nếu đang nợ (vd −4.500.000). Hạn mức và ngày sao kê/đến hạn là tùy chọn.',
+      // Gold wallets
+      typeGold: 'Vàng',
+      goldWeight: 'Khối lượng', unitChi: 'chỉ', unitLuong: 'lượng',
+      goldKind: 'Loại vàng', goldKindSjc: 'Vàng miếng SJC', goldKindRing: 'Nhẫn 9999 (24k)',
+      goldKindJewelry: 'Vàng tây (18k…)', goldKindCustom: 'Tự nhập giá',
+      goldFactor: 'Hệ số giá (%)', goldCustomBuy: 'Giá mua vào /chỉ', goldPerLuong: '/lượng',
+      updateGoldPrice: 'Cập nhật giá vàng', priceUpdatedAt: 'Giá lúc', priceStale: 'Giá có thể đã cũ',
+      goldValueNow: 'Giá trị hiện tại',
+      goldNoPrice: 'Chưa có giá cho loại vàng này — bấm "Cập nhật giá vàng" hoặc chọn Tự nhập giá.',
+      goldBuyPrice: 'Giá mua lúc đầu /chỉ', goldBuyDate: 'Ngày mua',
+      unrealizedPnl: 'Lãi/lỗ tạm tính', goldPnlTotal: 'Lãi/lỗ vàng (tạm tính)',
+      goldBuyHint: 'Giá thực trả cho 1 chỉ khi mua (đã gồm chênh lệch mua–bán); mua nhiều đợt thì nhập giá trung bình.',
+      goldSpreadHint: 'Định giá dùng giá tiệm MUA VÀO, còn lúc mua bạn trả giá BÁN RA — nên ngay sau khi mua thường lỗ nhẹ do chênh lệch, là bình thường.',
+      goldPriceUpdated: 'Đã cập nhật giá vàng', goldPriceUpdateFailed: 'Không lấy được giá vàng — đang dùng giá đã lưu.',
       // Attachments (photo evidence)
       evidence: 'Bằng chứng', addPhoto: 'Thêm ảnh', uploading: 'Đang tải lên…',
       removePhoto: 'Xóa ảnh', confirmRemovePhoto: 'Xóa ảnh này?',
@@ -385,6 +400,20 @@
       utilization: 'Utilization', minPayment: 'Min. payment', dueDate: 'Due', owed: 'Owed',
       dueInDays: 'in {n} days', dueTodayLabel: 'due today',
       liabilityHint: 'For credit cards / loans: enter a negative balance if you owe (e.g. −4,500,000). Limit and statement/due days are optional.',
+      // Gold wallets
+      typeGold: 'Gold',
+      goldWeight: 'Weight', unitChi: 'chỉ', unitLuong: 'lượng',
+      goldKind: 'Gold kind', goldKindSjc: 'SJC bullion', goldKindRing: '9999 ring (24k)',
+      goldKindJewelry: 'Jewelry gold (18k…)', goldKindCustom: 'Custom price',
+      goldFactor: 'Price factor (%)', goldCustomBuy: 'Buy-back price /chỉ', goldPerLuong: '/lượng',
+      updateGoldPrice: 'Update gold price', priceUpdatedAt: 'Price as of', priceStale: 'Price may be stale',
+      goldValueNow: 'Current value',
+      goldNoPrice: 'No price for this kind yet — tap "Update gold price" or pick Custom price.',
+      goldBuyPrice: 'Avg. buy price /chỉ', goldBuyDate: 'Purchase date',
+      unrealizedPnl: 'Unrealized P&L', goldPnlTotal: 'Gold P&L (unrealized)',
+      goldBuyHint: 'What you actually paid per chỉ (includes the buy/sell spread); for several purchases enter the average.',
+      goldSpreadHint: 'Valuation uses the dealer BUY-BACK price while you bought at the SELL price, so a small loss right after buying is normal (the spread).',
+      goldPriceUpdated: 'Gold prices updated', goldPriceUpdateFailed: 'Could not fetch gold prices — using saved prices.',
       // Attachments (photo evidence)
       evidence: 'Evidence', addPhoto: 'Add photo', uploading: 'Uploading…',
       removePhoto: 'Remove photo', confirmRemovePhoto: 'Remove this photo?',
@@ -821,7 +850,7 @@
     const typeOpts = '<option value="expense"' + (x.type !== 'income' ? ' selected' : '') + '>' + t('expense') + '</option>' +
       '<option value="income"' + (x.type === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
     const acctOpts = '<option value="">' + t('goalNone') + '</option>' +
-      activeAccounts().map((a) => '<option value="' + esc(a.id) + '"' + (a.id === x.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('');
+      spendableAccounts().map((a) => '<option value="' + esc(a.id) + '"' + (a.id === x.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('');
     return '<div class="rec-edit-row" data-rec="' + esc(x.id) + '">' +
       '<div class="rec-edit-l1"><input type="text" class="r-name" value="' + esc(x.name) + '" placeholder="' + t('recurringName') + '"/>' +
       (r ? '<button type="button" class="icon-btn danger" data-delrec="' + esc(x.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') + '</div>' +
@@ -844,7 +873,7 @@
   }
 
   /* ============== Accounts (wallets) ============== */
-  const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'savings', 'credit_card', 'loan', 'other'];
+  const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'savings', 'gold', 'credit_card', 'loan', 'other'];
   // Credit card & loan accounts are liabilities (money you owe); everything else is an asset.
   const LIABILITY_TYPES = ['credit_card', 'loan'];
   const ACCOUNT_TYPE_META = {
@@ -852,19 +881,72 @@
     bank: { icon: 'bank', key: 'typeBank' },
     ewallet: { icon: 'phone', key: 'typeEwallet' },
     savings: { icon: 'piggy', key: 'typeSavings' },
+    gold: { icon: 'gold', key: 'typeGold' },
     credit_card: { icon: 'card', key: 'typeCredit' },
     loan: { icon: 'file', key: 'typeLoan' },
     other: { icon: 'more', key: 'typeOther' },
   };
+  const GOLD_KINDS = ['sjc', 'ring9999', 'jewelry', 'custom'];
+  const GOLD_KIND_KEY = { sjc: 'goldKindSjc', ring9999: 'goldKindRing', jewelry: 'goldKindJewelry', custom: 'goldKindCustom' };
+  function goldKindLabel(kind) { return t(GOLD_KIND_KEY[kind] || 'goldKindCustom'); }
   function accountTypeIcon(type) { return icon((ACCOUNT_TYPE_META[type] || ACCOUNT_TYPE_META.other).icon); }
   function accountTypeLabel(type) { return t((ACCOUNT_TYPE_META[type] || ACCOUNT_TYPE_META.other).key); }
   // An account's class: explicit `class` if set, else inferred from its type.
   function accountClass(acc) { return acc.class || (LIABILITY_TYPES.includes(acc.type) ? 'liability' : 'asset'); }
   function activeAccounts() { return (DATA.accounts || []).filter((a) => !a.archived); }
+  // Wallets that can hold transactions — everything except gold, which is a
+  // valuation-only asset (v1). Use this for entry forms, transfers, recurring
+  // and the default wallet; keep activeAccounts() for net worth & settings.
+  function spendableAccounts() { return activeAccounts().filter((a) => a.type !== 'gold'); }
   function accountById(id) { return (DATA.accounts || []).find((a) => a.id === id) || null; }
+
+  /* ---- Gold wallets: value = weight (chỉ) × market buy-back price × factor ---- */
+  // Market buy-back price per chỉ for this wallet's kind (custom = user-entered).
+  function goldBuyPerChi(acc) {
+    if (acc.goldKind === 'custom') return acc.goldCustomBuy || 0;
+    const p = (DATA.goldPrices || {})[acc.goldKind];
+    return p ? p.buyPerChi : 0;
+  }
+  function goldValue(acc) {
+    return Math.round((acc.goldWeightChi || 0) * goldBuyPerChi(acc) * (acc.goldFactor || 1));
+  }
+  // Cost basis = weight × price actually paid per chỉ. NO factor here — the paid
+  // price already priced that specific gold; applying factor twice would skew P&L.
+  function goldCostBasis(acc) {
+    return Math.round((acc.goldWeightChi || 0) * (acc.goldBuyPerChi || 0));
+  }
+  // Unrealized P&L vs cost basis. pct is null when no cost basis was entered.
+  function goldPnl(acc) {
+    const cost = goldCostBasis(acc);
+    const pnl = goldValue(acc) - cost;
+    return { cost: cost, pnl: pnl, pct: cost > 0 ? pnl / cost : null };
+  }
+  function totalGoldPnl() {
+    return activeAccounts().filter((a) => a.type === 'gold' && a.goldBuyPerChi)
+      .reduce((s, a) => s + goldPnl(a).pnl, 0);
+  }
+  // Oldest fetched_at among the market kinds actually referenced by gold wallets
+  // (custom excluded). Null when nothing applies — drives the stale-price badge.
+  function goldPriceFetchedAt() {
+    const used = {};
+    activeAccounts().forEach((a) => { if (a.type === 'gold' && a.goldKind && a.goldKind !== 'custom') used[a.goldKind] = 1; });
+    let oldest = null;
+    Object.keys(used).forEach((k) => {
+      const p = (DATA.goldPrices || {})[k];
+      if (!p || !p.fetchedAt) return;
+      const d = new Date(p.fetchedAt);
+      if (!oldest || d < oldest) oldest = d;
+    });
+    return oldest;
+  }
+  // Trim to at most 3 decimals without trailing zeros (2.5 chỉ, 0.125 chỉ…).
+  function fmtChi(n) { return String(Math.round((n || 0) * 1000) / 1000); }
+
   // Balance of one wallet = opening balance + incomes − expenses recorded against it.
   function accountBalance(id) {
     const acc = accountById(id); if (!acc) return 0;
+    // Gold wallets are valued from weight × market price and take no transactions.
+    if (acc.type === 'gold') return goldValue(acc);
     let bal = acc.openingBalance || 0;
     DATA.transactions.forEach((tx) => {
       if (tx.type === 'transfer') {
@@ -878,6 +960,8 @@
     return bal;
   }
   // Total balance = sum of opening balances + net of every transaction (assigned or not).
+  // Deliberately NOT accountBalance-based, so gold wallets are EXCLUDED: this figure
+  // is spendable money (the Overview "Số dư"); gold only counts toward net worth.
   function totalBalance() {
     const opening = (DATA.accounts || []).reduce((s, a) => s + (a.openingBalance || 0), 0);
     return opening + allTimeBalance();
@@ -921,7 +1005,7 @@
   // Pre-selected wallet for the entry forms: the household's default wallet if one
   // is set, otherwise the first active wallet. (No "last used" — the default always wins.)
   function defaultAccountId() {
-    const accs = activeAccounts(); if (!accs.length) return '';
+    const accs = spendableAccounts(); if (!accs.length) return '';
     const def = accs.find((a) => a.isDefault);
     return def ? def.id : accs[0].id;
   }
@@ -935,9 +1019,10 @@
       esc(memberName(m.userId)) + '</option>').join('');
     return '<select id="' + id + '" class="acct-select">' + opts + '</select>';
   }
-  // <select> of wallets for the entry forms; empty string when the household has no wallets.
+  // <select> of wallets for the entry forms; empty string when the household has no
+  // (spendable) wallets. Gold wallets are excluded — they can't hold transactions.
   function accountSelect(id, selectedId) {
-    const accs = activeAccounts();
+    const accs = spendableAccounts();
     if (!accs.length) return '';
     const sel = selectedId || defaultAccountId();
     return '<select id="' + id + '" class="acct-select">' +
@@ -1093,7 +1178,7 @@
   // Confirm sheet for a multi-entry add: review/edit each row, then save all.
   function openEntryPreview(drafts, accountId, dropped) {
     const rows = drafts.map((d) => entryPreviewRow(d)).join('');
-    const walletSel = activeAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('epAccount', accountId) : '';
+    const walletSel = spendableAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('epAccount', accountId) : '';
     const benSel = '<label>' + t('spentFor') + '</label>' + beneficiarySelect('epBeneficiary', drafts[0] ? drafts[0].beneficiaryId : '');
     const wrap = document.createElement('div');
     wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal entry-modal">' +
@@ -2025,11 +2110,44 @@
         if (cyc.dueDate) bits.push(t('dueDate') + ' ' + cyc.dueDate);
         if (bits.length) sub = '<div class="nw-acc-sub">' + bits.join(' · ') + '</div>';
       }
+      if (a.type === 'gold') {
+        const per = goldBuyPerChi(a);
+        const bits = [fmtChi(a.goldWeightChi) + ' ' + t('unitChi'), goldKindLabel(a.goldKind)];
+        if ((a.goldFactor || 1) !== 1) bits.push(Math.round((a.goldFactor || 1) * 100) + '%');
+        if (per) bits.push('~' + fmtShort(per) + '/' + t('unitChi'));
+        let pnlBit = '';
+        if (a.goldBuyPerChi) {
+          const p = goldPnl(a);
+          const sign = p.pnl >= 0 ? '+' : '−';
+          pnlBit = ' · <span class="' + (p.pnl >= 0 ? 'income' : 'expense') + '">' +
+            mask(sign + fmtShort(Math.abs(p.pnl)) + (p.pct != null ? ' (' + sign + (Math.abs(Math.round(p.pct * 1000) / 10)) + '%)' : '')) + '</span>';
+        }
+        sub = '<div class="nw-acc-sub">' + bits.join(' · ') + pnlBit + '</div>';
+      }
       return '<div class="nw-acc">' +
         '<div class="nw-acc-main">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
         '<div class="nw-acc-val ' + (isLia ? 'neg' : '') + '">' + mask((isLia ? '−' : '') + fmtShort(shown)) + '</div>' +
         sub + '</div>';
     };
+
+    // Gold strip: price freshness + total unrealized P&L + on-demand refresh.
+    const goldAccs = assetAccs.filter((a) => a.type === 'gold');
+    let goldBar = '';
+    if (goldAccs.length) {
+      const fa = goldPriceFetchedAt();
+      const usesMarket = goldAccs.some((a) => a.goldKind && a.goldKind !== 'custom');
+      const when = fa ? t('priceUpdatedAt') + ' ' + pad(fa.getDate()) + '/' + pad(fa.getMonth() + 1) + ' ' + pad(fa.getHours()) + ':' + pad(fa.getMinutes()) : '';
+      const stale = usesMarket && (!fa || (Date.now() - fa.getTime() > 24 * 3600 * 1000))
+        ? '<span class="gold-stale">' + t('priceStale') + '</span>' : '';
+      const hasBasis = goldAccs.some((a) => a.goldBuyPerChi);
+      const pnlTotal = totalGoldPnl();
+      goldBar = '<div class="gold-price-bar">' +
+        '<div class="gold-price-info">' + (when ? '<span>' + when + '</span>' : '') + stale +
+        (hasBasis ? '<span class="gold-pnl-total ' + (pnlTotal >= 0 ? 'income' : 'expense') + '">' + t('goldPnlTotal') + ': ' +
+          mask((pnlTotal >= 0 ? '+' : '−') + fmtShort(Math.abs(pnlTotal))) + '</span>' : '') + '</div>' +
+        (usesMarket ? '<button type="button" id="goldRefreshBtn" class="ghost-btn sm">' + icon('refresh') + ' ' + t('updateGoldPrice') + '</button>' : '') +
+        '</div>';
+    }
 
     return '<div class="section-title">' + t('netWorth') + ' · ' + t('netWorthNow') + '</div>' +
       '<div class="nw-hero"><div class="nw-hero-label">' + icon('scale') + ' ' + t('netWorth') + '</div>' +
@@ -2037,7 +2155,7 @@
       '<div class="summary-grid">' +
       '<div class="sum-cell income"><span>' + t('totalAssets') + '</span><b>' + mask(fmtShort(nw.assets)) + '</b></div>' +
       '<div class="sum-cell expense"><span>' + t('totalLiabilities') + '</span><b>' + mask(fmtShort(nw.liabilities)) + '</b></div>' +
-      '</div>' +
+      '</div>' + goldBar +
       (assetAccs.length ? '<div class="nw-group-title">' + t('assets') + '</div><div class="nw-list">' + assetAccs.map(accRow).join('') + '</div>' : '') +
       (liabAccs.length ? '<div class="nw-group-title">' + t('liabilities') + '</div><div class="nw-list">' + liabAccs.map(accRow).join('') + '</div>' : '');
   }
@@ -2409,7 +2527,7 @@
       '<div class="add-photos-label">' + t('evidence') + ' <span class="add-photos-opt">(' + t('optional') + ')</span></div>' +
       '<div class="add-photos" id="addPhotos"></div>' +
       '<button id="addBtnBig" class="primary-btn">' + icon('plus') + ' ' + t('add') + '</button>' +
-      (activeAccounts().length >= 2 ? '<button id="transferBtn" class="ghost-btn transfer-btn">' + icon('transfer') + ' ' + t('transferBetween') + '</button>' : '') +
+      (spendableAccounts().length >= 2 ? '<button id="transferBtn" class="ghost-btn transfer-btn">' + icon('transfer') + ' ' + t('transferBetween') + '</button>' : '') +
       templateChipsHtml() +
       '<div class="examples">' +
       ['ăn sáng 35k', 'lương 15 triệu', 'đổ xăng 80k', 'cafe 2 triệu rưỡi', 'grab 1tr2', 'tiền điện 500 nghìn', 'mua giày 800k', 'khám bệnh 250k']
@@ -2462,13 +2580,49 @@
     const typeOpts = ACCOUNT_TYPES.map((ty) => '<option value="' + ty + '"' + (ty === a.type ? ' selected' : '') + '>' + accountTypeLabel(ty) + '</option>').join('');
     const balHtml = acc ? '<span class="w-bal">= ' + fmtShort(accountBalance(a.id)) + '</span>' : '';
     // Existing wallets get quick actions: snap balance to reality, and view this wallet's history.
-    // "Đổi số dư" is asset-only — the positive-only money input can't express a liability's owed amount.
-    const wAdjustBtn = (acc && !LIABILITY_TYPES.includes(a.type))
+    // "Đổi số dư" is asset-only — the positive-only money input can't express a liability's owed
+    // amount — and never for gold: its value comes from weight × price, not from transactions.
+    const wAdjustBtn = (acc && !LIABILITY_TYPES.includes(a.type) && a.type !== 'gold')
       ? '<button type="button" class="ghost-btn sm w-adjust" data-acc="' + esc(a.id) + '">' + icon('edit') + ' ' + t('adjustBalance') + '</button>' : '';
     const wActs = acc ? '<div class="wallet-edit-acts">' + wAdjustBtn +
       '<button type="button" class="ghost-btn sm w-history" data-acc="' + esc(a.id) + '">' + icon('clock') + ' ' + t('walletHistory') + '</button>' +
       '</div>' : '';
     const isLia = LIABILITY_TYPES.includes(a.type);
+    const isGold = a.type === 'gold';
+    // Gold: current value + P&L preview (rendered from the SAVED state; it refreshes on save).
+    let goldLive = '';
+    if (acc && isGold) {
+      const per = goldBuyPerChi(a);
+      goldLive = '<div class="wg-live">' + t('goldValueNow') + ': <b>' + mask(fmtShort(goldValue(a))) + '</b>' +
+        (per ? ' <span class="wg-per">(' + fmtShort(per) + '/' + t('unitChi') + ' ≈ ' + fmtShort(per * 10) + t('goldPerLuong') + ')</span>'
+             : ' <span class="wg-per">' + t('goldNoPrice') + '</span>');
+      if (a.goldBuyPerChi) {
+        const p = goldPnl(a);
+        const sign = p.pnl >= 0 ? '+' : '−';
+        goldLive += '<div class="wg-pnl ' + (p.pnl >= 0 ? 'income' : 'expense') + '">' + t('unrealizedPnl') + ': ' +
+          mask(sign + fmtShort(Math.abs(p.pnl)) + (p.pct != null ? ' (' + sign + (Math.abs(Math.round(p.pct * 1000) / 10)) + '%)' : '')) + '</div>';
+      }
+      goldLive += '</div>';
+    }
+    const gKindSel = a.goldKind || 'sjc';
+    const gKindOpts = GOLD_KINDS.map((k) => '<option value="' + k + '"' + (k === gKindSel ? ' selected' : '') + '>' + goldKindLabel(k) + '</option>').join('');
+    const goldFields = '<div class="wallet-gold-fields' + (isGold ? '' : ' hidden') + '">' +
+      '<div class="wg-grid">' +
+      '<label>' + t('goldWeight') +
+      '<div class="wg-weight"><input type="number" step="0.001" min="0" class="w-gweight" value="' + fmtChi(a.goldWeightChi || 0) + '"/>' +
+      '<div class="wg-unit w-gunit"><button type="button" class="on" data-unit="chi">' + t('unitChi') + '</button>' +
+      '<button type="button" data-unit="luong">' + t('unitLuong') + '</button></div></div></label>' +
+      '<label>' + t('goldKind') + '<select class="w-gkind">' + gKindOpts + '</select></label>' +
+      '<label>' + t('goldFactor') + '<input type="number" step="0.1" min="1" class="w-gfactor" value="' + (Math.round((a.goldFactor != null ? a.goldFactor : 1) * 10000) / 100) + '"/></label>' +
+      '</div>' +
+      '<label class="w-gcustom-row' + (gKindSel === 'custom' ? '' : ' hidden') + '">' + t('goldCustomBuy') +
+      '<input type="text" inputmode="numeric" class="w-gcustom js-money" value="' + groupMoney(a.goldCustomBuy != null ? a.goldCustomBuy : '') + '"/></label>' +
+      '<div class="wg-grid2">' +
+      '<label>' + t('goldBuyPrice') + '<input type="text" inputmode="numeric" class="w-gbuy js-money" value="' + groupMoney(a.goldBuyPerChi != null ? a.goldBuyPerChi : '') + '"/></label>' +
+      '<label>' + t('goldBuyDate') + '<input type="date" class="w-gbuydate" value="' + esc(a.goldBuyDate || '') + '"/></label>' +
+      '</div>' + goldLive +
+      '<div class="wc-hint">' + t('goldBuyHint') + ' ' + t('goldSpreadHint') + '</div>' +
+      '</div>';
     // Star toggles this wallet as the household default (the one pre-selected on entry).
     // The chosen default is applied on Save. New (unsaved) rows can't be default yet.
     const defBtn = '<button class="icon-btn w-default' + (a.isDefault ? ' on' : '') + '"' +
@@ -2481,7 +2635,8 @@
       defBtn +
       (acc ? '<button class="icon-btn danger" data-delacc="' + esc(a.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') +
       '</div>' +
-      '<div class="wallet-edit-sub"><label>' + t('openingBalance') + '</label>' +
+      // Opening balance does not apply to gold (value = weight × price) — hidden there.
+      '<div class="wallet-edit-sub' + (isGold ? ' hidden' : '') + '"><label>' + t('openingBalance') + '</label>' +
       '<input type="text" inputmode="numeric" class="w-open js-money" value="' + groupMoney(a.openingBalance || 0) + '"/>' + balHtml +
       '</div>' +
       wActs +
@@ -2492,7 +2647,7 @@
       '<label>' + t('dueDay') + '<input type="number" min="1" max="31" class="w-due" value="' + (a.dueDay || '') + '"/></label>' +
       '</div>' +
       '<div class="wc-hint">' + t('liabilityHint') + '</div>' +
-      '</div></div>';
+      '</div>' + goldFields + '</div>';
   }
   function walletsEditorHtml() {
     const accs = activeAccounts();
@@ -2857,7 +3012,7 @@
 
   /* ============== Transfer modal ============== */
   function openTransfer(existing) {
-    const accs = activeAccounts();
+    const accs = spendableAccounts(); // gold wallets can't send or receive transfers
     if (accs.length < 2) { toast(t('needTwoWallets'), 'warn'); return; }
     const ex = existing || null;
     const fromSel = ex ? ex.accountId : defaultAccountId();
@@ -2913,6 +3068,7 @@
   // attributed, reversible, and excluded from spending reports (category = ADJUST_CATEGORY).
   function openAdjustBalance(id) {
     const acc = accountById(id); if (!acc) return;
+    if (acc.type === 'gold') return; // gold ignores transactions — adjust weight/price instead
     if (!canManageConfig()) { toast(t('cantEditOthersTx'), 'warn'); return; }
     const cur = accountBalance(id);
     const wrap = document.createElement('div');
@@ -2993,7 +3149,7 @@
   function openWalletHistory(id) {
     const acc = accountById(id); if (!acc) return;
     const hist = walletHistory(id);
-    const canAdjust = canManageConfig() && !LIABILITY_TYPES.includes(acc.type);
+    const canAdjust = canManageConfig() && !LIABILITY_TYPES.includes(acc.type) && acc.type !== 'gold';
     const body = hist.length
       ? hist.map((h) => walletHistoryRow(h, id)).join('')
       : '<div class="empty">' + t('noWalletHistory') + '</div>';
@@ -3030,7 +3186,7 @@
       '<label>' + t('note') + '</label><input id="eNote" type="text" value="' + esc(tx.note) + '"/>' +
       '<div class="edit-datetime"><div><label>' + t('date') + '</label><input id="eDate" type="date" value="' + esc(tx.date) + '" max="' + ymd(new Date()) + '"/></div>' +
       '<div><label>' + t('time') + '</label><input id="eTime" type="time" value="' + esc(tx.time || '') + '"/></div></div>' +
-      (activeAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('eAccount', tx.accountId) : '') +
+      (spendableAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('eAccount', tx.accountId) : '') +
       '<label>' + t('spentFor') + '</label>' + beneficiarySelect('eBeneficiary', tx.beneficiaryId) +
       '<div class="seg" style="margin-top:10px"><button class="seg-btn ' + (tx.type === 'expense' ? 'active' : '') + '" data-type="expense">' + t('expense') + '</button>' +
       '<button class="seg-btn ' + (tx.type === 'income' ? 'active' : '') + '" data-type="income">' + t('income') + '</button></div>' +
@@ -3166,21 +3322,42 @@
         toast(t('syncError') + ': ' + err.message, 'error');
       }
     });
-    // wallets: show/hide credit-card fields when a row's type changes (delegated → covers new rows)
+    // wallets: show/hide credit-card & gold fields when a row's type changes (delegated → covers new rows)
     const weBox = document.getElementById('walletEdit');
     if (weBox) weBox.addEventListener('change', (e) => {
       if (e.target && e.target.classList.contains('w-type')) {
         const row = e.target.closest('.wallet-edit-row');
+        const ty = e.target.value;
         const cf = row && row.querySelector('.wallet-credit-fields');
-        if (cf) cf.classList.toggle('hidden', !LIABILITY_TYPES.includes(e.target.value));
+        if (cf) cf.classList.toggle('hidden', !LIABILITY_TYPES.includes(ty));
+        const gf = row && row.querySelector('.wallet-gold-fields');
+        if (gf) gf.classList.toggle('hidden', ty !== 'gold');
+        const ob = row && row.querySelector('.wallet-edit-sub');
+        if (ob) ob.classList.toggle('hidden', ty === 'gold');
+      }
+      // gold: the manual-price input only applies to kind='custom'
+      if (e.target && e.target.classList.contains('w-gkind')) {
+        const row = e.target.closest('.wallet-edit-row');
+        const cr = row && row.querySelector('.w-gcustom-row');
+        if (cr) cr.classList.toggle('hidden', e.target.value !== 'custom');
       }
     });
-    // wallets: quick actions on a row — adjust balance / view history
+    // wallets: quick actions on a row — adjust balance / view history / gold unit toggle
     if (weBox) weBox.addEventListener('click', (e) => {
       const adj = e.target && e.target.closest('.w-adjust');
       if (adj) { openAdjustBalance(adj.dataset.acc); return; }
       const his = e.target && e.target.closest('.w-history');
       if (his) { openWalletHistory(his.dataset.acc); return; }
+      // chỉ/lượng segmented control: switch the unit and convert the shown weight
+      const ub = e.target && e.target.closest('.w-gunit button');
+      if (ub && !ub.classList.contains('on')) {
+        const grp = ub.closest('.w-gunit');
+        grp.querySelectorAll('button').forEach((b) => b.classList.remove('on'));
+        ub.classList.add('on');
+        const inp = ub.closest('.wg-weight').querySelector('.w-gweight');
+        const v = parseFloat(String(inp.value).replace(',', '.'));
+        if (isFinite(v)) inp.value = String(Math.round((ub.dataset.unit === 'luong' ? v / 10 : v * 10) * 10000) / 10000);
+      }
     });
     // wallets: tap the star to choose the default wallet (single selection, applied on Save)
     if (weBox) weBox.addEventListener('click', (e) => {
@@ -3218,13 +3395,41 @@
           const id = row.dataset.acc;
           const name = (row.querySelector('.w-name').value || '').trim();
           const type = row.querySelector('.w-type').value;
-          const openingBalance = readMoney(row.querySelector('.w-open'));
+          // Gold wallets don't use an opening balance (value = weight × price).
+          const openingBalance = type === 'gold' ? 0 : readMoney(row.querySelector('.w-open'));
           const cls = LIABILITY_TYPES.includes(type) ? 'liability' : 'asset';
           const numOrNull = (sel) => { const v = row.querySelector(sel); const s = v ? String(v.value).replace(/\D/g, '') : ''; return s ? Number(s) : null; };
-          // Credit/loan metadata only applies to liabilities; clear it otherwise.
-          const extra = cls === 'liability'
-            ? { class: cls, creditLimit: numOrNull('.w-limit'), statementDay: numOrNull('.w-stmt'), dueDay: numOrNull('.w-due') }
-            : { class: cls, creditLimit: null, statementDay: null, dueDay: null };
+          // Type-specific metadata: credit/loan fields for liabilities, gold fields
+          // for gold wallets; whatever no longer applies gets cleared on type change.
+          let extra;
+          if (type === 'gold') {
+            const unitBtn = row.querySelector('.w-gunit .on');
+            let w = parseFloat(String((row.querySelector('.w-gweight') || {}).value || '').replace(',', '.'));
+            if (!isFinite(w) || w < 0) w = 0;
+            if (unitBtn && unitBtn.dataset.unit === 'luong') w = w * 10; // stored canonically in chỉ
+            let fpct = parseFloat((row.querySelector('.w-gfactor') || {}).value);
+            if (!isFinite(fpct) || fpct <= 0) fpct = 100;
+            const kind = ((row.querySelector('.w-gkind') || {}).value) || 'sjc';
+            extra = {
+              class: 'asset', creditLimit: null, statementDay: null, dueDay: null,
+              goldWeightChi: Math.round(w * 1000) / 1000,
+              goldKind: kind,
+              goldFactor: Math.round(fpct * 100) / 10000, // 98 (%) → 0.98
+              goldCustomBuy: kind === 'custom' ? (readMoney(row.querySelector('.w-gcustom')) || null) : null,
+              goldBuyPerChi: readMoney(row.querySelector('.w-gbuy')) || null,
+              goldBuyDate: ((row.querySelector('.w-gbuydate') || {}).value) || null,
+            };
+          } else {
+            extra = cls === 'liability'
+              ? { class: cls, creditLimit: numOrNull('.w-limit'), statementDay: numOrNull('.w-stmt'), dueDay: numOrNull('.w-due') }
+              : { class: cls, creditLimit: null, statementDay: null, dueDay: null };
+            // Only send the gold-clearing fields when this wallet used to be gold, so
+            // normal wallets keep saving on DBs that haven't re-run supabase-schema.sql.
+            const prev = id ? accountById(id) : null;
+            if (prev && (prev.type === 'gold' || prev.goldKind)) {
+              Object.assign(extra, { goldWeightChi: null, goldKind: null, goldFactor: 1, goldCustomBuy: null, goldBuyPerChi: null, goldBuyDate: null });
+            }
+          }
           const isDef = row.classList.contains('is-default');
           if (isDef) defaultMarked = true;
           if (id) {
@@ -3637,6 +3842,7 @@
     if (!DATA.recurring) DATA.recurring = [];
     if (!DATA.attachments) DATA.attachments = [];
     if (!DATA.monthlyReports) DATA.monthlyReports = [];
+    if (!DATA.goldPrices) DATA.goldPrices = {};
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     myRole = computeMyRole();
@@ -3645,6 +3851,38 @@
     startAutoSync();
     maybeNotify();
     runRecurring();
+    maybeRefreshGoldPrices();
+  }
+
+  /* ============== Gold price refresh ============== */
+  // On-demand refresh (button on the Net worth card). The Edge Function updates the
+  // shared gold_prices cache; realtime + refreshData bring the new numbers back.
+  document.addEventListener('click', async (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest('#goldRefreshBtn') : null;
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      await window.Store.refreshGoldPrices();
+      await refreshData(true);
+      toast(t('goldPriceUpdated'), 'success');
+    } catch (err) {
+      toast(t('goldPriceUpdateFailed'), 'warn');
+      btn.disabled = false;
+    }
+  });
+  // Keep prices fresh without user action: when any gold wallet references a market
+  // kind and the cache is older than 4h, poke the Edge Function fire-and-forget.
+  // The function itself no-ops when someone refreshed minutes ago, so a whole
+  // household opening the app at once still costs a single upstream fetch.
+  const GOLD_PRICE_TTL_MS = 4 * 60 * 60 * 1000;
+  function maybeRefreshGoldPrices() {
+    try {
+      const usesMarket = activeAccounts().some((a) => a.type === 'gold' && a.goldKind && a.goldKind !== 'custom');
+      if (!usesMarket) return;
+      const fa = goldPriceFetchedAt();
+      if (fa && Date.now() - fa.getTime() < GOLD_PRICE_TTL_MS) return;
+      window.Store.refreshGoldPrices().then(() => refreshData(true)).catch(() => { /* stale badge covers it */ });
+    } catch (e) { /* never block startup on prices */ }
   }
 
   /* ============== Auto-sync (realtime + when returning to the app) ============== */
@@ -3661,6 +3899,7 @@
     if (!DATA.recurring) DATA.recurring = [];
     if (!DATA.attachments) DATA.attachments = [];
     if (!DATA.monthlyReports) DATA.monthlyReports = [];
+    if (!DATA.goldPrices) DATA.goldPrices = {};
       householdMembers = await window.Store.listMembers().catch(() => householdMembers);
       myRole = computeMyRole();
       render();
