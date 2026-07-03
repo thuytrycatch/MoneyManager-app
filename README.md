@@ -93,6 +93,11 @@ Vietnamese input. Model used: **`claude-haiku-4-5`**. With no key, the app falls
 back to a **regex** parser (still recognizes `35k`, `80 nghìn`, `1.5tr`,
 `2 triệu rưỡi`, ...).
 
+AI keys are saved in the household's database (`household_settings` table), so
+one owner/admin enters them once and every member/device shares them. Only the
+Supabase URL + anon key stay in the browser's localStorage — the app needs them
+to reach the database in the first place.
+
 > ⚠️ An Anthropic API key placed in the browser can be exposed — set a
 > **spending limit** on the key and use it only for your own/family app.
 

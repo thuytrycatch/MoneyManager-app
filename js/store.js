@@ -796,6 +796,28 @@
     return mapMonthlyReport(data);
   }
 
+  /* ---------------- Household settings (shared config) ----------------
+   * One row per household; `settings` jsonb keys mirror window.CONFIG names
+   * (GEMINI_API_KEY, ANTHROPIC_API_KEY, …). Members read, owner/admin write
+   * (RLS). Supabase URL/anon key never live here — they bootstrap the client. */
+  async function saveHouseholdSettings(patch) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const user = await getUser();
+    // Merge with the current row so a partial patch never clobbers other keys.
+    const { data: cur } = await sb.from('household_settings')
+      .select('settings').eq('household_id', household.id).limit(1);
+    const merged = Object.assign({}, (cur && cur[0] && cur[0].settings) || {}, patch || {});
+    const { error } = await sb.from('household_settings').upsert({
+      household_id: household.id,
+      settings: merged,
+      updated_by: user ? user.id : null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'household_id' });
+    if (error) throw new Error(error.message);
+    return merged;
+  }
+
   /* ---------------- Activity log (audit trail) ---------------- */
   // Read the household's activity log (newest first). Owners/admins only — RLS returns
   // nothing for plain members. Tolerates the table being absent (before the schema re-run).
@@ -837,6 +859,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_attachments', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'household_settings', filter: 'household_id=eq.' + hid }, onChange)
       // gold_prices is a shared cache with no household_id — subscribe unfiltered
       // so a price refresh from any member (or the cron) updates everyone live.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gold_prices' }, onChange)
@@ -907,6 +930,7 @@
     updateRecurring,
     deleteRecurring,
     upsertMonthlyReport,
+    saveHouseholdSettings,
     refreshGoldPrices,
     subscribeChanges,
     unsubscribeChanges,

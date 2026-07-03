@@ -17,8 +17,23 @@
     } catch (e) { /* ignore */ }
   }
   function saveSettings(obj) {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(obj));
+    // Merge into the stored blob — a partial save (e.g. AI keys only) must not
+    // wipe the Supabase URL/key saved earlier under the same localStorage key.
+    let cur = {};
+    try { cur = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch (e) { /* ignore */ }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign(cur, obj)));
     Object.assign(window.CONFIG, obj);
+  }
+
+  // Household-shared config (household_settings table, loaded as DATA.aiConfig).
+  // Whitelisted merge into window.CONFIG: the DB row must never override the
+  // Supabase connection itself (bootstrap credentials stay on this device).
+  // An existing row is authoritative — an empty value means "key cleared".
+  const DB_CONFIG_KEYS = ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY'];
+  function applyDbConfig() {
+    const s = DATA && DATA.aiConfig;
+    if (!s) return; // no row / table yet → keep this browser's local values
+    DB_CONFIG_KEYS.forEach((k) => { window.CONFIG[k] = String(s[k] || '').trim(); });
   }
 
   /* ============== SVG icons (Lucide-style) ============== */
@@ -123,7 +138,10 @@
       connTitle: 'Kết nối Supabase', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
       anthropicKey: 'Claude API Key (tùy chọn)', saveConnect: 'Lưu & kết nối',
       geminiKey: 'Gemini API Key (miễn phí)', aiCategorize: 'AI tự phân loại chi tiêu',
-      aiHint: '🤖 Nhập key để AI tự đoán danh mục từ câu bạn gõ. Gemini có gói miễn phí — lấy key tại aistudio.google.com/app/apikey. Bỏ trống thì app vẫn tự phân loại bằng từ khóa. Key lưu trên trình duyệt này.',
+      aiHint: '🤖 Nhập key để AI tự đoán danh mục từ câu bạn gõ. Gemini có gói miễn phí — lấy key tại aistudio.google.com/app/apikey. Bỏ trống thì app vẫn tự phân loại bằng từ khóa. Key lưu trong database của hộ — mọi thành viên, mọi thiết bị dùng chung.',
+      aiSavedShared: 'Đã lưu vào database — cả hộ dùng chung trên mọi thiết bị.',
+      aiSavedLocal: 'Chưa có bảng cấu hình trên database (chạy lại supabase-schema.sql). Key tạm lưu trên trình duyệt này.',
+      supaWhyLocal: 'ℹ️ Riêng mục này luôn lưu trên thiết bị: app cần URL & anon key để kết nối database, nên không thể đọc chúng từ database.',
       connSaved: 'Đã lưu, đang kết nối…', connOk: 'Đã kết nối', configMissing: 'Chưa cấu hình Supabase.',
       tokenHint: '🔒 Thông tin lưu trên trình duyệt này (localStorage). anon key là khóa công khai, dữ liệu được bảo vệ bằng Row Level Security.',
       // Auth
@@ -300,7 +318,10 @@
       connTitle: 'Supabase connection', supaUrl: 'Supabase URL', supaKey: 'Supabase anon key',
       anthropicKey: 'Claude API Key (optional)', saveConnect: 'Save & connect',
       geminiKey: 'Gemini API Key (free)', aiCategorize: 'AI auto-categorization',
-      aiHint: '🤖 Add a key so AI infers the category from what you type. Gemini has a free tier — get a key at aistudio.google.com/app/apikey. Leave blank and the app still categorizes by keywords. Keys are stored in this browser.',
+      aiHint: '🤖 Add a key so AI infers the category from what you type. Gemini has a free tier — get a key at aistudio.google.com/app/apikey. Leave blank and the app still categorizes by keywords. Keys are stored in the household database — shared by every member and device.',
+      aiSavedShared: 'Saved to the database — shared with the whole household on every device.',
+      aiSavedLocal: 'The settings table does not exist yet (re-run supabase-schema.sql). Keys were saved in this browser for now.',
+      supaWhyLocal: 'ℹ️ This section always stays on this device: the app needs the URL & anon key to connect to the database, so they cannot be read from it.',
       connSaved: 'Saved, connecting…', connOk: 'Connected', configMissing: 'Supabase not configured.',
       tokenHint: '🔒 Stored only in this browser (localStorage). The anon key is public; data is protected by Row Level Security.',
       // Auth
@@ -2944,18 +2965,22 @@
         iosGroup([iosRow({ ic: 'right', tint: 'red', label: t('signOut'), action: 'signout', danger: true, noChevron: true })]);
     } else if (page === 'ai') {
       title = t('aiCategorize');
+      // Keys are household-wide (stored in the DB, shared by every member/device).
+      // Members see them read-only; only owner/admin can change them (RLS mirrors this).
       body = '<div class="hint">' + t('aiHint') + '</div>' +
         '<div class="conn-form">' +
         f('cfgGemini', t('geminiKey'), C.GEMINI_API_KEY, 'password') +
         f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
         '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>';
+      if (!canManageConfig()) body = roLock(body);
     } else if (page === 'supabase') {
       title = t('connTitle');
       body = '<div class="conn-form">' +
         f('cfgSupaUrl', t('supaUrl'), C.SUPABASE_URL) +
         f('cfgSupaKey', t('supaKey'), C.SUPABASE_ANON_KEY, 'password') + '</div>' +
         '<button id="saveSupaBtn" class="ghost-btn">' + icon('settings') + ' ' + t('saveConnect') + '</button>' +
-        '<div class="hint">' + t('tokenHint') + '</div>';
+        '<div class="hint">' + t('tokenHint') + '</div>' +
+        '<div class="hint">' + t('supaWhyLocal') + '</div>';
     } else if (page === 'reminder') {
       title = t('reminder');
       const r = getReminderCfg();
@@ -3551,14 +3576,25 @@
         toast(t('save') + ' ✓', 'success');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     });
-    // Save AI keys (parser): Gemini (free) + Claude (paid fallback)
+    // Save AI keys (parser): Gemini (free) + Claude (paid fallback).
+    // Written to the household_settings table so the whole household shares them;
+    // if the table doesn't exist yet (schema not re-run) fall back to localStorage.
     const sc = document.getElementById('saveConfigBtn');
-    if (sc) sc.addEventListener('click', () => {
-      saveSettings({
+    if (sc) sc.addEventListener('click', async () => {
+      const patch = {
         GEMINI_API_KEY: document.getElementById('cfgGemini').value.trim(),
         ANTHROPIC_API_KEY: document.getElementById('cfgAnthropic').value.trim(),
-      });
-      toast(t('save') + ' ✓', 'success');
+      };
+      sc.disabled = true;
+      try {
+        DATA.aiConfig = await window.Store.saveHouseholdSettings(patch);
+        applyDbConfig();
+        toast(t('aiSavedShared'), 'success');
+      } catch (err) {
+        saveSettings(patch);
+        toast(t('aiSavedLocal'), 'warn');
+      }
+      sc.disabled = false;
     });
     // Change Supabase config (URL/key) -> page reload required to apply
     const sca = document.getElementById('saveSupaBtn');
@@ -3846,6 +3882,17 @@
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     myRole = computeMyRole();
+    // One-time seed: no household_settings row yet but this browser has AI keys
+    // and we're allowed to write → migrate them to the DB (best-effort, silent).
+    if (DATA.aiConfig == null && canManageConfig() && (window.CONFIG.GEMINI_API_KEY || window.CONFIG.ANTHROPIC_API_KEY)) {
+      try {
+        DATA.aiConfig = await window.Store.saveHouseholdSettings({
+          GEMINI_API_KEY: window.CONFIG.GEMINI_API_KEY || '',
+          ANTHROPIC_API_KEY: window.CONFIG.ANTHROPIC_API_KEY || '',
+        });
+      } catch (e) { /* table not created yet → keep using local keys */ }
+    }
+    applyDbConfig();
     currentTab = 'overview';
     render();
     startAutoSync();
@@ -3902,6 +3949,7 @@
     if (!DATA.goldPrices) DATA.goldPrices = {};
       householdMembers = await window.Store.listMembers().catch(() => householdMembers);
       myRole = computeMyRole();
+      applyDbConfig();
       render();
       if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
     } catch (e) { /* keep existing data */ }
