@@ -743,3 +743,11 @@ do $$
 begin
   begin alter publication supabase_realtime add table public.household_settings; exception when duplicate_object then null; end;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- LAST: make PostgREST (Supabase's API layer) reload its schema cache so
+-- the columns/tables added above are usable IMMEDIATELY. Without this,
+-- saving can fail with "Could not find the '…' column in the schema cache"
+-- for several minutes after running this file.
+-- ---------------------------------------------------------------------
+notify pgrst, 'reload schema';

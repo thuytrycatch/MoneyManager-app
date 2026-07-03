@@ -255,6 +255,7 @@
       goldBuyHint: 'Giá thực trả cho 1 chỉ khi mua (đã gồm chênh lệch mua–bán); mua nhiều đợt thì nhập giá trung bình.',
       goldSpreadHint: 'Định giá dùng giá tiệm MUA VÀO, còn lúc mua bạn trả giá BÁN RA — nên ngay sau khi mua thường lỗ nhẹ do chênh lệch, là bình thường.',
       goldPriceUpdated: 'Đã cập nhật giá vàng', goldPriceUpdateFailed: 'Không lấy được giá vàng — đang dùng giá đã lưu.',
+      goldSchemaHint: 'Lưu ví thất bại: database chưa có các cột vàng. Hãy chạy lại TOÀN BỘ supabase-schema.sql trong Supabase SQL Editor rồi thử lại.',
       // Attachments (photo evidence)
       evidence: 'Bằng chứng', addPhoto: 'Thêm ảnh', uploading: 'Đang tải lên…',
       removePhoto: 'Xóa ảnh', confirmRemovePhoto: 'Xóa ảnh này?',
@@ -435,6 +436,7 @@
       goldBuyHint: 'What you actually paid per chỉ (includes the buy/sell spread); for several purchases enter the average.',
       goldSpreadHint: 'Valuation uses the dealer BUY-BACK price while you bought at the SELL price, so a small loss right after buying is normal (the spread).',
       goldPriceUpdated: 'Gold prices updated', goldPriceUpdateFailed: 'Could not fetch gold prices — using saved prices.',
+      goldSchemaHint: 'Save failed: the database is missing the gold columns. Re-run the ENTIRE supabase-schema.sql in the Supabase SQL Editor, then try again.',
       // Attachments (photo evidence)
       evidence: 'Evidence', addPhoto: 'Add photo', uploading: 'Uploading…',
       removePhoto: 'Remove photo', confirmRemovePhoto: 'Remove this photo?',
@@ -3470,7 +3472,15 @@
         if (defaultMarked) await window.Store.setDefaultAccount(defaultId);
         await refreshData(true);
         toast(t('walletSaved'), 'success');
-      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      } catch (err) {
+        // A missing gold_* column / stale PostgREST schema cache means
+        // supabase-schema.sql hasn't been (re)run — say that instead of
+        // surfacing the raw PostgREST message.
+        const msg = /gold_|schema cache/i.test(err.message || '')
+          ? t('goldSchemaHint')
+          : t('syncError') + ': ' + err.message;
+        toast(msg, 'error');
+      }
     });
     // wallets: delete
     document.querySelectorAll('[data-delacc]').forEach((b) => b.addEventListener('click', async () => {
