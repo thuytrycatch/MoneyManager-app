@@ -3417,7 +3417,7 @@
       const rows = Array.from(document.querySelectorAll('#walletEdit .wallet-edit-row'));
       try {
         // Resolve the wallet id the user marked as default (may be a row inserted just now).
-        let defaultId = null; let defaultMarked = false;
+        let defaultId = null; let defaultMarked = false; let skippedNoName = false;
         for (const row of rows) {
           const id = row.dataset.acc;
           const name = (row.querySelector('.w-name').value || '').trim();
@@ -3465,13 +3465,18 @@
           } else if (name) {
             const created = await window.Store.addAccount(Object.assign({ name: name, type: type, openingBalance: openingBalance, sortOrder: rows.indexOf(row) }, extra));
             if (isDef && created) defaultId = created.id;
+          } else {
+            // A brand-new row with no name would otherwise be silently dropped —
+            // no insert, no error — leaving the user thinking it saved. Flag it instead.
+            skippedNoName = true;
           }
         }
         // Apply the default choice atomically (clears it on all others). Only touch it
         // when the user expressed a choice, so we never wipe an existing default by accident.
         if (defaultMarked) await window.Store.setDefaultAccount(defaultId);
         await refreshData(true);
-        toast(t('walletSaved'), 'success');
+        if (skippedNoName) toast(t('needWalletName'), 'warn');
+        else toast(t('walletSaved'), 'success');
       } catch (err) {
         // A missing gold_* column / stale PostgREST schema cache means
         // supabase-schema.sql hasn't been (re)run — say that instead of
