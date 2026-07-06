@@ -15,7 +15,7 @@
 'use strict';
 
 // Bump VERSION whenever this file changes → old caches are purged on activate.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = 'sotc-' + VERSION;
 
 // Cross-origin hosts whose PUBLIC assets are safe to cache (no auth, no secrets).
