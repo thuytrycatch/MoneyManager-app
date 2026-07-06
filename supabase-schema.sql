@@ -425,6 +425,9 @@ create table if not exists public.monthly_reports (
   unique (household_id, period)
 );
 create index if not exists idx_monthly_reports_hh on public.monthly_reports (household_id, period desc);
+-- Email báo cáo tháng: stamp chống gửi trùng (Edge Function monthly-email ghi
+-- bằng service role — không cần đổi RLS/policy).
+alter table public.monthly_reports add column if not exists email_sent_at timestamptz;
 alter table public.monthly_reports enable row level security;
 drop policy if exists monthly_reports_select on public.monthly_reports;
 create policy monthly_reports_select on public.monthly_reports for select

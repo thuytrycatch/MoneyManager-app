@@ -91,6 +91,16 @@ main { padding: 4px 16px 110px; }
 #refreshBtn:disabled { opacity: .7; cursor: default; }
 #refreshBtn.spinning .ic { animation: spin .8s linear infinite; }
 
+/* ---------- Busy button (waiting on server) ---------- */
+button.btn-busy { opacity: .65; pointer-events: none; }
+button.btn-busy .ic { display: none; }              /* icon yields to the spinner */
+button.btn-busy::before {
+  content: ''; display: inline-block; width: 14px; height: 14px;
+  margin-right: 6px; vertical-align: -2px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: spin .8s linear infinite;
+}
+
 /* ---------- Hero balance ---------- */
 .hero {
   margin-top: 8px; padding: 22px 20px;

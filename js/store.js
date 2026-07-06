@@ -818,6 +818,28 @@
     return merged;
   }
 
+  // "Gửi thử" for the monthly email report: invokes the monthly-email Edge
+  // Function with the caller's JWT; the function checks owner/admin and mails
+  // only the caller. Throws with the function's error code (e.g. 'no_snapshot').
+  async function sendTestMonthlyEmail() {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { data, error } = await sb.functions.invoke('monthly-email', {
+      body: { test: true, householdId: household.id },
+    });
+    if (error) {
+      // FunctionsHttpError carries the response body with the real reason.
+      let msg = error.message;
+      try {
+        const body = error.context ? await error.context.json() : null;
+        if (body && body.error) msg = body.error;
+      } catch (e) { /* keep generic message */ }
+      throw new Error(msg);
+    }
+    if (data && data.ok === false) throw new Error(data.error || 'send failed');
+    return data;
+  }
+
   /* ---------------- Activity log (audit trail) ---------------- */
   // Read the household's activity log (newest first). Owners/admins only — RLS returns
   // nothing for plain members. Tolerates the table being absent (before the schema re-run).
@@ -931,6 +953,7 @@
     deleteRecurring,
     upsertMonthlyReport,
     saveHouseholdSettings,
+    sendTestMonthlyEmail,
     refreshGoldPrices,
     subscribeChanges,
     unsubscribeChanges,

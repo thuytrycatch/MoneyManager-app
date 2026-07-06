@@ -18,6 +18,10 @@ bilingual UI, and dark mode.
 - 📝 Enter transactions in natural Vietnamese (Claude API, with a regex fallback).
 - 📊 Charts: category donut, income/expense bars, budget progress bars.
 - 🔔 Alerts when a budget passes 80% and 100%.
+- 📧 **Monthly email report** (optional): the closed monthly summary is emailed to
+  all members via the `monthly-email` Edge Function — see
+  [`supabase/functions/monthly-email/README.md`](supabase/functions/monthly-email/README.md)
+  (requires re-running `supabase-schema.sql`, deploying the function, and a daily pg_cron job).
 - 📱 Mobile-first, bottom navigation, dark mode, Vietnamese / English UI.
 
 ---

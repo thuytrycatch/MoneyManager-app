@@ -88,6 +88,7 @@
     camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
     x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     gold: '<path d="M9 4h6l2 5H7l2-5z"/><path d="M4.5 13h6l2 5h-10l2-5z"/><path d="M13.5 13h6l2 5h-10l2-5z"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -280,6 +281,14 @@
       closeSaved: 'Đã chốt sổ tháng.', estSaving: 'Ước tính tiết kiệm',
       prioHigh: 'Ưu tiên cao', prioMedium: 'Trung bình', prioLow: 'Thấp',
       winSavingsUp: 'Tỷ lệ tiết kiệm cao hơn tháng trước 🎉', winBelowAvg: 'Chi thấp hơn trung bình 3 tháng.', winCatDown: 'Giảm chi ở {c}.',
+      // Monthly email report
+      emailReport: 'Báo cáo email hàng tháng', emailReportOn: 'Gửi báo cáo qua email',
+      emailReportDesc: 'Tự gửi tổng kết tháng đã chốt sổ tới email các thành viên. Chưa chốt tới ngày gửi thì owner/admin được nhắc qua mail.',
+      emailSendDay: 'Gửi vào ngày (1–28)', emailOnBadge: 'Bật',
+      emailPrivacyNote: 'Báo cáo tài chính tổng hợp của hộ sẽ được gửi qua email tới mọi thành viên.',
+      emailTestSend: 'Gửi thử', emailTestSent: 'Đã gửi email thử tới {e}.',
+      emailNeedClose: 'Chưa có tháng nào được chốt sổ — hãy chốt sổ trước.',
+      emailSaved: 'Đã lưu cài đặt email.',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -461,6 +470,14 @@
       closeSaved: 'Month closed.', estSaving: 'Est. saving',
       prioHigh: 'High', prioMedium: 'Medium', prioLow: 'Low',
       winSavingsUp: 'Savings rate up vs last month 🎉', winBelowAvg: 'Spending below the 3-month average.', winCatDown: 'Lower spending on {c}.',
+      // Monthly email report
+      emailReport: 'Monthly email report', emailReportOn: 'Send report by email',
+      emailReportDesc: 'Emails the closed monthly summary to all members. If the month is not closed by the send day, owners/admins get a reminder instead.',
+      emailSendDay: 'Send on day (1–28)', emailOnBadge: 'On',
+      emailPrivacyNote: 'The household’s aggregated financial report will be emailed to all members.',
+      emailTestSend: 'Send test', emailTestSent: 'Test email sent to {e}.',
+      emailNeedClose: 'No closed month yet — close a month first.',
+      emailSaved: 'Email settings saved.',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -1068,17 +1085,41 @@
     if (!el) return; el.textContent = text || ''; el.className = 'sync-status ' + (kind || '');
   }
 
+  /* ============== Busy button ============== */
+  // Wraps an async action tied to a button: disable + spinner while waiting,
+  // restore when done. Swallows re-clicks while running (double-submit guard).
+  // Safe when render() replaces the button before finally runs (restoring a
+  // detached node is harmless).
+  async function busy(btn, fn) {
+    if (!btn) return fn();
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = '1';
+    btn.disabled = true;
+    btn.classList.add('btn-busy');
+    btn.setAttribute('aria-busy', 'true');
+    try {
+      return await fn();
+    } finally {
+      delete btn.dataset.busy;
+      btn.disabled = false;
+      btn.classList.remove('btn-busy');
+      btn.removeAttribute('aria-busy');
+    }
+  }
+
   /* ============== Transaction actions ============== */
+  // busy() covers the whole flow (parse + save) so a double tap on slow
+  // networks can't create duplicate transactions.
   async function addFromInput(raw, btnId, dateInputId, accountSelectId) {
     if (!raw.trim()) { toast(t('emptyInput'), 'warn'); return; }
-    const btn = btnId && document.getElementById(btnId);
-    const old = btn && btn.innerHTML;
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    const btn = (btnId && document.getElementById(btnId)) || null;
+    return busy(btn, () => addFromInputInner(raw, dateInputId, accountSelectId));
+  }
+  async function addFromInputInner(raw, dateInputId, accountSelectId) {
     // Parse one OR many entries ("ăn sáng 35k, cafe 20k, grab 1tr2" → 3 drafts).
     let parsedList;
     try { parsedList = await window.Parser.parseMany(raw); }
     catch (e) { parsedList = [{ ...window.Parser.parseWithRegex(raw), rawInput: raw.trim() }]; }
-    if (btn) { btn.disabled = false; btn.innerHTML = old; }
 
     const recognized = (parsedList || []).filter((p) => p && p.amount > 0);
     const dropped = (parsedList || []).length - recognized.length;
@@ -1166,7 +1207,7 @@
     document.body.appendChild(bar);
     requestAnimationFrame(() => bar.classList.add('show'));
     const close = () => { bar.classList.remove('show'); setTimeout(() => { if (bar.parentNode) bar.remove(); }, 250); };
-    bar.querySelector('[data-undo]').addEventListener('click', async () => {
+    bar.querySelector('[data-undo]').addEventListener('click', (e) => busy(e.currentTarget, async () => {
       if (undoTimer) clearTimeout(undoTimer);
       close();
       try {
@@ -1174,7 +1215,7 @@
         DATA.transactions = DATA.transactions.filter((x) => x.id !== tx.id);
         toast(t('deleted'), 'info'); render();
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
-    });
+    }));
     undoTimer = setTimeout(close, 5000);
   }
 
@@ -1230,7 +1271,8 @@
         seg.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
         b.classList.add('active'); seg.dataset.type = b.dataset.type;
       })));
-    document.getElementById('epSave').addEventListener('click', async () => {
+    const epSave = document.getElementById('epSave');
+    epSave.addEventListener('click', () => busy(epSave, async () => {
       const acct = (document.getElementById('epAccount') ? document.getElementById('epAccount').value : accountId) || '';
       const ben = (document.getElementById('epBeneficiary') ? document.getElementById('epBeneficiary').value : '') || null;
       const out = [];
@@ -1248,7 +1290,7 @@
       if (!out.length) { toast(t('needAmount'), 'warn'); return; }
       close();
       await saveDrafts(out, acct, { undo: false });
-    });
+    }));
   }
   function checkBudgetWarning(cat) {
     const limit = DATA.budgets[cat]; if (!limit) return;
@@ -1257,17 +1299,21 @@
     if (pct >= 100) toast('🚨 ' + t('warn100') + ': ' + cat + ' (' + Math.round(pct) + '%)', 'error');
     else if (pct >= 80) toast('⚠️ ' + t('warn80') + ': ' + cat + ' (' + Math.round(pct) + '%)', 'warn');
   }
-  async function deleteTx(id) {
+  // `btn` (optional) is the button that triggered the delete — confirm() runs
+  // first so the spinner only shows while the server call is in flight.
+  async function deleteTx(id, btn) {
     const tx = DATA.transactions.find((x) => x.id === id);
     if (tx && !canEditTx(tx)) { toast(t('cantEditOthersTx'), 'warn'); return; }
     if (!confirm(t('confirmDelete'))) return;
-    try {
-      await window.Store.deleteTransaction(id);
-      DATA.transactions = DATA.transactions.filter((x) => x.id !== id);
-      toast(t('deleted'), 'info'); render();
-    } catch (err) {
-      toast(t('syncError') + ': ' + err.message, 'error');
-    }
+    return busy(btn || null, async () => {
+      try {
+        await window.Store.deleteTransaction(id);
+        DATA.transactions = DATA.transactions.filter((x) => x.id !== id);
+        toast(t('deleted'), 'info'); render();
+      } catch (err) {
+        toast(t('syncError') + ': ' + err.message, 'error');
+      }
+    });
   }
 
   /* ============== Escape ============== */
@@ -1463,14 +1509,16 @@
       loadSignedImg(img, img.dataset.path);
       img.addEventListener('click', () => openAttachmentViewer(tx.id, i));
     });
-    box.querySelectorAll('[data-delatt]').forEach((b) => b.addEventListener('click', async () => {
+    box.querySelectorAll('[data-delatt]').forEach((b) => b.addEventListener('click', () => {
       const att = attachmentsFor(tx.id).find((x) => x.id === b.dataset.delatt);
       if (!att || !confirm(t('confirmRemovePhoto'))) return;
-      try {
-        await window.Store.deleteAttachment(att);
-        DATA.attachments = (DATA.attachments || []).filter((x) => x.id !== att.id);
-        render(); fillEvidenceBox(tx);
-      } catch (err) { toast(t('photoUploadFailed') + ': ' + err.message, 'error'); }
+      busy(b, async () => {
+        try {
+          await window.Store.deleteAttachment(att);
+          DATA.attachments = (DATA.attachments || []).filter((x) => x.id !== att.id);
+          render(); fillEvidenceBox(tx);
+        } catch (err) { toast(t('photoUploadFailed') + ': ' + err.message, 'error'); }
+      });
     }));
     const addBtn = box.querySelector('#attachAdd');
     const fileInput = box.querySelector('#attachFile');
@@ -1490,25 +1538,27 @@
           toast(t('maxPhotos').replace('{n}', MAX_PHOTOS), 'warn');
         }
         if (!allow.length) return;
-        addBtn.disabled = true;
         const oldHtml = addBtn.innerHTML;
-        addBtn.innerHTML = icon('clock') + '<span>' + t('uploading') + '</span>';
-        for (const f of allow) {
+        await busy(addBtn, async () => {
+          addBtn.innerHTML = icon('clock') + '<span>' + t('uploading') + '</span>';
           try {
-            const out = await compressImage(f);
-            const path = await window.Store.uploadReceipt(tx.id, out.blob, 'jpg');
-            const att = await window.Store.insertAttachment({
-              transactionId: tx.id, storagePath: path, mime: 'image/jpeg',
-              sizeBytes: out.blob.size, width: out.width, height: out.height,
-            });
-            DATA.attachments = DATA.attachments || []; DATA.attachments.push(att);
-          } catch (err) {
-            const msg = (err && err.message === 'decode') ? t('photoUnsupported')
-              : (t('photoUploadFailed') + (err && err.message ? ': ' + err.message : ''));
-            toast(msg, 'error');
-          }
-        }
-        addBtn.disabled = false; addBtn.innerHTML = oldHtml;
+            for (const f of allow) {
+              try {
+                const out = await compressImage(f);
+                const path = await window.Store.uploadReceipt(tx.id, out.blob, 'jpg');
+                const att = await window.Store.insertAttachment({
+                  transactionId: tx.id, storagePath: path, mime: 'image/jpeg',
+                  sizeBytes: out.blob.size, width: out.width, height: out.height,
+                });
+                DATA.attachments = DATA.attachments || []; DATA.attachments.push(att);
+              } catch (err) {
+                const msg = (err && err.message === 'decode') ? t('photoUnsupported')
+                  : (t('photoUploadFailed') + (err && err.message ? ': ' + err.message : ''));
+                toast(msg, 'error');
+              }
+            }
+          } finally { addBtn.innerHTML = oldHtml; }
+        });
         render(); fillEvidenceBox(tx);
       });
     }
@@ -1565,8 +1615,11 @@
     if (!first) return;
     if (!window.Parser.imageOcrAvailable()) { toast(t('ocrNeedKey'), 'warn'); return; }
     if (!navigator.onLine) { toast(t('needNetworkPhoto'), 'warn'); return; }
+    return busy(btn, () => scanFirstReceiptInner(btn, first));
+  }
+  async function scanFirstReceiptInner(btn, first) {
     const oldHtml = btn.innerHTML;
-    btn.disabled = true; btn.innerHTML = icon('clock') + ' ' + t('scanning');
+    btn.innerHTML = icon('clock') + ' ' + t('scanning');
     try {
       let blob = first.file;
       try {
@@ -1591,7 +1644,7 @@
     } catch (err) {
       toast(t('ocrFailed') + (err && err.message ? ': ' + err.message : ''), 'error');
     } finally {
-      btn.disabled = false; btn.innerHTML = oldHtml;
+      btn.innerHTML = oldHtml;
     }
   }
   // Upload all pending Add-page photos onto a freshly-saved transaction. Pushes into
@@ -2396,14 +2449,16 @@
     const close = () => { const mo = document.getElementById('modalBackdrop'); if (mo) mo.remove(); };
     const wireBody = () => {
       const gen = document.getElementById('mcGenAi');
-      if (gen) gen.addEventListener('click', async () => {
+      if (gen) gen.addEventListener('click', () => {
         if (!window.Parser.aiReviewAvailable()) { toast(t('aiNeedKey'), 'error'); return; }
-        gen.disabled = true; gen.innerHTML = icon('refresh') + ' ' + t('closeGenerating');
-        try {
-          curReview = await window.Parser.reviewMonth(aiPayload(metrics));
-          const b = document.getElementById('mcBody'); if (b) b.innerHTML = renderMonthlyReport(metrics, curReview, !viewOnly);
-          wireBody();
-        } catch (e) { toast(e.message || t('aiFailed'), 'error'); gen.disabled = false; gen.innerHTML = icon('target') + ' ' + t('genAiReview'); }
+        busy(gen, async () => {
+          gen.innerHTML = icon('refresh') + ' ' + t('closeGenerating');
+          try {
+            curReview = await window.Parser.reviewMonth(aiPayload(metrics));
+            const b = document.getElementById('mcBody'); if (b) b.innerHTML = renderMonthlyReport(metrics, curReview, !viewOnly);
+            wireBody();
+          } catch (e) { toast(e.message || t('aiFailed'), 'error'); gen.innerHTML = icon('target') + ' ' + t('genAiReview'); }
+        });
       });
     };
 
@@ -2412,15 +2467,14 @@
     const reclose = document.getElementById('mcReclose');
     if (reclose) reclose.addEventListener('click', () => { close(); openMonthlyClose(period, { reclose: true }); });
     const save = document.getElementById('mcSave');
-    if (save) save.addEventListener('click', async () => {
-      save.disabled = true;
+    if (save) save.addEventListener('click', () => busy(save, async () => {
       try {
         const s2 = await window.Store.upsertMonthlyReport({ period: metrics.period, metrics: metrics, aiReview: curReview || null });
         const i = DATA.monthlyReports.findIndex((r) => r.period === s2.period);
         if (i >= 0) DATA.monthlyReports[i] = s2; else DATA.monthlyReports.push(s2);
         toast(t('closeSaved'), 'success'); close(); render();
-      } catch (e) { toast(e.message, 'error'); save.disabled = false; }
-    });
+      } catch (e) { toast(e.message, 'error'); }
+    }));
     wireBody();
   }
 
@@ -2720,6 +2774,18 @@
     } catch (e) { return ''; }
   })();
 
+  // Monthly email report config — lives in household_settings (DATA.aiConfig),
+  // read by the monthly-email Edge Function. NOT a window.CONFIG key.
+  function emailReportCfg() {
+    const s = (DATA && DATA.aiConfig && DATA.aiConfig.EMAIL_REPORT) || {};
+    let day = Math.round(Number(s.sendDay)) || 3;
+    day = Math.min(28, Math.max(1, day));
+    return { enabled: s.enabled === true, sendDay: day };
+  }
+  async function saveEmailReportCfg(cfg) {
+    DATA.aiConfig = await window.Store.saveHouseholdSettings({ EMAIL_REPORT: cfg });
+  }
+
   function settingsRoot() {
     const hh = DATA.household || { name: '' };
     const accs = activeAccounts();
@@ -2746,6 +2812,7 @@
       ], t('grpGeneral')) +
       iosGroup([
         iosRow({ ic: 'spark', tint: 'pink', label: t('aiCategorize'), page: 'ai' }),
+        iosRow({ ic: 'mail', tint: 'blue', label: t('emailReport'), value: emailReportCfg().enabled ? t('emailOnBadge') : '', page: 'email' }),
         iosRow({ ic: 'settings', tint: 'gray', label: t('connTitle'), page: 'supabase' }),
       ], t('grpAdvanced')) +
       iosGroup([
@@ -2975,6 +3042,21 @@
         f('cfgAnthropic', t('anthropicKey'), C.ANTHROPIC_API_KEY, 'password') + '</div>' +
         '<button id="saveConfigBtn" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>';
       if (!canManageConfig()) body = roLock(body);
+    } else if (page === 'email') {
+      title = t('emailReport');
+      const cfg = emailReportCfg();
+      const sw = '<span class="ios-switch' + (cfg.enabled ? ' on' : '') + '"><span class="ios-knob"></span></span>';
+      body = iosGroup([
+        iosRow({ ic: 'mail', tint: 'blue', label: t('emailReportOn'), control: sw, action: 'email-toggle', noChevron: true }),
+      ]) +
+        (cfg.enabled
+          ? '<div class="conn-row" style="margin-top:14px"><label>' + t('emailSendDay') + '</label>' +
+            '<input id="emailSendDay" type="number" min="1" max="28" inputmode="numeric" value="' + cfg.sendDay + '"/></div>' +
+            '<button id="emailTestBtn" class="ghost-btn" style="margin-top:10px">' + icon('mail') + ' ' + t('emailTestSend') + '</button>'
+          : '') +
+        '<div class="hint">' + t('emailReportDesc') + '</div>' +
+        '<div class="warn-hint">' + icon('alert') + ' ' + t('emailPrivacyNote') + '</div>';
+      if (!canManageConfig()) body = roLock(body);
     } else if (page === 'supabase') {
       title = t('connTitle');
       body = '<div class="conn-form">' +
@@ -3064,7 +3146,8 @@
     const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
     document.getElementById('tCancel').addEventListener('click', close);
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
-    document.getElementById('tSave').addEventListener('click', async () => {
+    const tSave = document.getElementById('tSave');
+    tSave.addEventListener('click', () => busy(tSave, async () => {
       const from = document.getElementById('tFrom').value;
       const to = document.getElementById('tTo').value;
       const amount = readMoney(document.getElementById('tAmount'));
@@ -3086,7 +3169,7 @@
         }
         close(); toast(t('transferDone'), 'success'); render();
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
-    });
+    }));
   }
 
   /* ============== Adjust balance & wallet history ============== */
@@ -3109,7 +3192,8 @@
     const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
     document.getElementById('abCancel').addEventListener('click', close);
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
-    document.getElementById('abSave').addEventListener('click', async () => {
+    const abSave = document.getElementById('abSave');
+    abSave.addEventListener('click', () => busy(abSave, async () => {
       const target = readMoney(document.getElementById('abAmount'));
       const delta = target - cur;
       if (!delta) { close(); return; }              // already correct — nothing to record
@@ -3123,7 +3207,7 @@
         DATA.transactions.unshift(saved);
         close(); toast(t('balanceAdjusted'), 'success'); render();
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
-    });
+    }));
   }
 
   // Every transaction that touched a wallet, oldest→newest, each stamped with the running
@@ -3231,7 +3315,8 @@
     const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
     document.getElementById('eCancel').addEventListener('click', close);
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
-    document.getElementById('eSave').addEventListener('click', async () => {
+    const eSave = document.getElementById('eSave');
+    eSave.addEventListener('click', () => busy(eSave, async () => {
       const fields = {
         amount: readMoney(document.getElementById('eAmount')),
         category: document.getElementById('eCat').value,
@@ -3251,7 +3336,7 @@
       } catch (err) {
         toast(t('syncError') + ': ' + err.message, 'error');
       }
-    });
+    }));
   }
 
   /* ============== Nav ============== */
@@ -3304,7 +3389,7 @@
     const fc = document.getElementById('fCat'); if (fc) fc.addEventListener('change', () => { filterCategory = fc.value; render(); });
     const ft = document.getElementById('fType'); if (ft) ft.addEventListener('change', () => { filterType = ft.value; render(); });
     // tx actions
-    document.querySelectorAll('.tx-actions .icon-btn').forEach((b) => b.addEventListener('click', () => { b.dataset.act === 'del' ? deleteTx(b.dataset.id) : openEdit(b.dataset.id); }));
+    document.querySelectorAll('.tx-actions .icon-btn').forEach((b) => b.addEventListener('click', () => { b.dataset.act === 'del' ? deleteTx(b.dataset.id, b) : openEdit(b.dataset.id); }));
     // tap a transaction row (anywhere but its delete button / attachment badge) to open its editor
     document.querySelectorAll('.tx-row[data-id]').forEach((row) => row.addEventListener('click', (e) => {
       if (e.target.closest('.tx-actions') || e.target.closest('[data-attview]')) return;
@@ -3338,7 +3423,7 @@
     document.querySelectorAll('[data-hmday]').forEach((b) => b.addEventListener('click', () => { filterMonth = b.dataset.hmday.slice(0, 7); filterCategory = ''; filterType = ''; currentTab = 'transactions'; render(); }));
     // budgets
     const sb = document.getElementById('saveBudgetBtn');
-    if (sb) sb.addEventListener('click', async () => {
+    if (sb) sb.addEventListener('click', () => busy(sb, async () => {
       const obj = {};
       document.querySelectorAll('[data-budget]').forEach((i) => { obj[i.dataset.budget] = readMoney(i); });
       try {
@@ -3348,7 +3433,7 @@
       } catch (err) {
         toast(t('syncError') + ': ' + err.message, 'error');
       }
-    });
+    }));
     // wallets: show/hide credit-card & gold fields when a row's type changes (delegated → covers new rows)
     const weBox = document.getElementById('walletEdit');
     if (weBox) weBox.addEventListener('change', (e) => {
@@ -3413,7 +3498,7 @@
     });
     // wallets: save all rows (update existing, insert new)
     const sw = document.getElementById('saveWalletsBtn');
-    if (sw) sw.addEventListener('click', async () => {
+    if (sw) sw.addEventListener('click', () => busy(sw, async () => {
       const rows = Array.from(document.querySelectorAll('#walletEdit .wallet-edit-row'));
       try {
         // Resolve the wallet id the user marked as default (may be a row inserted just now).
@@ -3486,18 +3571,20 @@
           : t('syncError') + ': ' + err.message;
         toast(msg, 'error');
       }
-    });
+    }));
     // wallets: delete
-    document.querySelectorAll('[data-delacc]').forEach((b) => b.addEventListener('click', async () => {
+    document.querySelectorAll('[data-delacc]').forEach((b) => b.addEventListener('click', () => {
       if (!confirm(t('confirmDeleteWallet'))) return;
-      try {
-        await window.Store.deleteAccount(b.dataset.delacc);
-        await refreshData(true);
-        toast(t('walletDeleted'), 'info');
-      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      busy(b, async () => {
+        try {
+          await window.Store.deleteAccount(b.dataset.delacc);
+          await refreshData(true);
+          toast(t('walletDeleted'), 'info');
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
     }));
     // Quick templates: tap a chip (Add page) to log it instantly
-    document.querySelectorAll('[data-usetpl]').forEach((b) => b.addEventListener('click', () => addFromTemplate(b.dataset.usetpl)));
+    document.querySelectorAll('[data-usetpl]').forEach((b) => b.addEventListener('click', () => busy(b, () => addFromTemplate(b.dataset.usetpl))));
     // Quick templates: add a blank editor row
     const atpl = document.getElementById('addTplBtn');
     if (atpl) atpl.addEventListener('click', () => {
@@ -3534,14 +3621,16 @@
       const last = box.querySelector('.goal-edit-row:last-child .g-name'); if (last) last.focus();
     });
     // Savings goals: delete (persists immediately)
-    document.querySelectorAll('[data-delgoal]').forEach((b) => b.addEventListener('click', async () => {
+    document.querySelectorAll('[data-delgoal]').forEach((b) => b.addEventListener('click', () => {
       if (!confirm(t('delete') + '?')) return;
-      try { await window.Store.deleteGoal(b.dataset.delgoal); await refreshData(true); toast(t('deleted'), 'info'); }
-      catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      busy(b, async () => {
+        try { await window.Store.deleteGoal(b.dataset.delgoal); await refreshData(true); toast(t('deleted'), 'info'); }
+        catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
     }));
     // Savings goals: save all rows (insert new / update existing)
     const sgoal = document.getElementById('saveGoalsBtn');
-    if (sgoal) sgoal.addEventListener('click', async () => {
+    if (sgoal) sgoal.addEventListener('click', () => busy(sgoal, async () => {
       const rows = Array.from(document.querySelectorAll('#goalEdit .goal-edit-row'));
       try {
         for (const r of rows) {
@@ -3556,7 +3645,7 @@
         await refreshData(true);
         toast(t('save') + ' ✓', 'success');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
-    });
+    }));
     // Recurring: add a blank editor row
     const arec = document.getElementById('addRecBtn');
     if (arec) arec.addEventListener('click', () => {
@@ -3566,14 +3655,16 @@
       const last = box.querySelector('.rec-edit-row:last-child .r-name'); if (last) last.focus();
     });
     // Recurring: delete (persists immediately)
-    document.querySelectorAll('[data-delrec]').forEach((b) => b.addEventListener('click', async () => {
+    document.querySelectorAll('[data-delrec]').forEach((b) => b.addEventListener('click', () => {
       if (!confirm(t('delete') + '?')) return;
-      try { await window.Store.deleteRecurring(b.dataset.delrec); await refreshData(true); toast(t('deleted'), 'info'); }
-      catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      busy(b, async () => {
+        try { await window.Store.deleteRecurring(b.dataset.delrec); await refreshData(true); toast(t('deleted'), 'info'); }
+        catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
     }));
     // Recurring: save all rows (insert new / update existing), then run any now due
     const srec = document.getElementById('saveRecBtn');
-    if (srec) srec.addEventListener('click', async () => {
+    if (srec) srec.addEventListener('click', () => busy(srec, async () => {
       const rows = Array.from(document.querySelectorAll('#recEdit .rec-edit-row'));
       try {
         for (const r of rows) {
@@ -3590,17 +3681,16 @@
         await runRecurring();
         toast(t('save') + ' ✓', 'success');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
-    });
+    }));
     // Save AI keys (parser): Gemini (free) + Claude (paid fallback).
     // Written to the household_settings table so the whole household shares them;
     // if the table doesn't exist yet (schema not re-run) fall back to localStorage.
     const sc = document.getElementById('saveConfigBtn');
-    if (sc) sc.addEventListener('click', async () => {
+    if (sc) sc.addEventListener('click', () => busy(sc, async () => {
       const patch = {
         GEMINI_API_KEY: document.getElementById('cfgGemini').value.trim(),
         ANTHROPIC_API_KEY: document.getElementById('cfgAnthropic').value.trim(),
       };
-      sc.disabled = true;
       try {
         DATA.aiConfig = await window.Store.saveHouseholdSettings(patch);
         applyDbConfig();
@@ -3609,8 +3699,7 @@
         saveSettings(patch);
         toast(t('aiSavedLocal'), 'warn');
       }
-      sc.disabled = false;
-    });
+    }));
     // Change Supabase config (URL/key) -> page reload required to apply
     const sca = document.getElementById('saveSupaBtn');
     if (sca) sca.addEventListener('click', () => {
@@ -3623,12 +3712,12 @@
     });
     // Rename household
     const rh = document.getElementById('renameHhBtn');
-    if (rh) rh.addEventListener('click', async () => {
+    if (rh) rh.addEventListener('click', () => busy(rh, async () => {
       const name = document.getElementById('hhName').value.trim();
       if (!name) return;
       try { await window.Store.renameHousehold(name); if (DATA.household) DATA.household.name = name; toast(t('renameOk'), 'success'); render(); }
       catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
-    });
+    }));
     // Copy invite code
     const cc = document.getElementById('copyCodeBtn');
     if (cc) cc.addEventListener('click', () => {
@@ -3638,7 +3727,7 @@
     });
     // Join another household
     const jb = document.getElementById('joinHhBtn');
-    if (jb) jb.addEventListener('click', async () => {
+    if (jb) jb.addEventListener('click', () => busy(jb, async () => {
       const code = document.getElementById('joinCode').value.trim();
       if (!code) return;
       try {
@@ -3646,47 +3735,55 @@
         toast(t('joined'), 'success');
         await enterApp();
       } catch (err) { toast(err.message, 'error'); }
-    });
+    }));
     // Remove member (owner removes another member)
-    document.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', async () => {
+    document.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => {
       if (!confirm(t('confirmRemoveMember'))) return;
-      try {
-        await window.Store.removeMember(b.dataset.remove);
-        householdMembers = await window.Store.listMembers().catch(() => []);
-        toast(t('memberRemoved'), 'success'); render();
-      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      busy(b, async () => {
+        try {
+          await window.Store.removeMember(b.dataset.remove);
+          householdMembers = await window.Store.listMembers().catch(() => []);
+          toast(t('memberRemoved'), 'success'); render();
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
     }));
     // Promote/demote a member (owner only). RLS + the role-guard trigger reject it server-side otherwise.
-    document.querySelectorAll('[data-setrole]').forEach((b) => b.addEventListener('click', async () => {
+    document.querySelectorAll('[data-setrole]').forEach((b) => b.addEventListener('click', () => {
       const role = b.dataset.role === 'admin' ? 'admin' : 'member';
       if (!confirm(role === 'admin' ? t('confirmMakeAdmin') : t('confirmRemoveAdmin'))) return;
-      try {
-        await window.Store.setMemberRole(b.dataset.setrole, role);
-        householdMembers = await window.Store.listMembers().catch(() => householdMembers);
-        myRole = computeMyRole();
-        toast(t('roleChanged'), 'success'); render();
-      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      busy(b, async () => {
+        try {
+          await window.Store.setMemberRole(b.dataset.setrole, role);
+          householdMembers = await window.Store.listMembers().catch(() => householdMembers);
+          myRole = computeMyRole();
+          toast(t('roleChanged'), 'success'); render();
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
     }));
     // Transfer ownership to another member (owner only). The acting owner becomes an admin.
-    document.querySelectorAll('[data-makeowner]').forEach((b) => b.addEventListener('click', async () => {
+    document.querySelectorAll('[data-makeowner]').forEach((b) => b.addEventListener('click', () => {
       if (!confirm(t('confirmMakeOwner'))) return;
-      try {
-        await window.Store.transferOwnership(b.dataset.makeowner);
-        householdMembers = await window.Store.listMembers().catch(() => householdMembers);
-        myRole = computeMyRole();
-        toast(t('ownerTransferred'), 'success'); render();
-      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      busy(b, async () => {
+        try {
+          await window.Store.transferOwnership(b.dataset.makeowner);
+          householdMembers = await window.Store.listMembers().catch(() => householdMembers);
+          myRole = computeMyRole();
+          toast(t('ownerTransferred'), 'success'); render();
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
     }));
     // Leave household (remove yourself)
     const lv = document.querySelector('[data-leave]');
-    if (lv) lv.addEventListener('click', async () => {
+    if (lv) lv.addEventListener('click', () => {
       if (!confirm(t('confirmLeave'))) return;
-      try {
-        window.Store.unsubscribeChanges();
-        await window.Store.removeMember(currentUserId);
-        toast(t('memberRemoved'), 'info');
-        await enterApp();
-      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      busy(lv, async () => {
+        try {
+          window.Store.unsubscribeChanges();
+          await window.Store.removeMember(currentUserId);
+          toast(t('memberRemoved'), 'info');
+          await enterApp();
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
     });
     // Switch household (when in multiple households)
     const hs = document.getElementById('switchHh');
@@ -3735,7 +3832,33 @@
       if (a === 'lang') openLangPicker();
       else if (a === 'theme') { toggleTheme(); render(); }
       else if (a === 'remind-toggle') toggleReminder();
-      else if (a === 'signout') signOutNow();
+      else if (a === 'email-toggle') busy(b, async () => {
+        const cfg = emailReportCfg();
+        try {
+          await saveEmailReportCfg({ enabled: !cfg.enabled, sendDay: cfg.sendDay });
+          toast(t('emailSaved'), 'success');
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+        render();
+      });
+      else if (a === 'signout') busy(b, signOutNow);
+    }));
+    // Monthly email report: send day + test send
+    const esd = document.getElementById('emailSendDay');
+    if (esd) esd.addEventListener('change', async () => {
+      let day = Math.round(Number(esd.value)) || 3;
+      day = Math.min(28, Math.max(1, day)); esd.value = day;
+      try { await saveEmailReportCfg({ enabled: true, sendDay: day }); toast(t('emailSaved'), 'success'); }
+      catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    });
+    const etb = document.getElementById('emailTestBtn');
+    if (etb) etb.addEventListener('click', () => busy(etb, async () => {
+      try {
+        const res = await window.Store.sendTestMonthlyEmail();
+        const to = (res && res.sentTo && res.sentTo[0]) || currentUserEmail;
+        toast(t('emailTestSent').replace('{e}', to), 'success');
+      } catch (err) {
+        toast(err.message === 'no_snapshot' ? t('emailNeedClose') : (t('syncError') + ': ' + err.message), 'error');
+      }
     }));
   }
 
@@ -3849,22 +3972,22 @@
     const password = document.getElementById('aPass').value || '';
     if (!email || !password) { setAuthError(t('fillEmailPass')); toast(t('fillEmailPass'), 'warn'); return; }
     const btn = document.getElementById('aPrimary');
-    const old = btn.innerHTML; btn.disabled = true; btn.textContent = '…';
-    try {
-      if (authIsSignup) {
-        await window.Store.signUp(email, password);
-        const user = await window.Store.getUser();
-        if (!user) { toast(t('signedUp'), 'success'); authIsSignup = false; showAuth('login'); return; }
-      } else {
-        await window.Store.signIn(email, password);
+    return busy(btn, async () => {
+      try {
+        if (authIsSignup) {
+          await window.Store.signUp(email, password);
+          const user = await window.Store.getUser();
+          if (!user) { toast(t('signedUp'), 'success'); authIsSignup = false; showAuth('login'); return; }
+        } else {
+          await window.Store.signIn(email, password);
+        }
+        await enterApp();
+      } catch (err) {
+        const msg = friendlyAuthError(err.message);
+        setAuthError(msg);
+        toast(msg, 'error');
       }
-      await enterApp();
-    } catch (err) {
-      const msg = friendlyAuthError(err.message);
-      setAuthError(msg);
-      toast(msg, 'error');
-      btn.disabled = false; btn.innerHTML = old;
-    }
+    });
   }
 
   /* ============== Enter app (load data) ============== */
@@ -3919,18 +4042,18 @@
   /* ============== Gold price refresh ============== */
   // On-demand refresh (button on the Net worth card). The Edge Function updates the
   // shared gold_prices cache; realtime + refreshData bring the new numbers back.
-  document.addEventListener('click', async (e) => {
+  document.addEventListener('click', (e) => {
     const btn = e.target && e.target.closest ? e.target.closest('#goldRefreshBtn') : null;
     if (!btn) return;
-    btn.disabled = true;
-    try {
-      await window.Store.refreshGoldPrices();
-      await refreshData(true);
-      toast(t('goldPriceUpdated'), 'success');
-    } catch (err) {
-      toast(t('goldPriceUpdateFailed'), 'warn');
-      btn.disabled = false;
-    }
+    busy(btn, async () => {
+      try {
+        await window.Store.refreshGoldPrices();
+        await refreshData(true);
+        toast(t('goldPriceUpdated'), 'success');
+      } catch (err) {
+        toast(t('goldPriceUpdateFailed'), 'warn');
+      }
+    });
   });
   // Keep prices fresh without user action: when any gold wallet references a market
   // kind and the cache is older than 4h, poke the Edge Function fire-and-forget.
