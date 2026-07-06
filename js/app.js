@@ -192,9 +192,9 @@
       paceFast: 'Chi nhanh hơn kế hoạch', paceOk: 'Chi tiêu trong tầm kiểm soát', overspentWeek: 'Tuần này chi nhiều hơn tuần trước',
       savedWell: 'Tuần này tiết kiệm tốt!', daysLeft: 'ngày còn lại trong tháng', biggestWeek: 'Khoản chi lớn nhất tuần',
       noAlerts: 'Mọi thứ ổn định. Tiếp tục duy trì nhé! 👍',
-      // Streak & reminders
-      streak: 'Chuỗi ghi chép', streakDays: 'ngày liên tiếp', loggedToday: 'Đã ghi hôm nay',
-      notLoggedToday: 'Ghi một khoản để giữ chuỗi', startStreak: 'Bắt đầu chuỗi ghi chép hôm nay', bestStreak: 'Kỷ lục',
+      // Income vs expense tile (overview)
+      netDiff: 'Chênh lệch thu chi', netIncomeHigher: 'Thu nhiều hơn chi', netExpenseHigher: 'Chi nhiều hơn thu', netEven: 'Thu chi bằng nhau',
+      // Reminders
       reminder: 'Nhắc ghi chép', reminderOn: 'Bật nhắc nhở', reminderTime: 'Giờ nhắc',
       reminderHint: '🔔 Tới giờ đã đặt, nếu hôm đó bạn chưa ghi khoản nào, app sẽ nhắc khi bạn mở app. Thông báo chỉ hiện trên thiết bị này và không kèm số tiền.',
       reminderTitle: 'Sổ Thu Chi', reminderBody: 'Hôm nay bạn chưa ghi khoản nào — ghi nhanh để theo dõi nhé!',
@@ -381,9 +381,9 @@
       paceFast: 'Spending faster than planned', paceOk: 'Spending under control', overspentWeek: 'Spent more than last week',
       savedWell: 'Great saving this week!', daysLeft: 'days left this month', biggestWeek: 'Biggest expense this week',
       noAlerts: 'All good. Keep it up! 👍',
-      // Streak & reminders
-      streak: 'Logging streak', streakDays: 'day streak', loggedToday: 'Logged today',
-      notLoggedToday: 'Log one to keep your streak', startStreak: 'Start your streak today', bestStreak: 'Best',
+      // Income vs expense tile (overview)
+      netDiff: 'Income vs expense', netIncomeHigher: 'Earned more than spent', netExpenseHigher: 'Spent more than earned', netEven: 'Break even',
+      // Reminders
       reminder: 'Logging reminder', reminderOn: 'Enable reminders', reminderTime: 'Reminder time',
       reminderHint: '🔔 At the set time, if you have not logged anything that day, the app reminds you when you open it. Notifications stay on this device and never include amounts.',
       reminderTitle: 'Sổ Thu Chi', reminderBody: "You haven't logged anything today — add a quick entry!",
@@ -650,21 +650,6 @@
     });
     return { current: current, longest: longest, loggedToday: loggedToday };
   }
-  function streakCardHtml() {
-    const s = computeStreak();
-    const flame = s.current > 0 ? '🔥' : '✨';
-    const state = s.loggedToday
-      ? '<span class="streak-state ok">' + icon('check') + ' ' + t('loggedToday') + '</span>'
-      : (s.current > 0 ? '<span class="streak-state warn">' + t('notLoggedToday') + '</span>'
-        : '<span class="streak-state">' + t('startStreak') + '</span>');
-    return '<div class="streak-card' + (s.loggedToday ? ' lit' : '') + '">' +
-      '<div class="streak-flame">' + flame + '</div>' +
-      '<div class="streak-main"><div class="streak-num">' + s.current + ' <span>' + t('streakDays') + '</span></div>' +
-      state + '</div>' +
-      (s.longest > 1 ? '<div class="streak-best">' + t('bestStreak') + '<b>' + s.longest + '</b></div>' : '') +
-      '</div>';
-  }
-
   // Reminder config (localStorage). Notifications are LOCAL only (no server push):
   // they appear when you open/return to the app after the set time if not logged.
   function getReminderCfg() {
@@ -1325,6 +1310,19 @@
       '<div class="tile-top">' + (ic ? icon(ic) : '') + '<span>' + label + '</span></div>' +
       '<div class="tile-val">' + fmtShort(Math.abs(value)) + '</div></div>';
   }
+  // Income-vs-expense tile: signed amount + a sentence saying which side won
+  // the month, so the meaning doesn't ride on the color alone.
+  function netTileHtml(mt) {
+    const zero = mt.net === 0;
+    const pos = mt.net > 0;
+    const kind = zero ? 'neutral' : (pos ? 'income' : 'expense');
+    const state = zero ? t('netEven') : (pos ? t('netIncomeHigher') : t('netExpenseHigher'));
+    const sign = zero ? '' : (pos ? '+' : '−');
+    return '<div class="tile ' + kind + '">' +
+      '<div class="tile-top">' + icon('scale') + '<span>' + t('netDiff') + '</span></div>' +
+      '<div class="tile-val">' + sign + fmtShort(Math.abs(mt.net)) + '</div>' +
+      '<div class="tile-sub ' + (zero ? '' : (pos ? 'good' : 'bad')) + '">' + state + '</div></div>';
+  }
   // Edit/delete buttons — only for transactions the current user may change
   // (own rows for members; any row for owners/admins). Mirrors the transactions RLS.
   /* ============== Attachments (photo evidence) ============== */
@@ -1815,13 +1813,10 @@
 
       '<div class="tiles">' +
       statTile(t('remaining') + ' ' + t('budget').toLowerCase(), remain, remain >= 0 ? 'income' : 'expense', 'target') +
-      statTile(t('savings') + ' ' + t('thisMonth').toLowerCase(), mt.net, mt.net >= 0 ? 'income' : 'expense', 'piggy') +
+      netTileHtml(mt) +
       statTile(t('spentToday'), spentToday, 'expense', 'up') +
       statTile(t('avgPerDay'), avgDay, 'neutral', 'chart') +
       '</div>' +
-
-      // Habit streak
-      streakCardHtml() +
 
       // Wallet balances
       walletStripHtml() +
