@@ -258,7 +258,9 @@
       goldBuyHint: 'Giá thực trả cho 1 chỉ khi mua (đã gồm chênh lệch mua–bán); mua nhiều đợt thì nhập giá trung bình.',
       goldSpreadHint: 'Định giá dùng giá tiệm MUA VÀO, còn lúc mua bạn trả giá BÁN RA — nên ngay sau khi mua thường lỗ nhẹ do chênh lệch, là bình thường.',
       goldPriceUpdated: 'Đã cập nhật giá vàng', goldPriceUpdateFailed: 'Không lấy được giá vàng — đang dùng giá đã lưu.',
-      goldSchemaHint: 'Lưu ví thất bại: database chưa có các cột vàng. Hãy chạy lại TOÀN BỘ supabase-schema.sql trong Supabase SQL Editor rồi thử lại.',
+      goldSchemaHint: 'Lưu ví thất bại: database thiếu cột mới của ví. Hãy chạy lại TOÀN BỘ supabase-schema.sql trong Supabase SQL Editor rồi thử lại.',
+      walletAllowTx: 'Cho phép giao dịch trực tiếp',
+      walletAllowTxHint: 'Tắt với ví lưu trữ (tiết kiệm, vàng…): ví sẽ không hiện trong form nhập giao dịch — muốn chi tiêu phải Chuyển ví sang ví khác trước. Số dư và báo cáo không đổi.',
       // Attachments (photo evidence)
       evidence: 'Bằng chứng', addPhoto: 'Thêm ảnh', uploading: 'Đang tải lên…',
       removePhoto: 'Xóa ảnh', confirmRemovePhoto: 'Xóa ảnh này?',
@@ -299,7 +301,9 @@
       catSaved: 'Đã lưu danh mục.', catDuplicate: 'Tên danh mục đã tồn tại.',
       catsHint: 'Danh mục dùng chung cho cả hộ. AI phân loại giao dịch theo danh sách này. Danh mục đã dùng chỉ có thể ẩn, không xóa được.',
       catsSchemaHint: 'Cần chạy lại supabase-schema.sql để bật danh mục tùy chỉnh.',
-      manageCats: 'Quản lý danh mục',
+      manageCats: 'Quản lý danh mục', catEmoji: 'Icon', catType: 'Loại',
+      emojiPickTitle: 'Chọn biểu tượng', emojiCustom: 'Hoặc gõ emoji khác',
+      emojiDefault: 'Dùng mặc định',
       // Storage usage
       storageUsage: 'Dung lượng', storageDb: 'Database', storageFiles: 'Ảnh hóa đơn (Storage)',
       storageFilesCount: '{n} ảnh',
@@ -458,7 +462,9 @@
       goldBuyHint: 'What you actually paid per chỉ (includes the buy/sell spread); for several purchases enter the average.',
       goldSpreadHint: 'Valuation uses the dealer BUY-BACK price while you bought at the SELL price, so a small loss right after buying is normal (the spread).',
       goldPriceUpdated: 'Gold prices updated', goldPriceUpdateFailed: 'Could not fetch gold prices — using saved prices.',
-      goldSchemaHint: 'Save failed: the database is missing the gold columns. Re-run the ENTIRE supabase-schema.sql in the Supabase SQL Editor, then try again.',
+      goldSchemaHint: 'Save failed: the database is missing newer wallet columns. Re-run the ENTIRE supabase-schema.sql in the Supabase SQL Editor, then try again.',
+      walletAllowTx: 'Allow direct transactions',
+      walletAllowTxHint: 'Turn off for storage wallets (savings, gold…): the wallet disappears from entry forms — spending requires a wallet transfer first. Balances and reports are unchanged.',
       // Attachments (photo evidence)
       evidence: 'Evidence', addPhoto: 'Add photo', uploading: 'Uploading…',
       removePhoto: 'Remove photo', confirmRemovePhoto: 'Remove this photo?',
@@ -499,7 +505,9 @@
       catSaved: 'Categories saved.', catDuplicate: 'Category name already exists.',
       catsHint: 'Categories are shared by the whole household. The AI classifies entries against this list. Categories in use can only be hidden, not deleted.',
       catsSchemaHint: 'Re-run supabase-schema.sql to enable custom categories.',
-      manageCats: 'Manage categories',
+      manageCats: 'Manage categories', catEmoji: 'Icon', catType: 'Type',
+      emojiPickTitle: 'Pick an icon', emojiCustom: 'Or type another emoji',
+      emojiDefault: 'Use default',
       // Storage usage
       storageUsage: 'Storage', storageDb: 'Database', storageFiles: 'Receipt photos (Storage)',
       storageFilesCount: '{n} photos',
@@ -929,8 +937,13 @@
     const catOpts = catOptionsFor(x.category);
     const typeOpts = '<option value="expense"' + (x.type !== 'income' ? ' selected' : '') + '>' + t('expense') + '</option>' +
       '<option value="income"' + (x.type === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
+    // Recurring items create transactions → offer tx-able wallets only, but keep
+    // the row's current wallet listed even if its allowTx switch was turned off.
+    let recAccs = txAccounts();
+    const curAcc = x.accountId ? accountById(x.accountId) : null;
+    if (curAcc && !recAccs.some((a) => a.id === curAcc.id)) recAccs = [curAcc].concat(recAccs);
     const acctOpts = '<option value="">' + t('goalNone') + '</option>' +
-      spendableAccounts().map((a) => '<option value="' + esc(a.id) + '"' + (a.id === x.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('');
+      recAccs.map((a) => '<option value="' + esc(a.id) + '"' + (a.id === x.accountId ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('');
     return '<div class="rec-edit-row" data-rec="' + esc(x.id) + '">' +
       '<div class="rec-edit-l1"><input type="text" class="r-name" value="' + esc(x.name) + '" placeholder="' + t('recurringName') + '"/>' +
       (r ? '<button type="button" class="icon-btn danger" data-delrec="' + esc(x.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' : '') + '</div>' +
@@ -975,9 +988,13 @@
   function accountClass(acc) { return acc.class || (LIABILITY_TYPES.includes(acc.type) ? 'liability' : 'asset'); }
   function activeAccounts() { return (DATA.accounts || []).filter((a) => !a.archived); }
   // Wallets that can hold transactions — everything except gold, which is a
-  // valuation-only asset (v1). Use this for entry forms, transfers, recurring
-  // and the default wallet; keep activeAccounts() for net worth & settings.
+  // valuation-only asset (v1). This is the TRANSFER list (moving money out of a
+  // storage wallet must stay possible); keep activeAccounts() for net worth & settings.
   function spendableAccounts() { return activeAccounts().filter((a) => a.type !== 'gold'); }
+  // Wallets offered in the ENTRY forms (add/edit/recurring). Each wallet has a
+  // user-set allowTx switch — storage wallets (e.g. savings) turn it off so
+  // spending from them requires an explicit transfer first. Not hardcoded by type.
+  function txAccounts() { return spendableAccounts().filter((a) => a.allowTx !== false); }
   function accountById(id) { return (DATA.accounts || []).find((a) => a.id === id) || null; }
 
   /* ---- Gold wallets: value = weight (chỉ) × market buy-back price × factor ---- */
@@ -1085,7 +1102,7 @@
   // Pre-selected wallet for the entry forms: the household's default wallet if one
   // is set, otherwise the first active wallet. (No "last used" — the default always wins.)
   function defaultAccountId() {
-    const accs = spendableAccounts(); if (!accs.length) return '';
+    const accs = txAccounts(); if (!accs.length) return '';
     const def = accs.find((a) => a.isDefault);
     return def ? def.id : accs[0].id;
   }
@@ -1102,7 +1119,11 @@
   // <select> of wallets for the entry forms; empty string when the household has no
   // (spendable) wallets. Gold wallets are excluded — they can't hold transactions.
   function accountSelect(id, selectedId) {
-    const accs = spendableAccounts();
+    let accs = txAccounts();
+    // Keep the row's CURRENT wallet selectable even when its allowTx switch is
+    // off — otherwise editing an old transaction would silently reassign it.
+    const cur = selectedId ? accountById(selectedId) : null;
+    if (cur && !accs.some((a) => a.id === cur.id)) accs = [cur].concat(accs);
     if (!accs.length) return '';
     const sel = selectedId || defaultAccountId();
     return '<select id="' + id + '" class="acct-select">' +
@@ -1282,7 +1303,8 @@
   // Confirm sheet for a multi-entry add: review/edit each row, then save all.
   function openEntryPreview(drafts, accountId, dropped) {
     const rows = drafts.map((d) => entryPreviewRow(d)).join('');
-    const walletSel = spendableAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('epAccount', accountId) : '';
+    const epAcctSel = accountSelect('epAccount', accountId);
+    const walletSel = epAcctSel ? '<label>' + t('wallet') + '</label>' + epAcctSel : '';
     const benSel = '<label>' + t('spentFor') + '</label>' + beneficiarySelect('epBeneficiary', drafts[0] ? drafts[0].beneficiaryId : '');
     const wrap = document.createElement('div');
     wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal entry-modal">' +
@@ -2702,6 +2724,11 @@
       '<div class="wallet-edit-sub' + (isGold ? ' hidden' : '') + '"><label>' + t('openingBalance') + '</label>' +
       '<input type="text" inputmode="numeric" class="w-open js-money" value="' + groupMoney(a.openingBalance || 0) + '"/>' + balHtml +
       '</div>' +
+      // User-set switch: storage wallets opt out of entry forms (spend via transfer).
+      // Gold never takes transactions at all, so the switch is hidden there.
+      '<label class="w-allowtx-row' + (isGold ? ' hidden' : '') + '" title="' + esc(t('walletAllowTxHint')) + '">' +
+      '<input type="checkbox" class="w-allowtx"' + (a.allowTx !== false ? ' checked' : '') + '/>' +
+      '<span>' + t('walletAllowTx') + '</span></label>' +
       wActs +
       '<div class="wallet-credit-fields' + (isLia ? '' : ' hidden') + '">' +
       '<div class="wc-grid">' +
@@ -2973,10 +3000,12 @@
   // One editable category row. Existing rows carry their id in data-cat (and the
   // original name in data-name); brand-new rows have neither — created on Save.
   // 'Thu nhập' (isSystem) is locked: parser & reports depend on it.
+  // The icon cell is readonly — tapping it opens the emoji picker (openEmojiPicker),
+  // which also offers free typing and "use default".
   function catEditRowHtml(c) {
     if (!c) {
       return '<div class="cat-edit-row is-new">' +
-        '<input type="text" class="c-emoji" maxlength="4" placeholder="🙂"/>' +
+        '<input type="text" class="c-emoji" maxlength="4" readonly placeholder="+" title="' + t('emojiPickTitle') + '"/>' +
         '<input type="text" class="c-name" placeholder="' + t('catName') + '"/>' +
         '<select class="c-type"><option value="expense">' + t('expense') + '</option><option value="income">' + t('income') + '</option></select>' +
         '<button type="button" class="icon-btn danger" data-rmcatrow="1" title="' + t('delete') + '">' + icon('x') + '</button>' +
@@ -2993,10 +3022,35 @@
       if (!used) action += '<button type="button" class="icon-btn danger" data-catdel="' + esc(c.name) + '" title="' + t('delete') + '">' + icon('trash') + '</button>';
     }
     return '<div class="cat-edit-row' + (c.archived ? ' is-archived' : '') + '" data-cat="' + esc(c.id) + '" data-name="' + esc(c.name) + '">' +
-      '<input type="text" class="c-emoji" maxlength="4" value="' + esc(c.emoji || '') + '" placeholder="' + (CAT_ICON[c.name] ? '' : '🙂') + '"' + (locked ? ' disabled' : '') + '/>' +
+      '<input type="text" class="c-emoji" maxlength="4" readonly value="' + esc(c.emoji || '') + '" placeholder="+" title="' + t('emojiPickTitle') + '"' + (locked ? ' disabled' : '') + '/>' +
       '<input type="text" class="c-name" value="' + esc(c.name) + '"' + (locked ? ' disabled' : '') + '/>' +
       '<span class="c-typelabel">' + (c.type === 'income' ? t('income') : t('expense')) + '</span>' +
       action + '</div>';
+  }
+
+  // 16 icons for the most familiar spending walks of life. Picked from a sheet
+  // (tap the icon cell); free typing and "use default" stay available.
+  const EMOJI_PRESETS = ['🍜', '🛒', '🛍️', '🚗', '⛽', '🏠', '🧾', '📱', '💊', '📚', '👶', '🐶', '🎬', '✈️', '🎁', '💰'];
+  function openEmojiPicker(target) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
+      '<div class="card-title">' + icon('spark') + ' ' + t('emojiPickTitle') + '</div>' +
+      '<div class="emoji-grid">' + EMOJI_PRESETS.map((e2) =>
+        '<button type="button" class="emoji-opt' + (target.value === e2 ? ' sel' : '') + '" data-emoji="' + e2 + '">' + e2 + '</button>').join('') + '</div>' +
+      '<label style="margin-top:12px;display:block">' + t('emojiCustom') + '</label>' +
+      '<div class="emoji-custom-row"><input id="emojiCustom" type="text" maxlength="4" value="' + esc(target.value || '') + '" placeholder="🙂"/>' +
+      '<button type="button" class="ghost-btn sm" id="emojiApply">' + t('save') + '</button></div>' +
+      '<div class="modal-actions"><button class="ghost-btn" id="emojiDefault">' + t('emojiDefault') + '</button>' +
+      '<button class="ghost-btn" id="emojiCancel">' + t('cancel') + '</button></div>' +
+      '</div></div>';
+    document.body.appendChild(wrap.firstChild);
+    const close = () => { const m = document.getElementById('modalBackdrop'); if (m) m.remove(); };
+    const set = (v) => { target.value = v; close(); };
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
+    document.getElementById('emojiCancel').addEventListener('click', close);
+    document.getElementById('emojiDefault').addEventListener('click', () => set(''));
+    document.getElementById('emojiApply').addEventListener('click', () => set(document.getElementById('emojiCustom').value.trim()));
+    document.querySelectorAll('#modalBackdrop [data-emoji]').forEach((b) => b.addEventListener('click', () => set(b.dataset.emoji)));
   }
 
   // A single Settings sub-page (reuses the existing form markup + element IDs).
@@ -3026,11 +3080,13 @@
         body = catsSeedPending ? '<div class="empty">…</div>'
           : '<div class="warn-hint">' + icon('alert') + ' ' + t('catsSchemaHint') + '</div>';
       } else {
-        body = '<div class="hint">' + t('catsHint') + '</div>' +
+        const head = '<div class="cat-edit-head"><span class="h-emoji">' + t('catEmoji') + '</span>' +
+          '<span class="h-name">' + t('catName') + '</span><span class="h-type">' + t('catType') + '</span></div>';
+        body = '<div class="hint">' + t('catsHint') + '</div>' + head +
           '<div id="catEdit" class="ios-card cat-edit">' + rows.map(catEditRowHtml).join('') + '</div>' +
           '<button id="addCatBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addCategory') + '</button>' +
           '<button id="saveCatsBtn" class="primary-btn" style="margin-top:10px">' + icon('check') + ' ' + t('save') + '</button>';
-        if (!canManageConfig()) body = roLock('<div class="hint">' + t('catsHint') + '</div>' +
+        if (!canManageConfig()) body = roLock('<div class="hint">' + t('catsHint') + '</div>' + head +
           '<div class="ios-card cat-edit">' + rows.map(catEditRowHtml).join('') + '</div>');
       }
     } else if (page === 'wallets') {
@@ -3375,7 +3431,7 @@
       '<label>' + t('note') + '</label><input id="eNote" type="text" value="' + esc(tx.note) + '"/>' +
       '<div class="edit-datetime"><div><label>' + t('date') + '</label><input id="eDate" type="date" value="' + esc(tx.date) + '" max="' + ymd(new Date()) + '"/></div>' +
       '<div><label>' + t('time') + '</label><input id="eTime" type="time" value="' + esc(tx.time || '') + '"/></div></div>' +
-      (spendableAccounts().length ? '<label>' + t('wallet') + '</label>' + accountSelect('eAccount', tx.accountId) : '') +
+      (accountSelect('eAccount', tx.accountId) ? '<label>' + t('wallet') + '</label>' + accountSelect('eAccount', tx.accountId) : '') +
       '<label>' + t('spentFor') + '</label>' + beneficiarySelect('eBeneficiary', tx.beneficiaryId) +
       '<div class="seg" style="margin-top:10px"><button class="seg-btn ' + (tx.type === 'expense' ? 'active' : '') + '" data-type="expense">' + t('expense') + '</button>' +
       '<button class="seg-btn ' + (tx.type === 'income' ? 'active' : '') + '" data-type="income">' + t('income') + '</button></div>' +
@@ -3620,6 +3676,13 @@
               Object.assign(extra, { goldWeightChi: null, goldKind: null, goldFactor: 1, goldCustomBuy: null, goldBuyPerChi: null, goldBuyDate: null });
             }
           }
+          // Per-wallet "allow direct transactions" switch — schema-tolerant: only
+          // sent when false is involved, so old DBs without the column keep saving.
+          const atEl = row.querySelector('.w-allowtx');
+          if (atEl && type !== 'gold') {
+            const prevAcc = id ? accountById(id) : null;
+            if (!atEl.checked || (prevAcc && prevAcc.allowTx === false)) extra.allowTx = atEl.checked;
+          }
           const isDef = row.classList.contains('is-default');
           if (isDef) defaultMarked = true;
           if (id) {
@@ -3770,6 +3833,8 @@
     // Categories editor: row actions (delegated → also covers rows added after wiring)
     const catBox = document.getElementById('catEdit');
     if (catBox) catBox.addEventListener('click', (e) => {
+      const em = e.target && e.target.closest && e.target.closest('.c-emoji');
+      if (em) { if (!em.disabled) openEmojiPicker(em); return; }
       const rm = e.target && e.target.closest && e.target.closest('[data-rmcatrow]');
       if (rm) { const row = rm.closest('.cat-edit-row'); if (row) row.remove(); return; }
       const arch = e.target && e.target.closest && e.target.closest('[data-catarch]');

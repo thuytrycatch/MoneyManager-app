@@ -109,6 +109,20 @@ alter table public.accounts add column if not exists statement_day   int;       
 alter table public.accounts add column if not exists due_day         int;          -- payment due day (1–31)
 alter table public.accounts add column if not exists min_payment_pct numeric(5,2); -- % of statement balance
 
+-- "Cho phép giao dịch trực tiếp": ví tắt cờ này không xuất hiện trong form nhập
+-- giao dịch (muốn tiêu phải Chuyển ví sang ví khác — đúng vai trò ví lưu trữ).
+-- Người dùng tự bật/tắt cho từng ví — KHÔNG fix cứng theo loại ví. Backfill
+-- MỘT LẦN khi cột mới được tạo: savings/gold mặc định tắt (đúng ý nghĩa lưu
+-- trữ); chạy lại file này KHÔNG ghi đè lựa chọn người dùng đã chỉnh.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'accounts' and column_name = 'allow_tx') then
+    alter table public.accounts add column allow_tx boolean not null default true;
+    update public.accounts set allow_tx = false where type in ('savings', 'gold');
+  end if;
+end $$;
+
 -- Default wallet: the one pre-selected in the entry form. At most one per household.
 -- Safe to re-run.
 alter table public.accounts add column if not exists is_default boolean not null default false;

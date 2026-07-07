@@ -333,6 +333,7 @@
       archived: !!a.archived,
       sortOrder: a.sort_order || 0,
       isDefault: !!a.is_default,
+      allowTx: a.allow_tx !== false,   // column absent (old schema) → true
     };
   }
   function mapGoal(g) {
@@ -673,6 +674,8 @@
     if ('goldCustomBuy' in acc) row.gold_custom_buy = acc.goldCustomBuy != null ? Math.round(acc.goldCustomBuy) : null;
     if ('goldBuyPerChi' in acc) row.gold_buy_per_chi = acc.goldBuyPerChi != null ? Math.round(acc.goldBuyPerChi) : null;
     if ('goldBuyDate' in acc) row.gold_buy_date = acc.goldBuyDate || null;
+    // Only sent when explicitly false (schema-tolerant like the gold fields).
+    if ('allowTx' in acc && acc.allowTx === false) row.allow_tx = false;
     const { data, error } = await sb.from('accounts').insert(row).select().single();
     if (error) throw new Error(error.message);
     return mapAccount(data);
@@ -698,6 +701,7 @@
     if ('sortOrder' in fields) patch.sort_order = fields.sortOrder || 0;
     if ('archived' in fields) patch.archived = !!fields.archived;
     if ('isDefault' in fields) patch.is_default = !!fields.isDefault;
+    if ('allowTx' in fields) patch.allow_tx = fields.allowTx !== false;
     const { error } = await sb.from('accounts').update(patch).eq('id', id);
     if (error) throw new Error(error.message);
   }

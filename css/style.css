@@ -267,6 +267,8 @@ button.btn-busy::before {
 /* Wallet editor (Settings) */
 .wallet-edit { display: flex; flex-direction: column; gap: 12px; }
 .wallet-edit-row { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow); }
+.w-allowtx-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+.w-allowtx-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); }
 .wallet-edit-main { display: flex; gap: 8px; align-items: center; }
 .wallet-edit-main .w-name { flex: 1 1 auto; min-width: 110px; min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; }
 .wallet-edit-main .w-type { min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; }
@@ -446,8 +448,17 @@ button.btn-busy::before {
 /* ---------- Settings ---------- */
 .budget-edit { display: flex; flex-direction: column; gap: 8px; }
 /* ---------- Category editor (Settings → Categories) ---------- */
+.cat-edit-head { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 0 14px 4px; font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .4px; }
+.cat-edit-head .h-emoji { width: 46px; text-align: center; flex-shrink: 0; }
+.cat-edit-head .h-name { flex: 1; }
 .cat-edit-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
-.cat-edit-row .c-emoji { width: 46px; min-height: 42px; text-align: center; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; font-size: 17px; padding: 0; }
+.cat-edit-row .c-emoji { width: 46px; min-height: 42px; text-align: center; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; font-size: 17px; padding: 0; cursor: pointer; caret-color: transparent; }
+.cat-edit-row .c-emoji::placeholder { color: var(--text-secondary); font-weight: 700; }
+.emoji-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
+.emoji-opt { min-height: 46px; font-size: 22px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.emoji-opt.sel { border: 2px solid var(--accent); }
+.emoji-custom-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.emoji-custom-row input { width: 90px; min-height: 42px; text-align: center; font-size: 18px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; }
 .cat-edit-row .c-name { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 .cat-edit-row .c-type { min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 6px; }
 .cat-edit-row .c-typelabel { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
