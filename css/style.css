@@ -318,6 +318,13 @@ button.btn-busy::before {
 .eye-btn { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; width: 30px; height: 30px; padding: 0; background: rgba(255,255,255,.18); border: none; border-radius: 9px; color: #fff; cursor: pointer; }
 .eye-btn .ic { width: 17px; height: 17px; }
 .eye-btn:active { transform: scale(.92); }
+.eye-btn.eye-sm { width: 24px; height: 24px; margin-left: 8px; }
+.eye-btn.eye-sm .ic { width: 14px; height: 14px; }
+/* Global mask toggle next to the "Wallets" section title (outside the hero). */
+.eye-btn.eye-plain { background: var(--bg-elev); border: 1px solid var(--border); color: var(--text-secondary); box-shadow: var(--shadow); }
+/* "Total balance" line under the hero figure. */
+.hero-total { display: flex; align-items: center; margin-top: 4px; font-size: 13.5px; opacity: .92; }
+.hero-total b { margin-left: 6px; font-size: 14.5px; }
 
 /* ---------- Segmented controls ---------- */
 .seg { display: inline-flex; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 3px; box-shadow: var(--shadow); }

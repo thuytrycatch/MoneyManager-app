@@ -109,6 +109,7 @@
     vi: {
       appName: 'Sổ Thu Chi', overview: 'Tổng quan', reports: 'Báo cáo', add: 'Thêm', txs: 'Giao dịch', settings: 'Cài đặt',
       income: 'Thu nhập', expense: 'Chi tiêu', balance: 'Số dư hiện tại', savings: 'Tiết kiệm', savingsRate: 'Tỷ lệ tiết kiệm',
+      balanceAvail: 'Số dư khả dụng', balanceTotal: 'Tổng số dư',
       thisMonth: 'Tháng này', remaining: 'Còn lại', budget: 'Ngân sách', spentToday: 'Chi hôm nay', avgPerDay: 'TB mỗi ngày',
       weekReview: 'Đánh giá tuần này', vsLastWeek: 'so với tuần trước',
       recent: 'Giao dịch gần đây', seeAll: 'Xem tất cả', noTx: 'Chưa có giao dịch nào.', refresh: 'Làm mới',
@@ -313,6 +314,7 @@
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
       income: 'Income', expense: 'Expense', balance: 'Current balance', savings: 'Savings', savingsRate: 'Savings rate',
+      balanceAvail: 'Available balance', balanceTotal: 'Total balance',
       thisMonth: 'This month', remaining: 'Remaining', budget: 'Budget', spentToday: 'Spent today', avgPerDay: 'Avg / day',
       weekReview: 'This week review', vsLastWeek: 'vs last week',
       recent: 'Recent transactions', seeAll: 'See all', noTx: 'No transactions yet.', refresh: 'Refresh',
@@ -614,6 +616,10 @@
   // Privacy: hide balances/amounts behind dots until the user taps the eye icon. Default: hidden.
   let hideAmounts = (localStorage.getItem('hideAmounts') || '1') === '1';
   function mask(str) { return hideAmounts ? '••••••' : str; }
+  // The two hero figures reveal INDEPENDENTLY (own eye each) — tapping one eye
+  // no longer unmasks everything at once. hideAmounts keeps governing the rest.
+  let hideBalAvail = (localStorage.getItem('hideBalAvail') || '1') === '1';
+  let hideBalTotal = (localStorage.getItem('hideBalTotal') || '1') === '1';
 
   // Display name of whoever entered a transaction (from tx.userId → household member).
   function memberName(uid) {
@@ -1062,6 +1068,11 @@
   function totalBalance() {
     const opening = (DATA.accounts || []).reduce((s, a) => s + (a.openingBalance || 0), 0);
     return opening + allTimeBalance();
+  }
+  // Money that is actually AVAILABLE to spend: balances of wallets whose
+  // "allow direct transactions" switch is on (storage wallets excluded).
+  function txBalance() {
+    return txAccounts().reduce((s, a) => s + accountBalance(a.id), 0);
   }
   // Net worth = total assets − total liabilities. Balances are kept in the "money held" frame,
   // so a liability you owe shows up as a negative balance; amount owed = −balance.
@@ -1847,7 +1858,10 @@
         '<div class="wallet-top">' + accountTypeIcon(a.type) + '<span>' + esc(a.name) + '</span></div>' +
         '<div class="wallet-bal ' + (b < 0 ? 'neg' : '') + '">' + mask(fmtShort(b)) + '</div></div>';
     }).join('');
-    return '<div class="section-title">' + t('wallets') + '</div>' +
+    // The GLOBAL mask toggle (wallet cards, goals, reports…) lives here now —
+    // the hero figures have their own independent eyes.
+    return '<div class="section-row"><div class="section-title">' + t('wallets') + '</div>' +
+      '<button id="eyeToggle" class="eye-btn eye-plain" title="' + (hideAmounts ? t('showBalance') : t('hideBalance')) + '">' + icon(hideAmounts ? 'eyeOff' : 'eye') + '</button></div>' +
       '<div class="wallet-strip">' + cards + '</div>';
   }
 
@@ -1879,9 +1893,11 @@
 
     return (
       '<div class="hero">' +
-      '<div class="hero-label">' + icon('wallet') + ' ' + t('balance') +
-      '<button id="eyeToggle" class="eye-btn" title="' + (hideAmounts ? t('showBalance') : t('hideBalance')) + '">' + icon(hideAmounts ? 'eyeOff' : 'eye') + '</button></div>' +
-      '<div class="hero-balance">' + mask(fmtVND(bal)) + '</div>' +
+      '<div class="hero-label">' + icon('wallet') + ' ' + t('balanceAvail') +
+      '<button id="eyeAvail" class="eye-btn" title="' + (hideBalAvail ? t('showBalance') : t('hideBalance')) + '">' + icon(hideBalAvail ? 'eyeOff' : 'eye') + '</button></div>' +
+      '<div class="hero-balance">' + (hideBalAvail ? '••••••' : fmtVND(txBalance())) + '</div>' +
+      '<div class="hero-total">' + t('balanceTotal') + ': <b>' + (hideBalTotal ? '••••••' : fmtVND(bal)) + '</b>' +
+      '<button id="eyeTotal" class="eye-btn eye-sm" title="' + (hideBalTotal ? t('showBalance') : t('hideBalance')) + '">' + icon(hideBalTotal ? 'eyeOff' : 'eye') + '</button></div>' +
       '<div class="hero-chips">' +
       '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + fmtShort(mt.income) + '</b></div>' +
       '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + fmtShort(mt.expense) + '</b></div>' +
@@ -3543,11 +3559,23 @@
       c.addEventListener('click', () => openWalletHistory(c.dataset.wallethist));
       c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWalletHistory(c.dataset.wallethist); } });
     });
-    // privacy: toggle balance visibility (eye icon on the hero)
+    // privacy: global mask toggle (wallet strip header) + per-figure hero eyes
     const eye = document.getElementById('eyeToggle');
     if (eye) eye.addEventListener('click', () => {
       hideAmounts = !hideAmounts;
       try { localStorage.setItem('hideAmounts', hideAmounts ? '1' : '0'); } catch (e) { /* ignore */ }
+      render();
+    });
+    const eyeA = document.getElementById('eyeAvail');
+    if (eyeA) eyeA.addEventListener('click', () => {
+      hideBalAvail = !hideBalAvail;
+      try { localStorage.setItem('hideBalAvail', hideBalAvail ? '1' : '0'); } catch (e) { /* ignore */ }
+      render();
+    });
+    const eyeT = document.getElementById('eyeTotal');
+    if (eyeT) eyeT.addEventListener('click', () => {
+      hideBalTotal = !hideBalTotal;
+      try { localStorage.setItem('hideBalTotal', hideBalTotal ? '1' : '0'); } catch (e) { /* ignore */ }
       render();
     });
     // reports period + nav
