@@ -289,6 +289,11 @@
       emailTestSend: 'Gửi thử', emailTestSent: 'Đã gửi email thử tới {e}.',
       emailNeedClose: 'Chưa có tháng nào được chốt sổ — hãy chốt sổ trước.',
       emailSaved: 'Đã lưu cài đặt email.',
+      // Storage usage
+      storageUsage: 'Dung lượng', storageDb: 'Database', storageFiles: 'Ảnh hóa đơn (Storage)',
+      storageFilesCount: '{n} ảnh',
+      storageHint: 'Hạn mức theo gói Supabase Free (Database 500 MB, Storage 1 GB). Số chính thức kèm băng thông xem tại Supabase Dashboard → Usage.',
+      storageUnavailable: 'Chưa đọc được dung lượng — hãy chạy lại supabase-schema.sql để tạo hàm get_storage_usage.',
     },
     en: {
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
@@ -478,6 +483,11 @@
       emailTestSend: 'Send test', emailTestSent: 'Test email sent to {e}.',
       emailNeedClose: 'No closed month yet — close a month first.',
       emailSaved: 'Email settings saved.',
+      // Storage usage
+      storageUsage: 'Storage', storageDb: 'Database', storageFiles: 'Receipt photos (Storage)',
+      storageFilesCount: '{n} photos',
+      storageHint: 'Limits shown are the Supabase Free plan (500 MB database, 1 GB storage). Official numbers incl. bandwidth: Supabase Dashboard → Usage.',
+      storageUnavailable: 'Could not read usage — re-run supabase-schema.sql to create get_storage_usage.',
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
@@ -508,6 +518,8 @@
   let activityLog = [];      // [{userEmail, action, entity, summary, createdAt}] — lazy-loaded for the Activity page
   let activityLoading = false;
   let activitySearch = '';   // client-side filter text for the Activity page
+  let storageUsage = null;   // {dbBytes, receiptsBytes, receiptsFiles} — lazy-loaded for the Storage page
+  let storageLoading = false;
   let currentTab = 'overview';
   let settingsPage = null; // Settings sub-page key (null = root grouped menu)
   const CATS = window.Parser.CATEGORIES;
@@ -2808,6 +2820,7 @@
       iosGroup([
         iosRow({ ic: 'spark', tint: 'pink', label: t('aiCategorize'), page: 'ai' }),
         iosRow({ ic: 'mail', tint: 'blue', label: t('emailReport'), value: emailReportCfg().enabled ? t('emailOnBadge') : '', page: 'email' }),
+        (canManageConfig() ? iosRow({ ic: 'chart', tint: 'teal', label: t('storageUsage'), page: 'storage' }) : ''),
         iosRow({ ic: 'settings', tint: 'gray', label: t('connTitle'), page: 'supabase' }),
       ], t('grpAdvanced')) +
       iosGroup([
@@ -2823,6 +2836,35 @@
   }
   function roLock(html, msg) {
     return lockBanner(msg) + '<fieldset class="ro-lock" disabled>' + html + '</fieldset>';
+  }
+
+  /* ============== VIEW: Storage usage ============== */
+  // Plan quotas aren't visible from SQL — these are the Supabase Free plan
+  // limits; the RPC measures what's used and the app shows used vs limit.
+  const STORAGE_PLAN = { dbMb: 500, filesMb: 1024 };
+  async function loadStorageUsage() {
+    storageLoading = true;
+    storageUsage = await window.Store.getStorageUsage();
+    storageLoading = false;
+  }
+  function fmtBytes(n) {
+    const loc = lang === 'vi' ? 'vi-VN' : 'en-US';
+    const f = (v, d) => v.toLocaleString(loc, { maximumFractionDigits: d });
+    if (n >= 1073741824) return f(n / 1073741824, 2) + ' GB';
+    if (n >= 1048576) return f(n / 1048576, 1) + ' MB';
+    if (n >= 1024) return f(n / 1024, 0) + ' KB';
+    return Math.round(n) + ' B';
+  }
+  // One "used vs plan limit" bar, reusing the budget bar styles.
+  function usageBarHtml(label, usedBytes, limitMb) {
+    const limit = limitMb * 1024 * 1024;
+    const raw = limit ? usedBytes / limit * 100 : 0;
+    const pct = Math.min(100, Math.round(raw));
+    let cls = 'ok'; if (raw >= 90) cls = 'danger'; else if (raw >= 70) cls = 'warn';
+    return '<div class="budget-row">' +
+      '<div class="budget-top"><span class="budget-cat">' + label + '</span>' +
+      '<span class="budget-nums' + (raw >= 100 ? ' over' : '') + '">' + fmtBytes(usedBytes) + ' / ' + fmtBytes(limit) + ' · ' + pct + '%</span></div>' +
+      '<div class="budget-track"><div class="budget-fill ' + cls + '" style="width:' + pct + '%"></div></div></div>';
   }
 
   /* ============== VIEW: Activity log ============== */
@@ -3052,6 +3094,21 @@
         '<div class="hint">' + t('emailReportDesc') + '</div>' +
         '<div class="warn-hint">' + icon('alert') + ' ' + t('emailPrivacyNote') + '</div>';
       if (!canManageConfig()) body = roLock(body);
+    } else if (page === 'storage') {
+      title = t('storageUsage');
+      if (!canManageConfig()) {
+        body = lockBanner();
+      } else if (storageLoading) {
+        body = '<div class="empty">…</div>';
+      } else if (!storageUsage) {
+        body = '<div class="warn-hint">' + icon('alert') + ' ' + t('storageUnavailable') + '</div>';
+      } else {
+        body =
+          usageBarHtml(t('storageDb'), storageUsage.dbBytes, STORAGE_PLAN.dbMb) +
+          usageBarHtml(t('storageFiles') + ' · ' + t('storageFilesCount').replace('{n}', storageUsage.receiptsFiles), storageUsage.receiptsBytes, STORAGE_PLAN.filesMb) +
+          '<button id="refreshStorageBtn" class="ghost-btn sm" style="margin-top:12px">' + icon('refresh') + ' ' + t('refresh') + '</button>' +
+          '<div class="hint">' + t('storageHint') + '</div>';
+      }
     } else if (page === 'supabase') {
       title = t('connTitle');
       body = '<div class="conn-form">' +
@@ -3792,9 +3849,15 @@
       if (settingsPage === 'activity') {
         activityLog = []; activityLoading = true; activitySearch = ''; render(); // show the loading state first
         await loadActivity();
+      } else if (settingsPage === 'storage') {
+        storageUsage = null; storageLoading = true; render(); // show the loading state first
+        await loadStorageUsage();
       }
       render();
     }));
+    // Storage page: manual refresh
+    const rsb = document.getElementById('refreshStorageBtn');
+    if (rsb) rsb.addEventListener('click', () => busy(rsb, async () => { await loadStorageUsage(); render(); }));
     // Activity: manual refresh
     const refAct = document.getElementById('refreshActBtn');
     if (refAct) refAct.addEventListener('click', async () => { await loadActivity(); render(); });

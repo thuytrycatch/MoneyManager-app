@@ -840,6 +840,21 @@
     return data;
   }
 
+  // Project-wide storage usage (database size + receipts bucket) via the
+  // get_storage_usage RPC (security definer — see supabase-schema.sql).
+  // Returns null when the function doesn't exist yet (schema not re-run).
+  async function getStorageUsage() {
+    try {
+      const { data, error } = await getClient().rpc('get_storage_usage');
+      if (error || !data) return null;
+      return {
+        dbBytes: Number(data.db_bytes) || 0,
+        receiptsBytes: Number(data.receipts_bytes) || 0,
+        receiptsFiles: Number(data.receipts_files) || 0,
+      };
+    } catch (e) { return null; }
+  }
+
   /* ---------------- Activity log (audit trail) ---------------- */
   // Read the household's activity log (newest first). Owners/admins only — RLS returns
   // nothing for plain members. Tolerates the table being absent (before the schema re-run).
@@ -954,6 +969,7 @@
     upsertMonthlyReport,
     saveHouseholdSettings,
     sendTestMonthlyEmail,
+    getStorageUsage,
     refreshGoldPrices,
     subscribeChanges,
     unsubscribeChanges,

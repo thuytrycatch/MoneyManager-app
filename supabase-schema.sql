@@ -747,6 +747,30 @@ begin
   begin alter publication supabase_realtime add table public.household_settings; exception when duplicate_object then null; end;
 end $$;
 
+-- =====================================================================
+--  Storage usage — RPC cho app đọc dung lượng đang dùng (toàn project):
+--  kích thước database + tổng dung lượng bucket receipts (ảnh hóa đơn).
+--  SECURITY DEFINER để đếm storage.objects mà không vướng RLS; chỉ trả
+--  con số tổng — không lộ dữ liệu. Hạn mức gói (Free: 500MB DB / 1GB
+--  Storage) SQL không thấy được, app tự trừ. An toàn chạy lại.
+-- =====================================================================
+create or replace function public.get_storage_usage()
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'db_bytes', pg_database_size(current_database()),
+    'receipts_bytes', coalesce((select sum((metadata->>'size')::bigint)
+                                from storage.objects where bucket_id = 'receipts'), 0),
+    'receipts_files', coalesce((select count(*)
+                                from storage.objects where bucket_id = 'receipts'), 0)
+  );
+$$;
+revoke all on function public.get_storage_usage() from public;
+grant execute on function public.get_storage_usage() to authenticated;
+
 -- ---------------------------------------------------------------------
 -- LAST: make PostgREST (Supabase's API layer) reload its schema cache so
 -- the columns/tables added above are usable IMMEDIATELY. Without this,
