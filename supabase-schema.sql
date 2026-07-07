@@ -748,6 +748,78 @@ begin
 end $$;
 
 -- =====================================================================
+--  Categories — danh bạ danh mục theo hộ. TÊN (text) vẫn là khóa định danh
+--  trong transactions/budgets/recurring; bảng này chỉ quản lý danh sách:
+--  thêm/đổi tên/ẩn/icon/sort. Hộ chưa có hàng nào → app dùng bộ 8 mặc định
+--  (không bắt buộc migration). An toàn chạy lại.
+-- =====================================================================
+create table if not exists public.categories (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  name         text not null,
+  type         text not null default 'expense' check (type in ('expense','income')),
+  emoji        text,                            -- icon cho danh mục tự tạo (null = SVG mặc định)
+  sort_order   int not null default 0,
+  archived     boolean not null default false,
+  is_system    boolean not null default false,  -- 'Thu nhập': không đổi tên/ẩn/xóa
+  created_at   timestamptz not null default now(),
+  unique (household_id, name)
+);
+create index if not exists idx_categories_hh on public.categories (household_id, sort_order);
+alter table public.categories enable row level security;
+drop policy if exists categories_select on public.categories;
+create policy categories_select on public.categories for select
+  using (household_id in (select public.user_households()));
+drop policy if exists categories_write on public.categories;
+create policy categories_write on public.categories for all
+  using (public.is_household_admin(household_id))
+  with check (public.is_household_admin(household_id));
+do $$
+begin
+  begin alter publication supabase_realtime add table public.categories; exception when duplicate_object then null; end;
+end $$;
+drop trigger if exists trg_log_categories on public.categories;
+create trigger trg_log_categories after insert or update or delete on public.categories
+  for each row execute function public.log_activity();
+
+-- Đổi tên danh mục: cascade text qua transactions/budgets/recurring trong MỘT
+-- transaction. KHÔNG sửa monthly_reports (snapshot đã chốt là lịch sử).
+create or replace function public.rename_category(hid uuid, old_name text, new_name text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_household_admin(hid) then raise exception 'forbidden'; end if;
+  if old_name = new_name or coalesce(trim(new_name), '') = '' then raise exception 'invalid'; end if;
+  if exists (select 1 from public.categories where household_id = hid and name = new_name) then
+    raise exception 'duplicate';
+  end if;
+  if exists (select 1 from public.categories where household_id = hid and name = old_name and is_system) then
+    raise exception 'system';
+  end if;
+  update public.categories   set name = new_name where household_id = hid and name = old_name;
+  update public.transactions set category = new_name where household_id = hid and category = old_name;
+  update public.recurring    set category = new_name where household_id = hid and category = old_name;
+  -- budgets có khóa chính (household_id, category) → chuyển sang tên mới rồi xóa hàng cũ
+  insert into public.budgets (household_id, category, amount)
+    select household_id, new_name, amount from public.budgets
+     where household_id = hid and category = old_name
+  on conflict (household_id, category) do update set amount = excluded.amount;
+  delete from public.budgets where household_id = hid and category = old_name;
+end $$;
+
+-- Xóa cứng: chỉ khi không còn giao dịch/khoản định kỳ nào tham chiếu.
+create or replace function public.delete_category(hid uuid, cat_name text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_household_admin(hid) then raise exception 'forbidden'; end if;
+  if exists (select 1 from public.transactions where household_id = hid and category = cat_name)
+     or exists (select 1 from public.recurring where household_id = hid and category = cat_name) then
+    raise exception 'in_use';
+  end if;
+  delete from public.budgets    where household_id = hid and category = cat_name;
+  delete from public.categories where household_id = hid and name = cat_name and not is_system;
+end $$;
+
+-- =====================================================================
 --  Storage usage — RPC cho app đọc dung lượng đang dùng (toàn project):
 --  kích thước database + tổng dung lượng bucket receipts (ảnh hóa đơn).
 --  SECURITY DEFINER để đếm storage.objects mà không vướng RLS; chỉ trả

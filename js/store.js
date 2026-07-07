@@ -354,6 +354,17 @@
       closedAt: r.closed_at,
     };
   }
+  function mapCategory(c) {
+    return {
+      id: c.id,
+      name: c.name,
+      type: c.type === 'income' ? 'income' : 'expense',
+      emoji: c.emoji || null,
+      sortOrder: c.sort_order || 0,
+      archived: !!c.archived,
+      isSystem: !!c.is_system,
+    };
+  }
   function mapAttachment(a) {
     return {
       id: a.id,
@@ -415,6 +426,11 @@
     const monthlyReports = await sb.from('monthly_reports').select('*').eq('household_id', hid)
       .order('period', { ascending: false })
       .then((r) => (r.error ? [] : (r.data || []).map(mapMonthlyReport))).catch(() => []);
+    // Custom categories registry — empty means "use the built-in defaults".
+    const categories = await sb.from('categories').select('*').eq('household_id', hid)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+      .then((r) => (r.error ? [] : (r.data || []).map(mapCategory))).catch(() => []);
     // Household-wide shared settings (AI keys…). null = no row/table yet (fall back
     // to this browser's localStorage) — distinct from {} (row exists but empty).
     const aiConfig = await sb.from('household_settings').select('settings').eq('household_id', hid).limit(1)
@@ -435,7 +451,7 @@
         return out;
       }).catch(() => ({}));
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, goldPrices, aiConfig };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, categories, goldPrices, aiConfig };
     idbSet('data', data).catch(() => {});
     return data;
   }
@@ -739,6 +755,66 @@
     if (error) throw new Error(error.message);
   }
 
+  /* ---------------- Categories (custom category registry) ---------------- */
+  async function addCategory(cat) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { data, error } = await sb.from('categories').insert({
+      household_id: household.id,
+      name: cat.name,
+      type: cat.type === 'income' ? 'income' : 'expense',
+      emoji: cat.emoji || null,
+      sort_order: cat.sortOrder || 0,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return mapCategory(data);
+  }
+  async function updateCategory(id, fields) {
+    const sb = getClient();
+    const patch = {};
+    if ('emoji' in fields) patch.emoji = fields.emoji || null;
+    if ('type' in fields) patch.type = fields.type === 'income' ? 'income' : 'expense';
+    if ('sortOrder' in fields) patch.sort_order = fields.sortOrder || 0;
+    if ('archived' in fields) patch.archived = !!fields.archived;
+    const { error } = await sb.from('categories').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+  // Rename cascades through transactions/budgets/recurring atomically (RPC).
+  // Closed monthly_reports snapshots keep the old name on purpose (history).
+  async function renameCategory(oldName, newName) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { error } = await sb.rpc('rename_category', {
+      hid: household.id, old_name: oldName, new_name: newName,
+    });
+    if (error) throw new Error(error.message);
+  }
+  // Hard delete — the RPC refuses ('in_use') while transactions/recurring reference it.
+  async function deleteCategory(name) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const { error } = await sb.rpc('delete_category', { hid: household.id, cat_name: name });
+    if (error) throw new Error(error.message);
+  }
+  // First open of the category editor: move the built-in defaults into the DB
+  // so they become editable rows. Ignores duplicates (safe to call twice).
+  async function seedDefaultCategories(list) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const rows = list.map((c, i) => ({
+      household_id: household.id,
+      name: c.name,
+      type: c.type === 'income' ? 'income' : 'expense',
+      sort_order: i,
+      is_system: !!c.isSystem,
+    }));
+    const { data, error } = await sb.from('categories')
+      .upsert(rows, { onConflict: 'household_id,name', ignoreDuplicates: true })
+      .select();
+    if (error) throw new Error(error.message);
+    return (data || []).map(mapCategory);
+  }
+
   /* ---------------- Recurring entries ---------------- */
   async function addRecurring(r) {
     if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
@@ -896,6 +972,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recurring', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_attachments', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'household_settings', filter: 'household_id=eq.' + hid }, onChange)
       // gold_prices is a shared cache with no household_id — subscribe unfiltered
       // so a price refresh from any member (or the cron) updates everyone live.
@@ -970,6 +1047,11 @@
     saveHouseholdSettings,
     sendTestMonthlyEmail,
     getStorageUsage,
+    addCategory,
+    updateCategory,
+    renameCategory,
+    deleteCategory,
+    seedDefaultCategories,
     refreshGoldPrices,
     subscribeChanges,
     unsubscribeChanges,

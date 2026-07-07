@@ -445,6 +445,16 @@ button.btn-busy::before {
 
 /* ---------- Settings ---------- */
 .budget-edit { display: flex; flex-direction: column; gap: 8px; }
+/* ---------- Category editor (Settings → Categories) ---------- */
+.cat-edit-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.cat-edit-row .c-emoji { width: 46px; min-height: 42px; text-align: center; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; font-size: 17px; padding: 0; }
+.cat-edit-row .c-name { flex: 1; min-width: 0; min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.cat-edit-row .c-type { min-height: 42px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 0 6px; }
+.cat-edit-row .c-typelabel { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.cat-edit-row.is-archived .c-name, .cat-edit-row.is-archived .c-emoji, .cat-edit-row.is-archived .c-typelabel { opacity: .45; }
+.cat-edit-row input:disabled { opacity: .6; }
+.cat-emoji { display: inline-flex; align-items: center; justify-content: center; width: 18px; font-size: 15px; line-height: 1; }
+
 .budget-edit-row { display: flex; align-items: center; gap: 10px; }
 .budget-edit-row label { flex: 1; display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 14px; }
 .budget-edit-row label .ic { width: 16px; height: 16px; color: var(--text-secondary); }
@@ -468,7 +478,6 @@ button.btn-busy::before {
 .nav-btn .ic { width: 22px; height: 22px; }
 .nav-btn.active { color: var(--accent); }
 .nav-ic { position: relative; display: inline-flex; }
-.nav-badge { position: absolute; top: -5px; right: -9px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--expense); color: #fff; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--bg-elev); }
 .nav-fab { flex: 0 0 auto; width: 58px; height: 58px; margin: 0 6px; transform: translateY(-14px); border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: 4px solid var(--bg-secondary); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-lg); }
 .nav-fab .ic { width: 26px; height: 26px; }
 .nav-fab:active { transform: translateY(-14px) scale(.93); }
@@ -720,7 +729,6 @@ main { padding: 4px 12px 92px; }
   .bottom-nav .nav-btn .ic { width: 20px; height: 20px; }
   .bottom-nav .nav-btn:hover { background: var(--bg-secondary); }
   .bottom-nav .nav-btn.active { background: rgba(99, 102, 241, .12); color: var(--accent); }
-  .bottom-nav .nav-badge { position: static; margin-left: auto; box-shadow: none; }
   .nav-ic { width: 20px; }
 
   /* FAB → full-width "Add" action at the top of the sidebar */

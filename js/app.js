@@ -97,7 +97,12 @@
     'Ăn uống': 'utensils', 'Di chuyển': 'car', 'Mua sắm': 'bag', 'Giải trí': 'film',
     'Sức khỏe': 'heart', 'Hóa đơn': 'file', 'Thu nhập': 'trendUp', 'Khác': 'more',
   };
-  function catIcon(cat) { return icon(CAT_ICON[cat] || 'more'); }
+  function catIcon(cat) {
+    // Custom categories carry an emoji; the built-in eight keep their SVG icon.
+    const row = (DATA.categories || []).find((c) => c.name === cat);
+    if (row && row.emoji) return '<span class="cat-emoji">' + esc(row.emoji) + '</span>';
+    return icon(CAT_ICON[cat] || 'more');
+  }
 
   /* ============== i18n ============== */
   const I18N = {
@@ -105,7 +110,7 @@
       appName: 'Sổ Thu Chi', overview: 'Tổng quan', reports: 'Báo cáo', add: 'Thêm', txs: 'Giao dịch', settings: 'Cài đặt',
       income: 'Thu nhập', expense: 'Chi tiêu', balance: 'Số dư hiện tại', savings: 'Tiết kiệm', savingsRate: 'Tỷ lệ tiết kiệm',
       thisMonth: 'Tháng này', remaining: 'Còn lại', budget: 'Ngân sách', spentToday: 'Chi hôm nay', avgPerDay: 'TB mỗi ngày',
-      weekReview: 'Đánh giá tuần này', vsLastWeek: 'so với tuần trước', alerts: 'Cảnh báo & kiểm soát',
+      weekReview: 'Đánh giá tuần này', vsLastWeek: 'so với tuần trước',
       recent: 'Giao dịch gần đây', seeAll: 'Xem tất cả', noTx: 'Chưa có giao dịch nào.', refresh: 'Làm mới',
       addTx: 'Thêm giao dịch', placeholder: 'ăn sáng 35k, lương 15 triệu, đổ xăng 80k…',
       week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', trend: 'Diễn biến thu chi',
@@ -189,9 +194,6 @@
       emptyInput: 'Vui lòng nhập nội dung.', cantParse: 'Không nhận diện được số tiền.',
       warn80: 'Sắp vượt ngân sách', warn100: 'Vượt ngân sách', parsing: 'Đang phân tích…',
       synced: 'Đã đồng bộ ✓', syncError: 'Lỗi đồng bộ', offline: 'Offline — sẽ đồng bộ sau', saving: 'Đang lưu…',
-      paceFast: 'Chi nhanh hơn kế hoạch', paceOk: 'Chi tiêu trong tầm kiểm soát', overspentWeek: 'Tuần này chi nhiều hơn tuần trước',
-      savedWell: 'Tuần này tiết kiệm tốt!', daysLeft: 'ngày còn lại trong tháng', biggestWeek: 'Khoản chi lớn nhất tuần',
-      noAlerts: 'Mọi thứ ổn định. Tiếp tục duy trì nhé! 👍',
       // Income vs expense tile (overview)
       netDiff: 'Chênh lệch thu chi', netIncomeHigher: 'Thu nhiều hơn chi', netExpenseHigher: 'Chi nhiều hơn thu', netEven: 'Thu chi bằng nhau',
       // Reminders
@@ -289,6 +291,15 @@
       emailTestSend: 'Gửi thử', emailTestSent: 'Đã gửi email thử tới {e}.',
       emailNeedClose: 'Chưa có tháng nào được chốt sổ — hãy chốt sổ trước.',
       emailSaved: 'Đã lưu cài đặt email.',
+      // Custom categories
+      categories: 'Danh mục', addCategory: 'Thêm danh mục', catName: 'Tên danh mục',
+      catHide: 'Ẩn', catShow: 'Hiện lại',
+      catInUse: 'Danh mục đang có giao dịch — chỉ có thể ẩn.',
+      confirmRenameCat: 'Đổi tên "{a}" thành "{b}"?\nMọi giao dịch, ngân sách, khoản định kỳ sẽ đổi theo. Báo cáo tháng đã chốt giữ tên cũ.',
+      catSaved: 'Đã lưu danh mục.', catDuplicate: 'Tên danh mục đã tồn tại.',
+      catsHint: 'Danh mục dùng chung cho cả hộ. AI phân loại giao dịch theo danh sách này. Danh mục đã dùng chỉ có thể ẩn, không xóa được.',
+      catsSchemaHint: 'Cần chạy lại supabase-schema.sql để bật danh mục tùy chỉnh.',
+      manageCats: 'Quản lý danh mục',
       // Storage usage
       storageUsage: 'Dung lượng', storageDb: 'Database', storageFiles: 'Ảnh hóa đơn (Storage)',
       storageFilesCount: '{n} ảnh',
@@ -299,7 +310,7 @@
       appName: 'Money Manager', overview: 'Overview', reports: 'Reports', add: 'Add', txs: 'Transactions', settings: 'Settings',
       income: 'Income', expense: 'Expense', balance: 'Current balance', savings: 'Savings', savingsRate: 'Savings rate',
       thisMonth: 'This month', remaining: 'Remaining', budget: 'Budget', spentToday: 'Spent today', avgPerDay: 'Avg / day',
-      weekReview: 'This week review', vsLastWeek: 'vs last week', alerts: 'Alerts & control',
+      weekReview: 'This week review', vsLastWeek: 'vs last week',
       recent: 'Recent transactions', seeAll: 'See all', noTx: 'No transactions yet.', refresh: 'Refresh',
       addTx: 'Add transaction', placeholder: 'breakfast 35k, salary 15 million, gas 80k…',
       week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', trend: 'Income & expense trend',
@@ -383,9 +394,6 @@
       emptyInput: 'Please enter something.', cantParse: 'Could not detect amount.',
       warn80: 'Near budget limit', warn100: 'Over budget', parsing: 'Parsing…',
       synced: 'Synced ✓', syncError: 'Sync error', offline: 'Offline — will sync later', saving: 'Saving…',
-      paceFast: 'Spending faster than planned', paceOk: 'Spending under control', overspentWeek: 'Spent more than last week',
-      savedWell: 'Great saving this week!', daysLeft: 'days left this month', biggestWeek: 'Biggest expense this week',
-      noAlerts: 'All good. Keep it up! 👍',
       // Income vs expense tile (overview)
       netDiff: 'Income vs expense', netIncomeHigher: 'Earned more than spent', netExpenseHigher: 'Spent more than earned', netEven: 'Break even',
       // Reminders
@@ -483,6 +491,15 @@
       emailTestSend: 'Send test', emailTestSent: 'Test email sent to {e}.',
       emailNeedClose: 'No closed month yet — close a month first.',
       emailSaved: 'Email settings saved.',
+      // Custom categories
+      categories: 'Categories', addCategory: 'Add category', catName: 'Name',
+      catHide: 'Hide', catShow: 'Unhide',
+      catInUse: 'This category has transactions — it can only be hidden.',
+      confirmRenameCat: 'Rename "{a}" to "{b}"?\nAll transactions, budgets and recurring items will follow. Closed monthly reports keep the old name.',
+      catSaved: 'Categories saved.', catDuplicate: 'Category name already exists.',
+      catsHint: 'Categories are shared by the whole household. The AI classifies entries against this list. Categories in use can only be hidden, not deleted.',
+      catsSchemaHint: 'Re-run supabase-schema.sql to enable custom categories.',
+      manageCats: 'Manage categories',
       // Storage usage
       storageUsage: 'Storage', storageDb: 'Database', storageFiles: 'Receipt photos (Storage)',
       storageFilesCount: '{n} photos',
@@ -520,9 +537,35 @@
   let activitySearch = '';   // client-side filter text for the Activity page
   let storageUsage = null;   // {dbBytes, receiptsBytes, receiptsFiles} — lazy-loaded for the Storage page
   let storageLoading = false;
+  let catsSeedPending = false; // first open of the Categories page: seeding defaults into the DB
   let currentTab = 'overview';
   let settingsPage = null; // Settings sub-page key (null = root grouped menu)
-  const CATS = window.Parser.CATEGORIES;
+  // Category source of truth: the household's registry (DATA.categories) when it
+  // has rows; otherwise the built-in defaults — so the app works unchanged before
+  // supabase-schema.sql is re-run. Names (text) remain the identity keys.
+  const DEFAULT_CATS = window.Parser.CATEGORIES.map((n) => ({
+    name: n, type: n === 'Thu nhập' ? 'income' : 'expense', emoji: null,
+    archived: false, isSystem: n === 'Thu nhập',
+  }));
+  function catList() {  // full objects, active-only, sorted (registry or defaults)
+    const rows = (DATA.categories || []).filter((c) => !c.archived);
+    return rows.length ? rows : DEFAULT_CATS;
+  }
+  function cats(type) { // just the names; type: 'expense' | 'income' | undefined = all
+    return catList().filter((c) => !type || c.type === type).map((c) => c.name);
+  }
+  // Push the live list into the parser (AI prompts + validation follow it).
+  function syncParserCategories() {
+    window.Parser.setCategories(catList().map((c) => ({ name: c.name, type: c.type })));
+  }
+  // <option> list for a category select. Keeps the row's CURRENT category in the
+  // list even when it has been archived — otherwise opening the editor would
+  // silently reassign the row to whatever option happened to be first.
+  function catOptionsFor(current) {
+    const list = cats();
+    const all = (current && list.indexOf(current) < 0) ? [current].concat(list) : list;
+    return all.map((c) => '<option value="' + esc(c) + '"' + (c === current ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>').join('');
+  }
   // Filters (transactions tab)
   let filterMonth = monthKey(new Date());
   let filterCategory = '';
@@ -747,7 +790,7 @@
   // Editor row + editor (Settings → Quick templates).
   function templateEditRowHtml(tp) {
     const x = tp || { id: '', label: '', amount: '', type: 'expense', category: 'Ăn uống', note: '' };
-    const catOpts = CATS.map((c) => '<option value="' + esc(c) + '"' + (c === x.category ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>').join('');
+    const catOpts = catOptionsFor(x.category);
     const typeOpts = '<option value="expense"' + (x.type !== 'income' ? ' selected' : '') + '>' + t('expense') + '</option>' +
       '<option value="income"' + (x.type === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
     return '<div class="tpl-edit-row" data-tpl="' + esc(x.id) + '">' +
@@ -883,7 +926,7 @@
 
   function recurringEditRowHtml(r) {
     const x = r || { id: '', name: '', amount: '', type: 'expense', category: 'Hóa đơn', accountId: '', day: 1 };
-    const catOpts = CATS.map((c) => '<option value="' + esc(c) + '"' + (c === x.category ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>').join('');
+    const catOpts = catOptionsFor(x.category);
     const typeOpts = '<option value="expense"' + (x.type !== 'income' ? ' selected' : '') + '>' + t('expense') + '</option>' +
       '<option value="income"' + (x.type === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
     const acctOpts = '<option value="">' + t('goalNone') + '</option>' +
@@ -1218,7 +1261,7 @@
 
   // One editable row inside the multi-entry confirm sheet.
   function entryPreviewRow(d) {
-    const catOpts = CATS.map((c) => '<option value="' + esc(c) + '"' + (c === d.category ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>').join('');
+    const catOpts = catOptionsFor(d.category);
     const isPast = d.date !== ymd(new Date());
     return '<div class="entry-row" data-date="' + esc(d.date) + '" data-time="' + esc(d.time || '') + '" data-raw="' + esc(d.rawInput || '') + '">' +
       '<div class="ep-line1">' +
@@ -1794,7 +1837,6 @@
     const bal = totalBalance();
     const budget = totalBudget();
     const remain = budget - mt.expense;
-    const daysInMonth = endOfMonth(now).getDate();
     const dayNow = now.getDate();
     const todayTx = DATA.transactions.filter((x) => x.date === ymd(now) && x.type === 'expense' && !isAdjust(x));
     const spentToday = todayTx.reduce((a, b) => a + b.amount, 0);
@@ -1836,21 +1878,15 @@
       // Savings goals
       goalsSectionHtml() +
 
-      // Weekly review + alerts (side by side on desktop)
-      '<div class="dash">' +
-      '<section class="dash-card"><div class="card week-card">' +
+      // Weekly review
+      '<div class="card week-card">' +
       '<div class="card-title">' + icon('calendar') + ' ' + t('weekReview') + '</div>' +
       '<div class="week-body">' +
       '<div><div class="week-amount">' + fmtVND(wkExp) + '</div>' +
       '<div class="week-diff ' + (diffPct > 0 ? 'bad' : 'good') + '">' + icon(diffPct > 0 ? 'trendUp' : 'trendDown') +
       ' ' + (diffPct > 0 ? '+' : '') + diffPct + '% ' + t('vsLastWeek') + '</div></div>' +
       '<div class="spark-wrap"><canvas id="weekSpark"></canvas></div>' +
-      '</div></div></section>' +
-
-      // Alerts
-      '<section class="dash-card"><div class="section-title">' + t('alerts') + '</div>' +
-      '<div class="alerts">' + buildAlerts(now, mt, budget, dayNow, daysInMonth, wkExp, lastWkExp, wkTx) + '</div></section>' +
-      '</div>' +
+      '</div></div>' +
 
       // Recent
       '<div class="section-row"><div class="section-title">' + t('recent') + '</div>' +
@@ -1862,63 +1898,6 @@
   function alertItem(kind, ic, text) {
     return '<div class="alert-item ' + kind + '">' + icon(ic) + '<span>' + text + '</span></div>';
   }
-  function buildAlerts(now, mt, budget, dayNow, daysInMonth, wkExp, lastWkExp, wkTx) {
-    const out = [];
-    const byCat = byCategory(inRange(startOfMonth(now), endOfMonth(now)));
-    // over-budget categories
-    Object.keys(DATA.budgets).forEach((cat) => {
-      const lim = DATA.budgets[cat]; if (!lim) return;
-      const used = byCat[cat] || 0; const pct = Math.round(used / lim * 100);
-      if (pct >= 100) out.push(alertItem('danger', 'alert', '<b>' + cat + '</b>: ' + t('warn100').toLowerCase() + ' (' + pct + '% — ' + fmtShort(used) + '/' + fmtShort(lim) + ')'));
-      else if (pct >= 80) out.push(alertItem('warn', 'alert', '<b>' + cat + '</b>: ' + t('warn80').toLowerCase() + ' (' + pct + '%)'));
-    });
-    // credit-card / loan due reminders (and high utilization)
-    activeAccounts().forEach((acc) => {
-      if (accountClass(acc) !== 'liability') return;
-      const cyc = cardCycle(acc);
-      if (cyc.owed <= 0) return;
-      if (cyc.dueDate) {
-        const dleft = daysUntil(cyc.dueDate);
-        if (dleft <= 7) {
-          const when = dleft <= 0 ? t('dueTodayLabel') : t('dueInDays').replace('{n}', dleft);
-          const pay = cyc.minPayment > 0 ? ' · ' + t('minPayment').toLowerCase() + ' ' + fmtShort(cyc.minPayment) : '';
-          out.push(alertItem(dleft <= 2 ? 'danger' : 'warn', 'card',
-            '<b>' + esc(acc.name) + '</b>: ' + t('dueDate').toLowerCase() + ' ' + cyc.dueDate + ' (' + when + ')' + pay));
-        }
-      }
-      if (cyc.utilization != null && cyc.utilization >= 80) {
-        out.push(alertItem('warn', 'card', '<b>' + esc(acc.name) + '</b>: ' + t('utilization').toLowerCase() + ' ' + cyc.utilization + '%'));
-      }
-    });
-    // pace
-    if (budget > 0) {
-      const expected = budget * dayNow / daysInMonth;
-      if (mt.expense > expected * 1.1) out.push(alertItem('warn', 'trendUp', t('paceFast') + ' — ' + (daysInMonth - dayNow) + ' ' + t('daysLeft')));
-      else out.push(alertItem('good', 'check', t('paceOk') + ' — ' + (daysInMonth - dayNow) + ' ' + t('daysLeft')));
-    }
-    // week comparison
-    if (wkExp > lastWkExp && lastWkExp > 0) out.push(alertItem('warn', 'trendUp', t('overspentWeek')));
-    else if (wkExp < lastWkExp) out.push(alertItem('good', 'piggy', t('savedWell')));
-    // biggest expense this week
-    const big = wkTx.filter((x) => x.type === 'expense' && !isAdjust(x)).sort((a, b) => b.amount - a.amount)[0];
-    if (big) out.push(alertItem('info', 'spark', t('biggestWeek') + ': <b>' + esc(big.note) + '</b> · ' + fmtShort(big.amount)));
-    if (!out.length) out.push(alertItem('good', 'check', t('noAlerts')));
-    return out.join('');
-  }
-  // Count of items that need attention now (drives the Overview nav badge):
-  // any category at/over budget this month + any liability due within 3 days.
-  function alertCount() {
-    let n = 0;
-    const byCat = byCategory(inRange(startOfMonth(new Date()), endOfMonth(new Date())));
-    Object.keys(DATA.budgets).forEach((c) => { const lim = DATA.budgets[c]; if (lim && (byCat[c] || 0) >= lim) n++; });
-    activeAccounts().forEach((a) => {
-      if (accountClass(a) !== 'liability') return;
-      const cyc = cardCycle(a);
-      if (cyc.owed > 0 && cyc.dueDate && daysUntil(cyc.dueDate) <= 3) n++;
-    });
-    return n;
-  }
-
   /* ============== VIEW: Reports ============== */
   function reportRange() {
     const a = reportAnchor;
@@ -2572,7 +2551,7 @@
 
     const months = new Set(DATA.transactions.map((tx) => tx.date.slice(0, 7))); months.add(monthKey(new Date()));
     const monthOpts = Array.from(months).sort().reverse().map((m) => '<option value="' + m + '"' + (m === filterMonth ? ' selected' : '') + '>' + t('month') + ' ' + m + '</option>').join('');
-    const catOpts = '<option value="">' + t('allCats') + '</option>' + CATS.map((c) => '<option value="' + c + '"' + (c === filterCategory ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
+    const catOpts = '<option value="">' + t('allCats') + '</option>' + cats().map((c) => '<option value="' + c + '"' + (c === filterCategory ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
     const typeOpts = '<option value="">' + t('allTypes') + '</option><option value="expense"' + (filterType === 'expense' ? ' selected' : '') + '>' + t('expense') + '</option><option value="income"' + (filterType === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
 
     let body = '';
@@ -2807,6 +2786,7 @@
       ], t('grpAccount')) +
       iosGroup([
         iosRow({ ic: 'target', tint: 'red', label: t('budget'), page: 'budget' }),
+        iosRow({ ic: 'list', tint: 'indigo', label: t('categories'), value: String(cats().length), page: 'cats' }),
         iosRow({ ic: 'card', tint: 'orange', label: t('wallets'), value: accs.length ? String(accs.length) : '', page: 'wallets' }),
         iosRow({ ic: 'zap', tint: 'green', label: t('quickTemplates'), value: getTemplates().length ? String(getTemplates().length) : '', page: 'templates' }),
         iosRow({ ic: 'piggy', tint: 'pink', label: t('savingsGoals'), value: (DATA.goals && DATA.goals.length) ? String(DATA.goals.length) : '', page: 'goals' }),
@@ -2990,6 +2970,35 @@
       '</div><span class="ios-row-chev">' + icon('right') + '</span></div>';
   }
 
+  // One editable category row. Existing rows carry their id in data-cat (and the
+  // original name in data-name); brand-new rows have neither — created on Save.
+  // 'Thu nhập' (isSystem) is locked: parser & reports depend on it.
+  function catEditRowHtml(c) {
+    if (!c) {
+      return '<div class="cat-edit-row is-new">' +
+        '<input type="text" class="c-emoji" maxlength="4" placeholder="🙂"/>' +
+        '<input type="text" class="c-name" placeholder="' + t('catName') + '"/>' +
+        '<select class="c-type"><option value="expense">' + t('expense') + '</option><option value="income">' + t('income') + '</option></select>' +
+        '<button type="button" class="icon-btn danger" data-rmcatrow="1" title="' + t('delete') + '">' + icon('x') + '</button>' +
+        '</div>';
+    }
+    const locked = c.isSystem;
+    const used = DATA.transactions.some((tx) => tx.category === c.name) ||
+      (DATA.recurring || []).some((r) => r.category === c.name);
+    let action = '';
+    if (!locked) {
+      action = c.archived
+        ? '<button type="button" class="icon-btn" data-catarch="' + esc(c.id) + '" data-to="0" title="' + t('catShow') + '">' + icon('eye') + '</button>'
+        : '<button type="button" class="icon-btn" data-catarch="' + esc(c.id) + '" data-to="1" title="' + t('catHide') + '">' + icon('eyeOff') + '</button>';
+      if (!used) action += '<button type="button" class="icon-btn danger" data-catdel="' + esc(c.name) + '" title="' + t('delete') + '">' + icon('trash') + '</button>';
+    }
+    return '<div class="cat-edit-row' + (c.archived ? ' is-archived' : '') + '" data-cat="' + esc(c.id) + '" data-name="' + esc(c.name) + '">' +
+      '<input type="text" class="c-emoji" maxlength="4" value="' + esc(c.emoji || '') + '" placeholder="' + (CAT_ICON[c.name] ? '' : '🙂') + '"' + (locked ? ' disabled' : '') + '/>' +
+      '<input type="text" class="c-name" value="' + esc(c.name) + '"' + (locked ? ' disabled' : '') + '/>' +
+      '<span class="c-typelabel">' + (c.type === 'income' ? t('income') : t('expense')) + '</span>' +
+      action + '</div>';
+  }
+
   // A single Settings sub-page (reuses the existing form markup + element IDs).
   function settingsPageView(page) {
     const C = window.CONFIG;
@@ -3000,13 +3009,30 @@
 
     if (page === 'budget') {
       title = t('budget');
-      const budgetInputs = CATS.filter((c) => c !== 'Thu nhập').map((c) =>
+      const budgetInputs = cats('expense').map((c) =>
         '<div class="budget-edit-row"><label>' + catIcon(c) + esc(catLabel(c)) + '</label>' +
         '<input type="text" inputmode="numeric" class="js-money" data-budget="' + c + '" value="' + groupMoney(DATA.budgets[c] || 0) + '"/></div>').join('');
       body = '<div class="ios-grp-h">' + t('budget') + ' (' + t('month').toLowerCase() + ')</div>' +
         '<div class="ios-card budget-edit">' + budgetInputs + '</div>' +
-        '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>';
+        '<button id="saveBudgetBtn" class="primary-btn">' + icon('target') + ' ' + t('saveBudget') + '</button>' +
+        (canManageConfig() ? '<button class="link-btn" data-page="cats" style="margin-top:10px">' + t('manageCats') + ' ' + icon('right') + '</button>' : '');
       if (!canManageConfig()) body = roLock(body);
+    } else if (page === 'cats') {
+      title = t('categories');
+      const rows = DATA.categories || [];
+      if (!rows.length) {
+        // First open seeds the defaults (see the data-page handler); if that
+        // failed, the table doesn't exist yet → point at the schema.
+        body = catsSeedPending ? '<div class="empty">…</div>'
+          : '<div class="warn-hint">' + icon('alert') + ' ' + t('catsSchemaHint') + '</div>';
+      } else {
+        body = '<div class="hint">' + t('catsHint') + '</div>' +
+          '<div id="catEdit" class="ios-card cat-edit">' + rows.map(catEditRowHtml).join('') + '</div>' +
+          '<button id="addCatBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addCategory') + '</button>' +
+          '<button id="saveCatsBtn" class="primary-btn" style="margin-top:10px">' + icon('check') + ' ' + t('save') + '</button>';
+        if (!canManageConfig()) body = roLock('<div class="hint">' + t('catsHint') + '</div>' +
+          '<div class="ios-card cat-edit">' + rows.map(catEditRowHtml).join('') + '</div>');
+      }
     } else if (page === 'wallets') {
       title = t('wallets');
       body = canManageConfig() ? walletsEditorHtml() : roLock(walletsEditorHtml());
@@ -3340,7 +3366,7 @@
     if (!canEditTx(tx)) { toast(t('cantEditOthersTx'), 'warn'); return; }
     if (isAdjust(tx)) return;                          // balance adjustments have no editable fields
     if (tx.type === 'transfer') { openTransfer(tx); return; }
-    const catOpts = CATS.map((c) => '<option value="' + c + '"' + (c === tx.category ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
+    const catOpts = catOptionsFor(tx.category);
     const wrap = document.createElement('div');
     wrap.innerHTML = '<div class="modal-backdrop" id="modalBackdrop"><div class="modal">' +
       '<div class="card-title">' + icon('edit') + ' ' + t('edit') + '</div>' +
@@ -3395,11 +3421,11 @@
   function renderNav() {
     const nav = document.getElementById('bottomNav');
     if (!nav) return;
-    const item = (tab, ic, label, badge) => '<button class="nav-btn ' + (currentTab === tab ? 'active' : '') + '" data-tab="' + tab + '"' + (currentTab === tab ? ' aria-current="page"' : '') + '>' +
-      '<span class="nav-ic">' + icon(ic) + (badge ? '<span class="nav-badge">' + (badge > 9 ? '9+' : badge) + '</span>' : '') + '</span>' +
+    const item = (tab, ic, label) => '<button class="nav-btn ' + (currentTab === tab ? 'active' : '') + '" data-tab="' + tab + '"' + (currentTab === tab ? ' aria-current="page"' : '') + '>' +
+      '<span class="nav-ic">' + icon(ic) + '</span>' +
       '<span>' + label + '</span></button>';
     nav.innerHTML =
-      item('overview', 'wallet', t('overview'), alertCount()) +
+      item('overview', 'wallet', t('overview')) +
       item('reports', 'chart', t('reports')) +
       '<button class="nav-fab ' + (currentTab === 'add' ? 'active' : '') + '" data-tab="add" data-label="' + esc(t('add')) + '" title="' + esc(t('add')) + '">' + icon('plus') + '</button>' +
       item('transactions', 'list', t('txs')) +
@@ -3734,6 +3760,74 @@
         toast(t('save') + ' ✓', 'success');
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     }));
+    // Categories editor: add a blank row
+    const acb = document.getElementById('addCatBtn');
+    if (acb) acb.addEventListener('click', () => {
+      const box = document.getElementById('catEdit'); if (!box) return;
+      box.insertAdjacentHTML('beforeend', catEditRowHtml(null));
+      const last = box.querySelector('.cat-edit-row:last-child .c-name'); if (last) last.focus();
+    });
+    // Categories editor: row actions (delegated → also covers rows added after wiring)
+    const catBox = document.getElementById('catEdit');
+    if (catBox) catBox.addEventListener('click', (e) => {
+      const rm = e.target && e.target.closest && e.target.closest('[data-rmcatrow]');
+      if (rm) { const row = rm.closest('.cat-edit-row'); if (row) row.remove(); return; }
+      const arch = e.target && e.target.closest && e.target.closest('[data-catarch]');
+      if (arch) {
+        busy(arch, async () => {
+          try {
+            await window.Store.updateCategory(arch.dataset.catarch, { archived: arch.dataset.to === '1' });
+            await refreshData(true);
+            toast(t('catSaved'), 'success');
+          } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+        });
+        return;
+      }
+      const del = e.target && e.target.closest && e.target.closest('[data-catdel]');
+      if (del) {
+        if (!confirm(t('delete') + '?')) return;
+        busy(del, async () => {
+          try {
+            await window.Store.deleteCategory(del.dataset.catdel);
+            await refreshData(true);
+            toast(t('deleted'), 'info');
+          } catch (err) {
+            toast(/in_use/.test(err.message || '') ? t('catInUse') : (t('syncError') + ': ' + err.message), 'error');
+          }
+        });
+      }
+    });
+    // Categories editor: save all rows (insert new / rename / emoji changes)
+    const scats = document.getElementById('saveCatsBtn');
+    if (scats) scats.addEventListener('click', () => busy(scats, async () => {
+      const rowEls = Array.from(document.querySelectorAll('#catEdit .cat-edit-row'));
+      try {
+        for (let i = 0; i < rowEls.length; i++) {
+          const r = rowEls[i];
+          const name = (r.querySelector('.c-name').value || '').trim();
+          const emoji = (r.querySelector('.c-emoji').value || '').trim();
+          const id = r.dataset.cat;
+          if (!id) {              // brand-new row
+            if (!name) continue;
+            const sel = r.querySelector('.c-type');
+            await window.Store.addCategory({ name: name, emoji: emoji, type: sel ? sel.value : 'expense', sortOrder: i });
+            continue;
+          }
+          const cat = (DATA.categories || []).find((x) => x.id === id);
+          if (!cat) continue;
+          if (!cat.isSystem && name && name !== cat.name) {
+            if (!confirm(t('confirmRenameCat').replace('{a}', cat.name).replace('{b}', name))) continue;
+            await window.Store.renameCategory(cat.name, name);
+          }
+          if ((emoji || null) !== (cat.emoji || null)) await window.Store.updateCategory(id, { emoji: emoji });
+        }
+        await refreshData(true);
+        toast(t('catSaved'), 'success');
+      } catch (err) {
+        const msg = /duplicate/i.test(err.message || '') ? t('catDuplicate') : (t('syncError') + ': ' + err.message);
+        toast(msg, 'error');
+      }
+    }));
     // Save AI keys (parser): Gemini (free) + Claude (paid fallback).
     // Written to the household_settings table so the whole household shares them;
     // if the table doesn't exist yet (schema not re-run) fall back to localStorage.
@@ -3852,6 +3946,14 @@
       } else if (settingsPage === 'storage') {
         storageUsage = null; storageLoading = true; render(); // show the loading state first
         await loadStorageUsage();
+      } else if (settingsPage === 'cats' && canManageConfig() && !(DATA.categories || []).length) {
+        // First open: move the built-in defaults into the DB so they become editable.
+        catsSeedPending = true; render();
+        try {
+          const seeded = await window.Store.seedDefaultCategories(DEFAULT_CATS);
+          if (seeded.length) { DATA.categories = seeded; syncParserCategories(); }
+        } catch (e) { /* table missing (schema not re-run) → page shows the hint */ }
+        catsSeedPending = false;
       }
       render();
     }));
@@ -4074,7 +4176,9 @@
     if (!DATA.recurring) DATA.recurring = [];
     if (!DATA.attachments) DATA.attachments = [];
     if (!DATA.monthlyReports) DATA.monthlyReports = [];
+    if (!DATA.categories) DATA.categories = [];
     if (!DATA.goldPrices) DATA.goldPrices = {};
+    syncParserCategories();
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     myRole = computeMyRole();
@@ -4142,7 +4246,9 @@
     if (!DATA.recurring) DATA.recurring = [];
     if (!DATA.attachments) DATA.attachments = [];
     if (!DATA.monthlyReports) DATA.monthlyReports = [];
+    if (!DATA.categories) DATA.categories = [];
     if (!DATA.goldPrices) DATA.goldPrices = {};
+    syncParserCategories();
       householdMembers = await window.Store.listMembers().catch(() => householdMembers);
       myRole = computeMyRole();
       applyDbConfig();

@@ -10,10 +10,21 @@
 (function () {
   'use strict';
 
-  const CATEGORIES = [
+  const DEFAULT_CATEGORIES = [
     'Ăn uống', 'Di chuyển', 'Mua sắm', 'Giải trí',
     'Sức khỏe', 'Hóa đơn', 'Thu nhập', 'Khác',
   ];
+  // The household's live category list (custom categories feature). The app
+  // pushes it via setCategories() after loadData/realtime; until then the
+  // defaults apply, so parsing works even before the schema is re-run.
+  let CATEGORIES = DEFAULT_CATEGORIES.slice();
+  let EXPENSE_FALLBACK = 'Khác';
+  function setCategories(list) {   // list = [{name, type}] active, sorted
+    if (!Array.isArray(list) || !list.length) return;
+    CATEGORIES = list.map((c) => c.name);
+    const exp = list.filter((c) => c.type !== 'income').map((c) => c.name);
+    EXPENSE_FALLBACK = exp.indexOf('Khác') >= 0 ? 'Khác' : (exp[0] || 'Khác');
+  }
 
   // Hint keywords for the regex fallback
   const KEYWORDS = {
@@ -28,17 +39,19 @@
 
   const INCOME_HINTS = ['lương', 'thưởng', 'thu nhập', 'nhận', 'được', 'bán', 'lãi', 'hoàn tiền', 'chuyển khoản vào'];
 
-  const SYSTEM_PROMPT =
-    'Bạn là assistant parse chi tiêu tài chính từ văn bản tiếng Việt.\n' +
+  // Built per call so the category list always reflects the household's live set.
+  function systemPrompt() {
+    return 'Bạn là assistant parse chi tiêu tài chính từ văn bản tiếng Việt.\n' +
     'Trả về JSON với format: {"amount": number, "type": "expense"|"income", "category": string, "note": string, "date": string|null}\n' +
     '- amount: số tiền (số nguyên, đơn vị VND)\n' +
     '- type: "income" nếu là thu nhập, "expense" nếu là chi tiêu\n' +
-    '- category: một trong [Ăn uống, Di chuyển, Mua sắm, Giải trí, Sức khỏe, Hóa đơn, Thu nhập, Khác]\n' +
+    '- category: một trong [' + CATEGORIES.join(', ') + ']. Nếu không khớp danh mục nào, dùng "' + EXPENSE_FALLBACK + '".\n' +
     '- note: mô tả ngắn gọn bằng tiếng Việt (không chứa cụm chỉ ngày)\n' +
     '- date: ngày giao dịch dạng "YYYY-MM-DD" nếu câu có nhắc ngày ("hôm qua", "hôm kia", "20/6"…); nếu không nhắc ngày thì để null\n' +
     'Quy đổi tiền: k/nghìn/ngàn = nghìn, tr/triệu/củ = triệu, "rưỡi" = thêm một nửa đơn vị (vd "2 triệu rưỡi" = 2500000, "1tr2" = 1200000).\n' +
-    'QUAN TRỌNG: input có thể viết KHÔNG DẤU (telex/gõ nhanh). Hãy tự suy ra nghĩa có dấu rồi phân loại. Ví dụ: "an sang"=ăn sáng→Ăn uống, "an trua"=ăn trưa→Ăn uống, "ca phe"=cà phê→Ăn uống, "do xang"/"xang xe"=đổ xăng→Di chuyển, "tien dien"=tiền điện→Hóa đơn, "luong"=lương→Thu nhập, "mua sam"=mua sắm→Mua sắm.\n' +
+    'QUAN TRỌNG: input có thể viết KHÔNG DẤU (telex/gõ nhanh). Hãy tự suy ra nghĩa có dấu rồi phân loại. Ví dụ: "an sang"=ăn sáng→Ăn uống, "ca phe"=cà phê→Ăn uống, "do xang"/"xang xe"=đổ xăng→Di chuyển, "tien dien"=tiền điện→Hóa đơn, "luong"=lương→Thu nhập (chỉ dùng các ví dụ này khi danh mục tương ứng có trong danh sách trên).\n' +
     'Chỉ trả về JSON, không giải thích thêm.';
+  }
 
   // Validate a "YYYY-MM-DD" string; return it normalized or null.
   function normDate(v) {
@@ -190,7 +203,7 @@
     const amount = toIntAmount(parsed.amount);
     const type = parsed.type === 'income' ? 'income' : 'expense';
     let category = String(parsed.category || '').trim();
-    if (!CATEGORIES.includes(category)) category = type === 'income' ? 'Thu nhập' : 'Khác';
+    if (!CATEGORIES.includes(category)) category = type === 'income' ? 'Thu nhập' : EXPENSE_FALLBACK;
     const note = String(parsed.note || raw).trim();
     const date = normDate(parsed.date);
     return { amount, type, category, note, date };
@@ -219,7 +232,7 @@
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
         max_tokens: 256,
-        system: SYSTEM_PROMPT + '\nHôm nay là ' + ymdOf(new Date()) + '.',
+        system: systemPrompt() + '\nHôm nay là ' + ymdOf(new Date()) + '.',
         messages: [{ role: 'user', content: raw }],
       }),
     });
@@ -246,7 +259,7 @@
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT + '\nHôm nay là ' + ymdOf(new Date()) + '.' }] },
+        system_instruction: { parts: [{ text: systemPrompt() + '\nHôm nay là ' + ymdOf(new Date()) + '.' }] },
         contents: [{ role: 'user', parts: [{ text: raw }] }],
         // Force temperature 0 + JSON output so categorization is deterministic and easy to parse.
         generationConfig: { temperature: 0, responseMimeType: 'application/json' },
@@ -268,8 +281,9 @@
    *  Reuses the same browser-direct API calls as the text parser, but with an
    *  image content block. Returns the normalized {amount,type,category,note,date}.
    * --------------------------------------------------------------- */
-  const OCR_PROMPT =
-    'Đây là ảnh hoá đơn / biên lai. Trích ra MỘT giao dịch, trả về JSON:\n' +
+  // Built per call so the category list always reflects the household's live set.
+  function ocrPrompt() {
+    return 'Đây là ảnh hoá đơn / biên lai. Trích ra MỘT giao dịch, trả về JSON:\n' +
     '{"total": number, "tendered": number|null, "change": number|null, "subtotal": number|null, "tax": number|null, ' +
     '"type": "expense"|"income", "category": string, "note": string, "date": string|null}.\n' +
     'Mọi số là SỐ NGUYÊN VND, KHÔNG dấu phân cách (vd 185000, không phải "185.000").\n' +
@@ -280,10 +294,11 @@
     'QUAN TRỌNG: total là số PHẢI TRẢ, TUYỆT ĐỐI không nhầm với tendered (tiền khách đưa). ' +
     'Nếu không thấy dòng tổng nhưng có tendered và change thì total = tendered − change.\n' +
     '- type: "expense" cho hoá đơn mua hàng/dịch vụ (mặc định); "income" chỉ khi rõ là phiếu thu/nhận tiền.\n' +
-    '- category: một trong [Ăn uống, Di chuyển, Mua sắm, Giải trí, Sức khỏe, Hóa đơn, Thu nhập, Khác] — suy từ tên cửa hàng/mặt hàng.\n' +
+    '- category: một trong [' + CATEGORIES.join(', ') + '] — suy từ tên cửa hàng/mặt hàng. Không khớp thì dùng "' + EXPENSE_FALLBACK + '".\n' +
     '- note: tên cửa hàng hoặc mô tả ngắn (tiếng Việt).\n' +
     '- date: ngày trên hoá đơn dạng "YYYY-MM-DD"; không thấy thì null.\n' +
     'Chỉ trả về JSON, không giải thích.';
+  }
 
   // Gemini structured-output schema → guarantees valid JSON + correct types (faster, no parse retry).
   const OCR_SCHEMA = {
@@ -317,7 +332,7 @@
     else if (amount > 0 && derived > 0 && Math.abs(derived - amount) > 1000) lowConfidence = true; // mismatch
     const type = parsed.type === 'income' ? 'income' : 'expense';
     let category = String(parsed.category || '').trim();
-    if (!CATEGORIES.includes(category)) category = type === 'income' ? 'Thu nhập' : 'Khác';
+    if (!CATEGORIES.includes(category)) category = type === 'income' ? 'Thu nhập' : EXPENSE_FALLBACK;
     const note = String(parsed.note || '').trim();
     const date = normDate(parsed.date);
     return { amount, type, category, note, date,
@@ -350,7 +365,7 @@
         system: 'Hôm nay là ' + ymdOf(new Date()) + '.',
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: blob.type || 'image/jpeg', data: b64 } },
-          { type: 'text', text: OCR_PROMPT },
+          { type: 'text', text: ocrPrompt() },
         ] }],
       }),
     });
@@ -371,7 +386,7 @@
         system_instruction: { parts: [{ text: 'Hôm nay là ' + ymdOf(new Date()) + '.' }] },
         contents: [{ role: 'user', parts: [
           { inline_data: { mime_type: blob.type || 'image/jpeg', data: b64 } },
-          { text: OCR_PROMPT },
+          { text: ocrPrompt() },
         ] }],
         generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: OCR_SCHEMA },
       }),
@@ -573,6 +588,7 @@
     reviewMonth,
     aiReviewAvailable,
     MAX_ENTRIES,
-    CATEGORIES,
+    CATEGORIES: DEFAULT_CATEGORIES,   // initial defaults (app reads its own live list)
+    setCategories,
   };
 })();
