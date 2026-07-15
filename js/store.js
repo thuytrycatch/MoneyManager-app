@@ -214,13 +214,60 @@
   async function listMembers() {
     if (!household) return [];
     const sb = getClient();
-    const { data, error } = await sb
+    // Profile columns may not exist yet (schema not re-run) → retry without them.
+    let { data, error } = await sb
       .from('household_members')
-      .select('user_id,email,role,joined_at')
+      .select('user_id,email,role,joined_at,display_name,avatar')
       .eq('household_id', household.id)
       .order('joined_at', { ascending: true });
+    if (error) {
+      ({ data, error } = await sb
+        .from('household_members')
+        .select('user_id,email,role,joined_at')
+        .eq('household_id', household.id)
+        .order('joined_at', { ascending: true }));
+    }
     if (error) throw new Error(error.message);
-    return (data || []).map((m) => ({ userId: m.user_id, email: m.email, role: m.role }));
+    return (data || []).map((m) => ({
+      userId: m.user_id, email: m.email, role: m.role,
+      displayName: m.display_name || '', avatar: m.avatar || '',
+    }));
+  }
+
+  // Update the user's profile columns on ALL their member rows (every household
+  // they belong to) so the identity is consistent everywhere. RLS only lets a
+  // user touch their own rows; the role guard is unaffected.
+  async function updateProfile(fields) {
+    const user = await getUser();
+    if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
+    const payload = {};
+    if ('displayName' in fields) payload.display_name = (fields.displayName || '').trim() || null;
+    if ('avatar' in fields) payload.avatar = fields.avatar || null;
+    if (!Object.keys(payload).length) return;
+    const { error } = await getClient()
+      .from('household_members')
+      .update(payload)
+      .eq('user_id', user.id);
+    if (error) throw new Error(error.message);
+  }
+
+  // Verify the current password first (also refreshes the session), then set
+  // the new one via Supabase Auth. The app never stores passwords anywhere.
+  async function changePassword(currentPw, newPw) {
+    const user = await getUser();
+    if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
+    await signIn(user.email, currentPw);
+    const { error } = await getClient().auth.updateUser({ password: newPw });
+    if (error) throw new Error(error.message);
+  }
+
+  // Re-send the signup confirmation email (requires "Confirm email" to be
+  // enabled in the Supabase Auth settings).
+  async function resendVerification() {
+    const user = await getUser();
+    if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
+    const { error } = await getClient().auth.resend({ type: 'signup', email: user.email });
+    if (error) throw new Error(error.message);
   }
 
   async function removeMember(userId) {
@@ -1056,6 +1103,9 @@
     switchHousehold,
     clearHousehold,
     listMembers,
+    updateProfile,
+    changePassword,
+    resendVerification,
     removeMember,
     setMemberRole,
     transferOwnership,

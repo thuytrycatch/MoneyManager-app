@@ -170,6 +170,18 @@
       createHousehold: 'Tạo hộ mới', hhCreated: 'Đã tạo hộ mới', errEnterHhName: 'Vui lòng nhập tên hộ.',
       hhOnboardSub: 'Bạn chưa thuộc hộ nào. Tạo hộ mới cho gia đình mình, hoặc dán mã mời để tham gia hộ có sẵn.',
       joinWithCode: 'Tham gia bằng mã mời', orDivider: 'hoặc',
+      // Profile
+      displayNameLbl: 'Tên hiển thị', changeAvatar: 'Đổi ảnh', removeAvatar: 'Xóa ảnh',
+      avatarSaved: 'Đã cập nhật ảnh đại diện.', avatarTooLarge: 'Ảnh quá lớn — hãy chọn ảnh khác.',
+      nameSaved: 'Đã lưu tên hiển thị.', fillAllFields: 'Vui lòng điền đủ các ô.',
+      changePassword: 'Đổi mật khẩu', currentPassword: 'Mật khẩu hiện tại',
+      newPassword: 'Mật khẩu mới', confirmPassword: 'Nhập lại mật khẩu mới',
+      passwordMismatch: 'Mật khẩu nhập lại không khớp.', passwordChanged: 'Đã đổi mật khẩu.',
+      emailVerified: 'Đã xác thực', emailNotVerified: 'Chưa xác thực',
+      resendVerify: 'Gửi lại email xác thực',
+      verifySent: 'Đã gửi email xác thực — kiểm tra hộp thư.',
+      verifyWait: 'Vui lòng đợi một lát rồi gửi lại.',
+      profileSchemaHint: 'Cần chạy lại supabase-schema.sql để bật hồ sơ (tên, ảnh).',
       grpAccount: 'Hộ gia đình & Tài khoản', grpMoney: 'Quản lý tiền', grpGeneral: 'Cài đặt chung', grpAdvanced: 'Nâng cao',
       chooseLanguage: 'Chọn ngôn ngữ', darkMode: 'Chế độ tối',
       members: 'Thành viên', roleOwner: 'Chủ hộ', roleAdmin: 'Quản trị viên', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
@@ -379,6 +391,18 @@
       createHousehold: 'Create household', hhCreated: 'Household created', errEnterHhName: 'Please enter a household name.',
       hhOnboardSub: 'You are not in any household yet. Create one for your family, or paste an invite code to join an existing one.',
       joinWithCode: 'Join with an invite code', orDivider: 'or',
+      // Profile
+      displayNameLbl: 'Display name', changeAvatar: 'Change photo', removeAvatar: 'Remove photo',
+      avatarSaved: 'Profile photo updated.', avatarTooLarge: 'Image too large — please pick another.',
+      nameSaved: 'Display name saved.', fillAllFields: 'Please fill in all fields.',
+      changePassword: 'Change password', currentPassword: 'Current password',
+      newPassword: 'New password', confirmPassword: 'Confirm new password',
+      passwordMismatch: 'Passwords do not match.', passwordChanged: 'Password changed.',
+      emailVerified: 'Verified', emailNotVerified: 'Not verified',
+      resendVerify: 'Resend verification email',
+      verifySent: 'Verification email sent — check your inbox.',
+      verifyWait: 'Please wait a moment before resending.',
+      profileSchemaHint: 'Re-run supabase-schema.sql to enable profiles (name, photo).',
       grpAccount: 'Household & Account', grpMoney: 'Money', grpGeneral: 'General', grpAdvanced: 'Advanced',
       chooseLanguage: 'Choose language', darkMode: 'Dark mode',
       members: 'Members', roleOwner: 'Owner', roleAdmin: 'Admin', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
@@ -547,6 +571,8 @@
   let authIsSignup = false;
   let currentUserEmail = '';
   let currentUserId = '';
+  let currentUserVerified = false; // email_confirmed_at present on the auth user
+  let verifyCooldownUntil = 0; // client-side cooldown for "resend verification"
   let myHouseholds = []; // [{id, name}] households the user belongs to
   let householdMembers = []; // [{userId, email, role}] members of the household being viewed
   let myRole = 'member'; // current user's role in the active household: 'owner' | 'admin' | 'member'
@@ -630,11 +656,32 @@
   let hideBalTotal = (localStorage.getItem('hideBalTotal') || '1') === '1';
 
   // Display name of whoever entered a transaction (from tx.userId → household member).
+  // Prefers the self-chosen profile name, falls back to the email prefix.
   function memberName(uid) {
     if (uid && uid === currentUserId) return t('you');
     const m = householdMembers.find((x) => x.userId === uid);
+    if (m && m.displayName) return m.displayName;
     if (m && m.email) return m.email.split('@')[0];
     return t('unknownMember');
+  }
+  // The current user's own profile name (for the Settings root row / Profile page).
+  function myDisplayName() {
+    const m = householdMembers.find((x) => x.userId === currentUserId);
+    return (m && m.displayName) || currentUserEmail || '';
+  }
+  // Avatar circle: the member's photo (small data-URI) or a colored-initial
+  // fallback. Only data: image URIs are ever rendered into src.
+  const AVATAR_TINTS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+  function memberAvatar(uid, cls) {
+    const m = householdMembers.find((x) => x.userId === uid) || {};
+    if (m.avatar && /^data:image\//.test(m.avatar)) {
+      return '<img class="avatar ' + (cls || '') + '" src="' + esc(m.avatar) + '" alt=""/>';
+    }
+    const name = (m.displayName || m.email || '?').trim() || '?';
+    const sum = (uid || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    const tint = AVATAR_TINTS[sum % AVATAR_TINTS.length];
+    return '<span class="avatar avatar-fallback ' + (cls || '') + '" style="background:' + tint + '">' +
+      esc(name.charAt(0).toUpperCase()) + '</span>';
   }
 
   /* ============== Permissions (role-based) ==============
@@ -1454,6 +1501,16 @@
     const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', quality));
     if (!blob) throw new Error('encode');
     return { blob: blob, width: w, height: h };
+  }
+
+  // Blob → data-URI string (used for the profile avatar stored inline in the DB).
+  function blobToDataURL(blob) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.onerror = () => rej(r.error || new Error('read'));
+      r.readAsDataURL(blob);
+    });
   }
 
   // Point an <img> at a private file via a signed URL, re-signing once on load error.
@@ -2659,7 +2716,9 @@
       const isSelf = m.userId === currentUserId;
       const role = memberRole(m);
       const isOwn = role === 'owner';
-      const label = esc(m.email || t('unknownMember')) + (isSelf ? ' <span class="member-you">(' + t('you') + ')</span>' : '');
+      const label = esc(m.displayName || m.email || t('unknownMember')) + (isSelf ? ' <span class="member-you">(' + t('you') + ')</span>' : '');
+      // With a profile name shown, keep the email visible on a secondary line.
+      const sub = (m.displayName && m.email) ? '<div class="member-sub">' + esc(m.email) + '</div>' : '';
       const roleCls = isOwn ? 'owner' : (role === 'admin' ? 'admin' : '');
       // Action buttons. The owner manages everyone else; a non-owner can only leave.
       let act = '';
@@ -2675,8 +2734,8 @@
       } else if (isSelf && !isOwn) {
         act = '<button class="icon-btn danger" data-leave="1" title="' + t('leaveHousehold') + '">' + icon('right') + '</button>';
       }
-      return '<div class="member-row">' +
-        '<div class="member-info"><div class="member-email">' + label + '</div>' +
+      return '<div class="member-row">' + memberAvatar(m.userId) +
+        '<div class="member-info"><div class="member-email">' + label + '</div>' + sub +
         '<div class="member-role ' + roleCls + '">' + roleLabel(role) + '</div></div>' +
         (act ? '<div class="member-actions">' + act + '</div>' : '') + '</div>';
     }).join('');
@@ -2833,7 +2892,7 @@
         iosRow({ ic: 'wallet', tint: 'indigo', label: t('household'), value: esc(hh.name), page: 'household' }),
         iosRow({ ic: 'more', tint: 'blue', label: t('members'), value: householdMembers.length ? String(householdMembers.length) : '', page: 'members' }),
         (canManageConfig() ? iosRow({ ic: 'clock', tint: 'gray', label: t('activity'), page: 'activity' }) : ''),
-        iosRow({ ic: 'check', tint: 'green', label: t('account'), value: esc(currentUserEmail || ''), page: 'account' }),
+        iosRow({ ic: 'check', tint: 'green', label: t('account'), value: esc(myDisplayName()), page: 'account' }),
       ], t('grpAccount')) +
       iosGroup([
         iosRow({ ic: 'target', tint: 'red', label: t('budget'), page: 'budget' }),
@@ -3189,7 +3248,31 @@
       }
     } else if (page === 'account') {
       title = t('account');
-      body = '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + '</div>' +
+      const me = householdMembers.find((x) => x.userId === currentUserId) || {};
+      const badge = currentUserVerified
+        ? '<span class="verify-badge ok">' + icon('check') + ' ' + t('emailVerified') + '</span>'
+        : '<span class="verify-badge warn">' + icon('alert') + ' ' + t('emailNotVerified') + '</span>';
+      body =
+        '<div class="profile-head">' + memberAvatar(currentUserId, 'avatar-lg') +
+        '<input id="avatarFile" type="file" accept="image/*" style="display:none"/>' +
+        '<div class="profile-avatar-btns">' +
+        '<button id="changeAvatarBtn" class="ghost-btn sm">' + icon('edit') + ' ' + t('changeAvatar') + '</button>' +
+        (me.avatar ? '<button id="removeAvatarBtn" class="ghost-btn sm">' + icon('trash') + ' ' + t('removeAvatar') + '</button>' : '') +
+        '</div></div>' +
+        '<div class="config-status ok">👤 ' + esc(currentUserEmail || '') + ' ' + badge + '</div>' +
+        (!currentUserVerified
+          ? '<button id="resendVerifyBtn" class="ghost-btn">' + icon('refresh') + ' ' + t('resendVerify') + '</button>'
+          : '') +
+        '<div class="conn-form"><div class="conn-row"><label>' + t('displayNameLbl') + '</label>' +
+        '<input id="displayNameInp" type="text" value="' + esc(me.displayName || '') + '" maxlength="40" autocomplete="off"/></div></div>' +
+        '<button id="saveNameBtn" class="ghost-btn">' + icon('check') + ' ' + t('save') + '</button>' +
+        '<div class="ios-grp-h" style="margin-top:18px">' + t('changePassword') + '</div>' +
+        '<div class="conn-form">' +
+        '<div class="conn-row"><label>' + t('currentPassword') + '</label><input id="pwCur" type="password" autocomplete="current-password"/></div>' +
+        '<div class="conn-row"><label>' + t('newPassword') + '</label><input id="pwNew" type="password" autocomplete="new-password"/></div>' +
+        '<div class="conn-row"><label>' + t('confirmPassword') + '</label><input id="pwNew2" type="password" autocomplete="new-password"/></div>' +
+        '</div>' +
+        '<button id="changePwBtn" class="ghost-btn">' + icon('shield') + ' ' + t('changePassword') + '</button>' +
         iosGroup([iosRow({ ic: 'right', tint: 'red', label: t('signOut'), action: 'signout', danger: true, noChevron: true })]);
     } else if (page === 'ai') {
       title = t('aiCategorize');
@@ -4079,6 +4162,78 @@
         await enterApp();
       } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
     }));
+    // Profile: avatar, display name, password, email verification -----------
+    const reloadProfile = async (msg) => {
+      householdMembers = await window.Store.listMembers().catch(() => householdMembers);
+      if (msg) toast(msg, 'success');
+      render();
+    };
+    const profileError = (err) => {
+      const m = ((err && err.message) || '').toLowerCase();
+      if (m.includes('column') || m.includes('schema')) toast(t('profileSchemaHint'), 'warn');
+      else toast(t('syncError') + ': ' + err.message, 'error');
+    };
+    const caBtn = document.getElementById('changeAvatarBtn');
+    const caFile = document.getElementById('avatarFile');
+    if (caBtn && caFile) {
+      caBtn.addEventListener('click', () => caFile.click());
+      caFile.addEventListener('change', () => {
+        const f = caFile.files && caFile.files[0];
+        if (!f) return;
+        busy(caBtn, async () => {
+          try {
+            // Shrink to a small square-ish JPEG; retry harder if the data-URI
+            // would still exceed the DB's 60000-char cap.
+            let out = await compressImage(f, 256, 0.8);
+            let dataUrl = await blobToDataURL(out.blob);
+            if (dataUrl.length > 60000) {
+              out = await compressImage(f, 128, 0.6);
+              dataUrl = await blobToDataURL(out.blob);
+            }
+            if (dataUrl.length > 60000) { toast(t('avatarTooLarge'), 'warn'); return; }
+            await window.Store.updateProfile({ avatar: dataUrl });
+            await reloadProfile(t('avatarSaved'));
+          } catch (err) {
+            if (err && err.message === 'decode') toast(t('avatarTooLarge'), 'warn');
+            else profileError(err);
+          } finally { caFile.value = ''; }
+        });
+      });
+    }
+    const raBtn = document.getElementById('removeAvatarBtn');
+    if (raBtn) raBtn.addEventListener('click', () => busy(raBtn, async () => {
+      try { await window.Store.updateProfile({ avatar: null }); await reloadProfile(t('avatarSaved')); }
+      catch (err) { profileError(err); }
+    }));
+    const snBtn = document.getElementById('saveNameBtn');
+    if (snBtn) snBtn.addEventListener('click', () => busy(snBtn, async () => {
+      const name = document.getElementById('displayNameInp').value.trim();
+      try { await window.Store.updateProfile({ displayName: name }); await reloadProfile(t('nameSaved')); }
+      catch (err) { profileError(err); }
+    }));
+    const cpBtn = document.getElementById('changePwBtn');
+    if (cpBtn) cpBtn.addEventListener('click', () => busy(cpBtn, async () => {
+      const cur = document.getElementById('pwCur').value;
+      const nw = document.getElementById('pwNew').value;
+      const nw2 = document.getElementById('pwNew2').value;
+      if (!cur || !nw || !nw2) { toast(t('fillAllFields'), 'warn'); return; }
+      if (nw.length < 6) { toast(t('weakPassword'), 'warn'); return; }
+      if (nw !== nw2) { toast(t('passwordMismatch'), 'warn'); return; }
+      try {
+        await window.Store.changePassword(cur, nw);
+        toast(t('passwordChanged'), 'success');
+        ['pwCur', 'pwNew', 'pwNew2'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+      } catch (err) { toast(friendlyAuthError(err.message), 'error'); }
+    }));
+    const rvBtn = document.getElementById('resendVerifyBtn');
+    if (rvBtn) rvBtn.addEventListener('click', () => busy(rvBtn, async () => {
+      if (Date.now() < verifyCooldownUntil) { toast(t('verifyWait'), 'info'); return; }
+      try {
+        await window.Store.resendVerification();
+        verifyCooldownUntil = Date.now() + 60000;
+        toast(t('verifySent'), 'success');
+      } catch (err) { toast(friendlyAuthError(err.message), 'error'); }
+    }));
     // Settings: navigate into a sub-page (Activity lazy-loads its data on open)
     document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', async () => {
       settingsPage = b.dataset.page;
@@ -4096,6 +4251,14 @@
           if (seeded.length) { DATA.categories = seeded; syncParserCategories(); }
         } catch (e) { /* table missing (schema not re-run) → page shows the hint */ }
         catsSeedPending = false;
+      } else if (settingsPage === 'account') {
+        // Refresh the verified badge in the background — the user may have just
+        // clicked the confirmation link in their inbox.
+        window.Store.getUser().then((u) => {
+          if (!u) return;
+          const v = !!(u.email_confirmed_at || u.confirmed_at);
+          if (v !== currentUserVerified) { currentUserVerified = v; render(); }
+        }).catch(() => {});
       }
       render();
     }));
@@ -4361,6 +4524,7 @@
     if (!user) { showAuth('login'); return; }
     currentUserEmail = user.email || '';
     currentUserId = user.id || '';
+    currentUserVerified = !!(user.email_confirmed_at || user.confirmed_at);
     setStatus(t('saving'));
     try {
       DATA = await window.Store.loadData();

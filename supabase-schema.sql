@@ -40,6 +40,16 @@ create table if not exists public.household_members (
 -- (if the table was created previously, add the email column)
 alter table public.household_members add column if not exists email text;
 
+-- Profile columns: display name + avatar shown to fellow household members.
+-- The avatar is a small data-URI JPEG (~5KB); the CHECK blocks oversized blobs.
+-- Users update their OWN rows (members_update RLS already allows it) across all
+-- their households, mirroring how the email column is self-filled.
+alter table public.household_members add column if not exists display_name text;
+alter table public.household_members add column if not exists avatar text;
+alter table public.household_members drop constraint if exists household_members_avatar_len;
+alter table public.household_members add constraint household_members_avatar_len
+  check (avatar is null or length(avatar) <= 60000);
+
 -- Roles & permissions:
 --   owner  : full control — rename/delete household, manage members & roles, all config, all transactions.
 --   admin  : co-manager — shared config (budgets, wallets, goals, recurring) + edit any transaction.
@@ -495,6 +505,10 @@ declare
   v_eid   uuid;
   v_email text;
 begin
+  -- The avatar is a multi-KB data-URI — never copy it into the log.
+  v_new := v_new - 'avatar';
+  v_old := v_old - 'avatar';
+  v_row := coalesce(v_new, v_old);
   -- Ignore no-op updates (e.g. idempotent budget upserts that change nothing).
   if tg_op = 'UPDATE' and v_new = v_old then
     return NEW;
