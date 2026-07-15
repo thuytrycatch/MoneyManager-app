@@ -12,7 +12,7 @@
  *    loadData()                           - {household, budgets, transactions}
  *    addTransaction / updateTransaction / deleteTransaction
  *    saveBudgets(obj)                     - upsert budgets
- *    getHousehold() / renameHousehold / joinHousehold(code)
+ *    getHousehold() / renameHousehold / createHousehold(name) / joinHousehold(code)
  *    getCachedData()                      - cached data (shown when offline)
  * ===================================================================== */
 
@@ -96,7 +96,13 @@
       req.onerror = () => reject(req.error);
     });
   }
-  function getCachedData() { return idbGet('data').catch(() => null); }
+  // Cache is keyed per household so switching households (or opening the app
+  // offline) never shows another household's numbers.
+  function getCachedData() {
+    const hid = getActiveId();
+    if (!hid) return Promise.resolve(null);
+    return idbGet('data:' + hid).catch(() => null);
+  }
 
   /* ---------------- Auth ---------------- */
   async function getUser() {
@@ -144,7 +150,6 @@
   }
 
   async function ensureHousehold(user) {
-    const sb = getClient();
     const list = await listHouseholds();
     if (list.length) {
       // Prefer the currently selected household (saved in localStorage) if still a member
@@ -154,11 +159,21 @@
       setActiveId(household.id);
       return household;
     }
-    // None yet → create a new household + add self as a member
-    const baseName = user.email ? user.email.split('@')[0] : tr('me', 'tôi');
+    // No household yet → the UI must show the create/join screen. Creating a
+    // household is an explicit user action now (createHousehold), never implicit.
+    return null;
+  }
+
+  // Create a household with a user-chosen name and become its owner.
+  async function createHousehold(name) {
+    const user = await getUser();
+    if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
+    const hhName = (name || '').trim();
+    if (!hhName) throw new Error(tr('errEnterHhName', 'Vui lòng nhập tên hộ.'));
+    const sb = getClient();
     const { data: h, error: e1 } = await sb
       .from('households')
-      .insert({ name: tr('hhDefaultPrefix', 'Gia đình của') + ' ' + baseName, created_by: user.id })
+      .insert({ name: hhName, created_by: user.id })
       .select()
       .single();
     if (e1) throw new Error(e1.message);
@@ -267,6 +282,14 @@
     household = found;
     setActiveId(id);
     return household;
+  }
+
+  // Forget the active household (used when the user has been removed from the
+  // last household they were viewing) so the UI can fall back to the
+  // create/join screen instead of rendering an empty shell.
+  function clearHousehold() {
+    household = null;
+    setActiveId('');
   }
 
   async function renameHousehold(name) {
@@ -385,6 +408,13 @@
     const user = await getUser();
     if (!user) throw new Error(tr('errNotSignedIn', 'Chưa đăng nhập.'));
     if (!household) await ensureHousehold(user);
+    if (!household) {
+      // Signed in but not a member of any household — the app shows the
+      // create/join screen for this specific code (never auto-creates).
+      const err = new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+      err.code = 'NO_HOUSEHOLD';
+      throw err;
+    }
     const sb = getClient();
     const hid = household.id;
 
@@ -453,7 +483,7 @@
       }).catch(() => ({}));
 
     const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, categories, goldPrices, aiConfig };
-    idbSet('data', data).catch(() => {});
+    idbSet('data:' + hid, data).catch(() => {});
     return data;
   }
 
@@ -978,6 +1008,9 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'household_settings', filter: 'household_id=eq.' + hid }, onChange)
+      // member joins/leaves/removals update the member list live, and let a
+      // removed device notice its own eviction (refreshData handles it).
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'household_members', filter: 'household_id=eq.' + hid }, onChange)
       // gold_prices is a shared cache with no household_id — subscribe unfiltered
       // so a price refresh from any member (or the cron) updates everyone live.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gold_prices' }, onChange)
@@ -1015,11 +1048,13 @@
     signIn,
     signOut,
     ensureHousehold,
+    createHousehold,
     joinHousehold,
     renameHousehold,
     getHousehold,
     listHouseholds,
     switchHousehold,
+    clearHousehold,
     listMembers,
     removeMember,
     setMemberRole,

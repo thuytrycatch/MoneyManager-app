@@ -166,6 +166,10 @@
       copyCode: 'Sao chép mã', copied: 'Đã sao chép', joinHousehold: 'Tham gia hộ khác', joinCodePh: 'Dán mã mời vào đây',
       join: 'Tham gia', joined: 'Đã tham gia hộ', renameOk: 'Đã đổi tên hộ', account: 'Tài khoản',
       switchHousehold: 'Chọn hộ đang xem',
+      myHouseholds: 'Hộ của tôi', currentHh: 'Đang xem', hhSwitched: 'Đã chuyển hộ',
+      createHousehold: 'Tạo hộ mới', hhCreated: 'Đã tạo hộ mới', errEnterHhName: 'Vui lòng nhập tên hộ.',
+      hhOnboardSub: 'Bạn chưa thuộc hộ nào. Tạo hộ mới cho gia đình mình, hoặc dán mã mời để tham gia hộ có sẵn.',
+      joinWithCode: 'Tham gia bằng mã mời', orDivider: 'hoặc',
       grpAccount: 'Hộ gia đình & Tài khoản', grpMoney: 'Quản lý tiền', grpGeneral: 'Cài đặt chung', grpAdvanced: 'Nâng cao',
       chooseLanguage: 'Chọn ngôn ngữ', darkMode: 'Chế độ tối',
       members: 'Thành viên', roleOwner: 'Chủ hộ', roleAdmin: 'Quản trị viên', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
@@ -371,6 +375,10 @@
       copyCode: 'Copy code', copied: 'Copied', joinHousehold: 'Join another household', joinCodePh: 'Paste invite code here',
       join: 'Join', joined: 'Joined household', renameOk: 'Household renamed', account: 'Account',
       switchHousehold: 'Active household',
+      myHouseholds: 'My households', currentHh: 'Current', hhSwitched: 'Switched household',
+      createHousehold: 'Create household', hhCreated: 'Household created', errEnterHhName: 'Please enter a household name.',
+      hhOnboardSub: 'You are not in any household yet. Create one for your family, or paste an invite code to join an existing one.',
+      joinWithCode: 'Join with an invite code', orDivider: 'or',
       grpAccount: 'Household & Account', grpMoney: 'Money', grpGeneral: 'General', grpAdvanced: 'Advanced',
       chooseLanguage: 'Choose language', darkMode: 'Dark mode',
       members: 'Members', roleOwner: 'Owner', roleAdmin: 'Admin', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
@@ -3121,10 +3129,26 @@
       if (!canManageConfig()) body = roLock(body);
     } else if (page === 'household') {
       title = t('household');
-      const switchSel = (myHouseholds.length > 1 ?
-        '<div class="conn-row" style="margin-bottom:12px"><label>' + t('switchHousehold') + '</label><select id="switchHh">' +
-        myHouseholds.map((h) => '<option value="' + esc(h.id) + '"' + (hh.id === h.id ? ' selected' : '') + '>' + esc(h.name) + '</option>').join('') +
-        '</select></div>' : '');
+      // All households the user belongs to — the active one is checked, tap
+      // another to switch. Always shown (even with a single household) so the
+      // "create another household" entry has a natural home.
+      const hhList = myHouseholds.length ? myHouseholds : (hh.id ? [hh] : []);
+      const hhRows = hhList.map((h) => {
+        const active = h.id === hh.id;
+        const inner = '<span class="ios-ic tint-indigo">' + icon('wallet') + '</span>' +
+          '<span class="ios-row-label">' + esc(h.name) + '</span>' +
+          (active
+            ? '<span class="ios-row-value">' + t('currentHh') + '</span><span class="ios-row-chev">' + icon('check') + '</span>'
+            : '<span class="ios-row-chev">' + icon('right') + '</span>');
+        return active
+          ? '<div class="ios-row">' + inner + '</div>'
+          : '<button class="ios-row tappable" data-switch="' + esc(h.id) + '">' + inner + '</button>';
+      });
+      const myHhBlock = iosGroup(hhRows, t('myHouseholds')) +
+        '<button id="createHhBtn" class="ghost-btn" style="margin-top:10px">' + icon('plus') + ' ' + t('createHousehold') + '</button>' +
+        '<div id="createHhForm" class="conn-form hidden"><div class="conn-row"><label>' + t('householdName') + '</label>' +
+        '<input id="newHhName" type="text" autocomplete="off"/></div>' +
+        '<button id="createHhGo" class="primary-btn">' + icon('plus') + ' ' + t('createHousehold') + '</button></div>';
       // Renaming the household is owner-only; everyone can still see the name, copy the
       // invite code, and join another household.
       const renameBlock = iAmOwner()
@@ -3134,7 +3158,7 @@
         : '<div class="conn-form"><div class="conn-row"><label>' + t('householdName') + '</label>' +
           '<input type="text" value="' + esc(hh.name) + '" readonly/></div></div>' +
           '<div class="hint">' + t('ownerOnlyRename') + '</div>';
-      body = switchSel + renameBlock +
+      body = myHhBlock + renameBlock +
         '<div class="conn-row" style="margin-top:16px"><label>' + t('inviteCode') + '</label>' +
         '<input id="inviteCodeBox" type="text" value="' + esc(hh.id) + '" readonly/></div>' +
         '<button id="copyCodeBtn" class="ghost-btn">' + icon('file') + ' ' + t('copyCode') + '</button>' +
@@ -4024,12 +4048,37 @@
         } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
       });
     });
-    // Switch household (when in multiple households)
-    const hs = document.getElementById('switchHh');
-    if (hs) hs.addEventListener('change', async () => {
-      try { await window.Store.switchHousehold(hs.value); await enterApp(); }
-      catch (err) { toast(err.message, 'error'); }
+    // Switch household (tap a row in "My households")
+    document.querySelectorAll('[data-switch]').forEach((b) => b.addEventListener('click', () => busy(b, async () => {
+      try {
+        await window.Store.switchHousehold(b.dataset.switch);
+        toast(t('hhSwitched'), 'success');
+        await enterApp();
+      } catch (err) {
+        // e.g. removed from that household after the list was rendered
+        toast(err.message, 'error');
+        await enterApp();
+      }
+    })));
+    // Create another household (reveal the name form, then submit)
+    const chb = document.getElementById('createHhBtn');
+    if (chb) chb.addEventListener('click', () => {
+      const f = document.getElementById('createHhForm');
+      if (!f) return;
+      f.classList.toggle('hidden');
+      const inp = document.getElementById('newHhName');
+      if (inp && !f.classList.contains('hidden')) inp.focus();
     });
+    const chg = document.getElementById('createHhGo');
+    if (chg) chg.addEventListener('click', () => busy(chg, async () => {
+      const name = document.getElementById('newHhName').value.trim();
+      if (!name) { toast(t('errEnterHhName'), 'warn'); return; }
+      try {
+        await window.Store.createHousehold(name);
+        toast(t('hhCreated'), 'success');
+        await enterApp();
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
     // Settings: navigate into a sub-page (Activity lazy-loads its data on open)
     document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', async () => {
       settingsPage = b.dataset.page;
@@ -4169,6 +4218,23 @@
         '<div class="hint">' + t('tokenHint') + '</div>' +
         '</div>';
     }
+    if (authMode === 'household') {
+      // Signed in but not a member of any household yet: create one (with a
+      // user-chosen name) or join an existing one via its invite code. The app
+      // never creates a household implicitly.
+      const suggest = (t('hhDefaultPrefix') + ' ' + (currentUserEmail ? currentUserEmail.split('@')[0] : '')).trim();
+      return '<div class="auth-card">' +
+        '<div class="auth-brand">' + icon('wallet') + ' ' + t('appName') + '</div>' +
+        '<div class="auth-sub">' + t('hhOnboardSub') + '</div>' +
+        '<label>' + t('householdName') + '</label><input id="aHhName" type="text" value="' + esc(suggest) + '" autocomplete="off"/>' +
+        '<button id="aCreateHh" class="primary-btn">' + icon('plus') + ' ' + t('createHousehold') + '</button>' +
+        '<div class="auth-or"><span>' + t('orDivider') + '</span></div>' +
+        '<label>' + t('joinWithCode') + '</label><input id="aJoinCode" type="text" placeholder="' + t('joinCodePh') + '" autocomplete="off" autocapitalize="off" spellcheck="false"/>' +
+        '<button id="aJoinHh" class="ghost-btn">' + icon('check') + ' ' + t('join') + '</button>' +
+        '<div id="authError" class="auth-error hidden"></div>' +
+        '<button id="aSignOut" class="link-btn subtle">' + t('signOut') + '</button>' +
+        '</div>';
+    }
     return '<div class="auth-card">' +
       '<div class="auth-brand">' + icon('wallet') + ' ' + t('appName') + '</div>' +
       '<div class="auth-sub">' + t('authWelcome') + '</div>' +
@@ -4194,6 +4260,32 @@
     if (tg) tg.addEventListener('click', () => { authIsSignup = !authIsSignup; showAuth('login'); });
     const ec = document.getElementById('aEditCfg');
     if (ec) ec.addEventListener('click', () => showAuth('config'));
+    // Household onboarding: create a household or join one with an invite code.
+    const ch = document.getElementById('aCreateHh');
+    if (ch) ch.addEventListener('click', () => busy(ch, async () => {
+      const name = document.getElementById('aHhName').value.trim();
+      if (!name) { setAuthError(t('errEnterHhName')); return; }
+      try {
+        await window.Store.createHousehold(name);
+        toast(t('hhCreated'), 'success');
+        await enterApp();
+      } catch (err) { setAuthError(err.message); }
+    }));
+    const jh = document.getElementById('aJoinHh');
+    if (jh) jh.addEventListener('click', () => busy(jh, async () => {
+      const code = document.getElementById('aJoinCode').value.trim();
+      if (!code) { setAuthError(t('errEnterCode')); return; }
+      try {
+        await window.Store.joinHousehold(code);
+        toast(t('joined'), 'success');
+        await enterApp();
+      } catch (err) { setAuthError(err.message); }
+    }));
+    const so = document.getElementById('aSignOut');
+    if (so) so.addEventListener('click', () => busy(so, async () => {
+      await window.Store.signOut();
+      showAuth('login');
+    }));
     const pr = document.getElementById('aPrimary');
     if (pr) pr.addEventListener('click', doAuth);
     const pass = document.getElementById('aPass');
@@ -4244,24 +4336,49 @@
   }
 
   /* ============== Enter app (load data) ============== */
+  // The active household no longer lists us as a member (removed by the owner,
+  // or we left elsewhere): jump to another household we still belong to, or
+  // show the create/join screen. Returns true when it navigated away; false on
+  // a false alarm (still a member) or a transient network error (keep as-is).
+  async function handleEvicted() {
+    const list = await window.Store.listHouseholds().catch(() => null);
+    if (!list) return false;
+    const activeId = DATA.household ? DATA.household.id : '';
+    if (list.some((h) => h.id === activeId)) return false;
+    try { window.Store.unsubscribeChanges(); } catch (e) { /* ignore */ }
+    if (list.length) {
+      await window.Store.switchHousehold(list[0].id);
+      await enterApp();
+    } else {
+      window.Store.clearHousehold();
+      showAuth('household');
+    }
+    return true;
+  }
+
   async function enterApp() {
     const user = await window.Store.getUser();
     if (!user) { showAuth('login'); return; }
     currentUserEmail = user.email || '';
     currentUserId = user.id || '';
-    hideAuth();
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('appShell').classList.remove('hidden');
     setStatus(t('saving'));
     try {
       DATA = await window.Store.loadData();
       setStatus('');
     } catch (err) {
+      // Signed in but not a member of any household → show the create/join
+      // screen. Never auto-create, never fall back to another household's cache.
+      if (err && err.code === 'NO_HOUSEHOLD') { showAuth('household'); return; }
       const cached = await window.Store.getCachedData().catch(() => null);
       DATA = cached || { household: null, budgets: {}, transactions: [] };
       setStatus(t('syncError'), 'err');
       toast(t('syncError') + ': ' + err.message, 'error');
     }
+    // Reveal the shell only now: a brand-new user goes straight from the
+    // splash to the household screen without an empty-app flash in between.
+    hideAuth();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('appShell').classList.remove('hidden');
     if (!DATA.budgets) DATA.budgets = {};
     if (!DATA.transactions) DATA.transactions = [];
     if (!DATA.accounts) DATA.accounts = [];
@@ -4275,6 +4392,12 @@
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
     myRole = computeMyRole();
+    // Our member row is gone from the household we were viewing (owner removed
+    // us while it was still the saved selection) → move on instead of showing
+    // an empty shell. handleEvicted() re-checks membership before acting.
+    if (DATA.household && currentUserId && !householdMembers.some((m) => m.userId === currentUserId)) {
+      if (await handleEvicted()) return;
+    }
     // One-time seed: no household_settings row yet but this browser has AI keys
     // and we're allowed to write → migrate them to the DB (best-effort, silent).
     if (DATA.aiConfig == null && canManageConfig() && (window.CONFIG.GEMINI_API_KEY || window.CONFIG.ANTHROPIC_API_KEY)) {
@@ -4344,6 +4467,12 @@
     syncParserCategories();
       householdMembers = await window.Store.listMembers().catch(() => householdMembers);
       myRole = computeMyRole();
+      // Successful-but-empty member list = we were removed from this household
+      // (a member always sees at least their own row; network errors keep the
+      // previous list via the catch above, so this never fires offline).
+      if (DATA.household && currentUserId && !householdMembers.some((m) => m.userId === currentUserId)) {
+        if (await handleEvicted()) return;
+      }
       applyDbConfig();
       render();
       if (!silent) { setStatus(t('synced'), 'ok'); setTimeout(() => setStatus(''), 1500); }
