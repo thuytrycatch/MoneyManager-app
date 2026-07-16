@@ -575,8 +575,85 @@
     throw lastErr || new Error('Chưa cấu hình API key để tạo nhận xét');
   }
 
+  /* ---------------------------------------------------------------
+   *  Daily inspirational quote (Overview greeting card)
+   * --------------------------------------------------------------- */
+  const QUOTE_SYSTEM =
+    'Bạn chọn MỘT câu danh ngôn / câu nói truyền cảm hứng CÓ THẬT của tác giả hoặc nhân vật nổi tiếng ' +
+    '(nhà văn, triết gia, doanh nhân, danh nhân Việt Nam hoặc thế giới), ưu tiên đúng chủ đề được yêu cầu. ' +
+    'TUYỆT ĐỐI KHÔNG bịa câu nói hay gán sai tác giả — nếu không chắc tác giả, chọn câu khác mà bạn chắc chắn. ' +
+    'Câu ngắn gọn (dưới 30 từ), tiếng Việt (dịch mượt nếu nguyên gốc tiếng nước ngoài). ' +
+    'Chỉ trả về JSON: {"text": "câu nói", "author": "tên tác giả"}.';
+
+  const QUOTE_SCHEMA = {
+    type: 'OBJECT',
+    properties: { text: { type: 'STRING' }, author: { type: 'STRING' } },
+    required: ['text', 'author'],
+  };
+
+  function normalizeQuote(p) {
+    const text = String((p && p.text) || '').trim();
+    const author = String((p && p.author) || '').trim();
+    if (!text || !author) throw new Error('Quote JSON thiếu text/author');
+    return { text: text.slice(0, 220), author: author.slice(0, 60) };
+  }
+
+  async function quoteGemini(topic, apiKey) {
+    const model = 'gemini-2.5-flash';
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: QUOTE_SYSTEM }] },
+        contents: [{ role: 'user', parts: [{ text: 'Chủ đề hôm nay: ' + topic + '. Ngày: ' + new Date().toISOString().slice(0, 10) }] }],
+        generationConfig: { temperature: 0.9, responseMimeType: 'application/json', responseSchema: QUOTE_SCHEMA },
+      }),
+    });
+    if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Gemini API ' + resp.status + ': ' + e); }
+    const data = await resp.json();
+    const cand = (data.candidates || [])[0];
+    const parts = cand && cand.content && cand.content.parts ? cand.content.parts : [];
+    return normalizeQuote(extractJson(parts.map((p) => p.text || '').join(''), 'Gemini'));
+  }
+
+  async function quoteClaude(topic, apiKey) {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json', 'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5', max_tokens: 200, system: QUOTE_SYSTEM,
+        messages: [{ role: 'user', content: 'Chủ đề hôm nay: ' + topic + '. Ngày: ' + new Date().toISOString().slice(0, 10) + '\nChỉ trả về JSON.' }],
+      }),
+    });
+    if (!resp.ok) { const e = await resp.text().catch(() => ''); throw new Error('Claude API ' + resp.status + ': ' + e); }
+    const data = await resp.json();
+    const tb = (data.content || []).find((b) => b.type === 'text');
+    return normalizeQuote(extractJson(tb ? tb.text : '', 'Claude'));
+  }
+
+  // Gemini (free) → Claude, same key order as reviewMonth. Throws when no key
+  // or all providers fail — the app falls back to its built-in quote list.
+  async function dailyQuote(topic) {
+    const cfg = window.CONFIG || {};
+    let lastErr = null;
+    if (cfg.GEMINI_API_KEY) {
+      try { return await quoteGemini(topic, cfg.GEMINI_API_KEY); }
+      catch (err) { lastErr = err; console.warn('Gemini quote lỗi, thử cách khác:', err.message); }
+    }
+    if (cfg.ANTHROPIC_API_KEY) {
+      try { return await quoteClaude(topic, cfg.ANTHROPIC_API_KEY); }
+      catch (err) { lastErr = err; console.warn('Claude quote lỗi:', err.message); }
+    }
+    throw lastErr || new Error('Chưa cấu hình API key');
+  }
+
   // Export to global
   window.Parser = {
+    dailyQuote,
     parseTransaction,
     parseWithRegex,
     parseAmount,

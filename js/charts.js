@@ -45,6 +45,94 @@
   function colors() { return { text: cssVar('--text-secondary', '#6b7280'), grid: cssVar('--border', '#e5e7eb') }; }
   const FONT = 'Be Vietnam Pro, system-ui, sans-serif';
 
+  /* ---- Direct labels for donuts --------------------------------------
+   * Big slices get "name %" painted right on the ring; smaller ones get a
+   * leader line pointing out to the label; the hole shows the period total.
+   * Slices under 3% stay unlabeled — the tappable legend below lists them. */
+  function truncate(ctx, text, maxW) {
+    if (maxW <= 8) return '';
+    if (ctx.measureText(text).width <= maxW) return text;
+    let s = text;
+    while (s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+    return s + '…';
+  }
+  const donutLabels = {
+    id: 'donutLabels',
+    afterDatasetsDraw(chart, args, opts) {
+      if (!opts || !opts.total) return;
+      const meta = chart.getDatasetMeta(0);
+      const arcs = (meta && meta.data) || [];
+      if (!arcs.length) return;
+      const ctx = chart.ctx;
+      const area = chart.chartArea;
+      const c = colors();
+      ctx.save();
+
+      // Period total in the hole.
+      const p0 = arcs[0].getProps(['x', 'y', 'innerRadius'], true);
+      if (p0.innerRadius >= 34) {
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = c.text; ctx.font = '600 10px ' + FONT;
+        ctx.fillText(opts.totalLabel || '', p0.x, p0.y - 9);
+        ctx.fillStyle = cssVar('--text-primary', '#111827');
+        ctx.font = '700 ' + (p0.innerRadius >= 52 ? 15 : 12) + 'px ' + FONT;
+        ctx.fillText(fmtShort(opts.total), p0.x, p0.y + 7);
+      }
+
+      const callouts = [];
+      arcs.forEach((arc, i) => {
+        const v = opts.values[i];
+        const pct = v ? v / opts.total * 100 : 0;
+        if (pct < 3) return; // tiny slice: legend only
+        const p = arc.getProps(['x', 'y', 'startAngle', 'endAngle', 'innerRadius', 'outerRadius'], true);
+        const mid = (p.startAngle + p.endAngle) / 2;
+        const text = opts.labels[i] + ' ' + Math.round(pct) + '%';
+        ctx.font = '700 10px ' + FONT;
+        const rMid = (p.innerRadius + p.outerRadius) / 2;
+        const chord = (p.endAngle - p.startAngle) * rMid - 8; // usable arc length
+        if (pct >= 10 && p.outerRadius - p.innerRadius >= 15 && ctx.measureText(text).width <= chord) {
+          // Fits on the ring → paint it directly on the slice.
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#fff';
+          ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 3;
+          ctx.fillText(text, p.x + Math.cos(mid) * rMid, p.y + Math.sin(mid) * rMid);
+          ctx.shadowBlur = 0;
+        } else {
+          const bg = chart.data.datasets[0].backgroundColor;
+          callouts.push({ p: p, mid: mid, text: text, color: bg[i % bg.length] });
+        }
+      });
+
+      // Leader-line labels, spaced apart per side so they never overlap.
+      const GAP = 13;
+      [1, -1].forEach((s) => {
+        const list = callouts.filter((l) => (Math.cos(l.mid) >= 0 ? 1 : -1) === s);
+        if (!list.length) return;
+        list.forEach((l) => { l.ty = l.p.y + Math.sin(l.mid) * (l.p.outerRadius + 12); });
+        list.sort((a, b) => a.ty - b.ty);
+        for (let i = 1; i < list.length; i++) if (list[i].ty < list[i - 1].ty + GAP) list[i].ty = list[i - 1].ty + GAP;
+        const over = list[list.length - 1].ty - (area.bottom - 5);
+        if (over > 0) list.forEach((l) => { l.ty -= over; });
+        list.forEach((l) => {
+          if (l.ty < area.top + 5) l.ty = area.top + 5;
+          const sx = l.p.x + Math.cos(l.mid) * (l.p.outerRadius - 1);
+          const sy = l.p.y + Math.sin(l.mid) * (l.p.outerRadius - 1);
+          const ex = l.p.x + Math.cos(l.mid) * (l.p.outerRadius + 9);
+          const hx = ex + s * 7;
+          ctx.strokeStyle = l.color; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, l.ty); ctx.lineTo(hx, l.ty); ctx.stroke();
+          ctx.textAlign = s > 0 ? 'left' : 'right'; ctx.textBaseline = 'middle';
+          ctx.font = '600 9.5px ' + FONT;
+          ctx.fillStyle = c.text;
+          const maxW = s > 0 ? (area.right - hx - 4) : (hx - area.left - 4);
+          const txt = truncate(ctx, l.text, maxW);
+          if (txt) ctx.fillText(txt, hx + s * 3, l.ty);
+        });
+      });
+      ctx.restore();
+    },
+  };
+
   /* Donut + legend. labelFn maps a canonical category to its localized display label. */
   function donut(canvasId, legendId, byCat, onClick, labelFn) {
     labelFn = labelFn || ((x) => x);
@@ -60,13 +148,20 @@
           type: 'doughnut',
           data: { labels: display, datasets: [{ data: values, backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 0, hoverOffset: 6 }] },
           options: {
-            responsive: true, maintainAspectRatio: false, cutout: '70%',
+            responsive: true, maintainAspectRatio: false, cutout: '58%',
+            // Side padding gives the leader-line labels room outside the ring.
+            layout: { padding: { left: 72, right: 72, top: 16, bottom: 16 } },
             plugins: {
               legend: { display: false },
               tooltip: { callbacks: { label: (it) => { const p = total ? Math.round(it.parsed / total * 100) : 0; return ' ' + it.label + ': ' + fmtVND(it.parsed) + ' (' + p + '%)'; } } },
+              donutLabels: {
+                values: values, labels: display, total: total,
+                totalLabel: (window.t ? window.t('totalLabel') : 'Tổng'),
+              },
             },
             onClick: (e, el) => { if (el.length && onClick) onClick(labels[el[0].index]); },
           },
+          plugins: [donutLabels],
         });
       }
     }

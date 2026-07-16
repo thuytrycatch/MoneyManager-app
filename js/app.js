@@ -114,8 +114,10 @@
       weekReview: 'Đánh giá tuần này', vsLastWeek: 'so với tuần trước',
       recent: 'Giao dịch gần đây', seeAll: 'Xem tất cả', noTx: 'Chưa có giao dịch nào.', refresh: 'Làm mới',
       addTx: 'Thêm giao dịch', placeholder: 'ăn sáng 35k, lương 15 triệu, đổ xăng 80k…',
-      week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', incomeByCat: 'Thu theo danh mục', trend: 'Diễn biến thu chi',
+      week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', incomeByCat: 'Thu theo danh mục', trend: 'Diễn biến thu chi', totalLabel: 'Tổng',
       budgetProgress: 'Tiến độ ngân sách', topSpending: 'Khoản chi lớn nhất', summary: 'Tổng kết',
+      rgOverview: 'Tổng quan', rgFlow: 'Dòng tiền trong kỳ', rgStructure: 'Cơ cấu danh mục',
+      rgAnalysis: 'Phân tích & dự báo', rgDetail: 'Chi tiết', rgAssets: 'Tài sản & chốt sổ',
       save: 'Lưu', cancel: 'Hủy', delete: 'Xóa', edit: 'Sửa', category: 'Danh mục', note: 'Ghi chú', amount: 'Số tiền',
       date: 'Ngày', time: 'Giờ', today: 'Hôm nay', yesterday: 'Hôm qua', pickDate: 'Chọn ngày',
       wallets: 'Ví / Tài khoản', wallet: 'Ví', walletCash: 'Tiền mặt', addWallet: 'Thêm ví',
@@ -338,8 +340,10 @@
       weekReview: 'This week review', vsLastWeek: 'vs last week',
       recent: 'Recent transactions', seeAll: 'See all', noTx: 'No transactions yet.', refresh: 'Refresh',
       addTx: 'Add transaction', placeholder: 'breakfast 35k, salary 15 million, gas 80k…',
-      week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', incomeByCat: 'Income by category', trend: 'Income & expense trend',
+      week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', incomeByCat: 'Income by category', trend: 'Income & expense trend', totalLabel: 'Total',
       budgetProgress: 'Budget progress', topSpending: 'Top spending', summary: 'Summary',
+      rgOverview: 'Overview', rgFlow: 'Cash flow', rgStructure: 'Category breakdown',
+      rgAnalysis: 'Analysis & forecast', rgDetail: 'Details', rgAssets: 'Assets & closing',
       save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', category: 'Category', note: 'Note', amount: 'Amount',
       date: 'Date', time: 'Time', today: 'Today', yesterday: 'Yesterday', pickDate: 'Pick date',
       wallets: 'Wallets / Accounts', wallet: 'Wallet', walletCash: 'Cash', addWallet: 'Add wallet',
@@ -1947,6 +1951,71 @@
       '<div class="wallet-strip">' + cards + '</div>';
   }
 
+  /* ============== Daily quote ============== */
+  // A short inspirational quote with its author, shown on Overview under the
+  // hero. A curated built-in list rotates by day-of-year; when the household
+  // has an AI key, a fresh quote is fetched once per day (cached per device in
+  // localStorage) — offline / no key silently falls back to the list.
+  const QUOTES = [
+    { vi: 'Đừng tiết kiệm những gì còn lại sau khi chi tiêu, hãy chi tiêu những gì còn lại sau khi tiết kiệm.', en: 'Do not save what is left after spending, but spend what is left after saving.', author: 'Warren Buffett' },
+    { vi: 'Giá cả là những gì bạn trả. Giá trị là những gì bạn nhận được.', en: 'Price is what you pay. Value is what you get.', author: 'Warren Buffett' },
+    { vi: 'Hãy cẩn thận với những khoản chi nhỏ; một lỗ rò bé có thể làm đắm cả con tàu lớn.', en: 'Beware of little expenses; a small leak will sink a great ship.', author: 'Benjamin Franklin' },
+    { vi: 'Đầu tư vào tri thức luôn mang lại lợi nhuận cao nhất.', en: 'An investment in knowledge pays the best interest.', author: 'Benjamin Franklin' },
+    { vi: 'Kiến tha lâu cũng đầy tổ.', en: 'Grain by grain, the ant fills its nest.', author: 'Tục ngữ Việt Nam' },
+    { vi: 'Năng nhặt chặt bị.', en: 'Pick up little and often, and the bag stays full.', author: 'Tục ngữ Việt Nam' },
+    { vi: 'Có làm thì mới có ăn, không dưng ai dễ đem phần đến cho.', en: 'Only work brings food; no one hands you a share for nothing.', author: 'Ca dao Việt Nam' },
+    { vi: 'Hành trình vạn dặm bắt đầu từ một bước chân.', en: 'A journey of a thousand miles begins with a single step.', author: 'Lão Tử' },
+    { vi: 'Biết đủ là giàu.', en: 'He who knows he has enough is rich.', author: 'Lão Tử' },
+    { vi: 'Không quan trọng bạn đi chậm thế nào, miễn là đừng dừng lại.', en: 'It does not matter how slowly you go as long as you do not stop.', author: 'Khổng Tử' },
+    { vi: 'Sự giàu có không nằm ở việc có nhiều tài sản, mà ở việc có ít nhu cầu.', en: 'Wealth consists not in having great possessions, but in having few wants.', author: 'Epictetus' },
+    { vi: 'Hạnh phúc của bạn phụ thuộc vào chất lượng những suy nghĩ của bạn.', en: 'The happiness of your life depends upon the quality of your thoughts.', author: 'Marcus Aurelius' },
+    { vi: 'Hạnh phúc không phải là thứ có sẵn. Nó đến từ chính hành động của bạn.', en: 'Happiness is not something ready made. It comes from your own actions.', author: 'Dalai Lama' },
+    { vi: 'Hãy sống như thể bạn sẽ chết ngày mai. Hãy học như thể bạn sẽ sống mãi mãi.', en: 'Live as if you were to die tomorrow. Learn as if you were to live forever.', author: 'Mahatma Gandhi' },
+    { vi: 'Hãy là sự thay đổi mà bạn muốn thấy ở thế giới.', en: 'Be the change that you wish to see in the world.', author: 'Mahatma Gandhi' },
+    { vi: 'Người lạc quan nhìn thấy cơ hội trong mỗi khó khăn.', en: 'The optimist sees the opportunity in every difficulty.', author: 'Winston Churchill' },
+    { vi: 'Thành công là đi từ thất bại này đến thất bại khác mà không mất đi nhiệt huyết.', en: 'Success is stumbling from failure to failure with no loss of enthusiasm.', author: 'Winston Churchill' },
+    { vi: 'Cuộc đời là 10% những gì xảy ra với bạn và 90% cách bạn phản ứng với nó.', en: 'Life is 10% what happens to you and 90% how you react to it.', author: 'Charles R. Swindoll' },
+    { vi: 'Đừng để ngày hôm qua chiếm quá nhiều chỗ của ngày hôm nay.', en: "Don't let yesterday take up too much of today.", author: 'Will Rogers' },
+    { vi: 'Cách tốt nhất để dự đoán tương lai là tạo ra nó.', en: 'The best way to predict the future is to create it.', author: 'Peter Drucker' },
+    { vi: 'Bắt đầu từ nơi bạn đứng. Dùng những gì bạn có. Làm những gì bạn có thể.', en: 'Start where you are. Use what you have. Do what you can.', author: 'Arthur Ashe' },
+    { vi: 'Nếu bạn muốn đi nhanh, hãy đi một mình. Nếu bạn muốn đi xa, hãy đi cùng nhau.', en: 'If you want to go fast, go alone. If you want to go far, go together.', author: 'Ngạn ngữ châu Phi' },
+    { vi: 'Đừng đợi đến khi khát mới đào giếng.', en: 'Dig the well before you are thirsty.', author: 'Ngạn ngữ Trung Hoa' },
+    { vi: 'Điều duy nhất chúng ta phải sợ chính là nỗi sợ hãi.', en: 'The only thing we have to fear is fear itself.', author: 'Franklin D. Roosevelt' },
+  ];
+  function currentQuote() {
+    try {
+      const c = JSON.parse(localStorage.getItem('mm_quote') || 'null');
+      if (c && c.date === ymd(new Date()) && c.text && c.author) return c;
+    } catch (e) { /* fall through to the built-in list */ }
+    const start = new Date(new Date().getFullYear(), 0, 0);
+    const doy = Math.floor((Date.now() - start.getTime()) / 86400000);
+    const q = QUOTES[doy % QUOTES.length];
+    return { text: lang === 'en' ? q.en : q.vi, author: q.author };
+  }
+  function quoteCardHtml() {
+    const q = currentQuote();
+    return '<div class="quote-card">' +
+      '<div class="quote-text">“' + esc(q.text) + '”</div>' +
+      '<div class="quote-author">— ' + esc(q.author) + '</div></div>';
+  }
+  // Rotating topics keep the AI picks varied across the week.
+  const QUOTE_TOPICS = ['lạc quan và niềm vui sống', 'tiết kiệm và quản lý tiền bạc', 'gia đình và yêu thương', 'kiên trì và nỗ lực', 'hạnh phúc giản dị', 'ước mơ và mục tiêu', 'sức khỏe và cân bằng cuộc sống'];
+  function maybeFetchDailyQuote() {
+    try {
+      if (!window.Parser || !window.Parser.dailyQuote) return;
+      if (!(window.CONFIG.GEMINI_API_KEY || window.CONFIG.ANTHROPIC_API_KEY)) return;
+      const today = ymd(new Date());
+      let c = null;
+      try { c = JSON.parse(localStorage.getItem('mm_quote') || 'null'); } catch (e) { /* refetch */ }
+      if (c && c.date === today) return; // already fetched today
+      const topic = QUOTE_TOPICS[new Date().getDay() % QUOTE_TOPICS.length];
+      window.Parser.dailyQuote(topic).then((q) => {
+        try { localStorage.setItem('mm_quote', JSON.stringify({ date: today, text: q.text, author: q.author })); } catch (e) { /* ignore */ }
+        if (currentTab === 'overview') render();
+      }).catch(() => { /* built-in list already covers today */ });
+    } catch (e) { /* never block startup on a quote */ }
+  }
+
   /* ============== VIEW: Overview ============== */
   function viewOverview() {
     const now = new Date();
@@ -1984,6 +2053,9 @@
       '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + fmtShort(mt.income) + '</b></div>' +
       '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + fmtShort(mt.expense) + '</b></div>' +
       '</div></div>' +
+
+      // Daily inspirational quote (rotates every day; AI-refreshed when a key is set)
+      quoteCardHtml() +
 
       '<div class="tiles">' +
       statTile(t('remaining') + ' ' + t('budget').toLowerCase(), remain, remain >= 0 ? 'income' : 'expense', 'target') +
@@ -2381,6 +2453,17 @@
   // Wrap a report section as an atomic card (skipped when empty so the masonry
   // grid never gets blank cells). See .report-grid / .dash-card in style.css.
   function reportCard(inner) { return inner ? '<section class="dash-card">' + inner + '</section>' : ''; }
+  // Reports screen grouping (spec: docs/prompt-sap-xep-man-bao-cao.md).
+  // Empty cards are dropped; a group with no content disappears entirely,
+  // heading included — no orphan titles on the week/year views.
+  function reportGrid(cards) {
+    const inner = cards.filter(Boolean).join('');
+    return inner ? '<div class="report-grid">' + inner + '</div>' : '';
+  }
+  function reportGroup(titleKey, cards) {
+    const g = reportGrid(cards);
+    return g ? '<div class="report-group-title">' + t(titleKey) + '</div>' + g : '';
+  }
 
   // Aggregate spending by WHO IT WAS SPENT FOR (beneficiary) for the given period.
   // NULL beneficiary = "Chung (cả nhà)". Only buckets that actually have activity are
@@ -2671,52 +2754,61 @@
 
     const periodBtn = (p, label) => '<button class="seg-btn ' + (reportPeriod === p ? 'active' : '') + '" data-period="' + p + '">' + label + '</button>';
 
+    // Blocks ordered general → detail (spec: docs/prompt-sap-xep-man-bao-cao.md).
+    const isMonth = reportPeriod === 'month';
     return (
       '<div class="seg period-seg">' + periodBtn('week', t('week')) + periodBtn('month', t('month')) + periodBtn('year', t('year')) + '</div>' +
       '<div class="period-nav"><button class="nav-arrow" data-shift="-1">' + icon('left') + '</button>' +
       '<span class="period-label">' + reportLabel() + '</span>' +
       '<button class="nav-arrow" data-shift="1">' + icon('right') + '</button></div>' +
 
+      // 1 — Overview: what happened this period (headline + numbers + plain-language notes)
+      '<div class="report-group-title">' + t('rgOverview') + '</div>' +
       reportWrapUpHtml(tt, pt, byCat) +
-
-      (reportPeriod === 'month' ? reportCard(monthlyCloseCardHtml()) : '') +
-
       '<div class="summary-grid">' +
-      '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + fmtShort(tt.income) + '</b>' + deltaChip(tt.income, pt.income, true) + '</div>' +
-      '<div class="sum-cell expense"><span>' + t('expense') + '</span><b>' + fmtShort(tt.expense) + '</b>' + deltaChip(tt.expense, pt.expense, false) + '</div>' +
-      '<div class="sum-cell ' + (tt.net >= 0 ? 'income' : 'expense') + '"><span>' + t('savings') + '</span><b>' + fmtShort(tt.net) + '</b>' + deltaChip(tt.net, pt.net, true) + '</div>' +
+      '<div class="sum-cell income"><span>' + t('income') + '</span><b>' + fmtShort(tt.income) + '</b>' + deltaChip(tt.income, pt.income) + '</div>' +
+      '<div class="sum-cell expense"><span>' + t('expense') + '</span><b>' + fmtShort(tt.expense) + '</b>' + deltaChip(tt.expense, pt.expense) + '</div>' +
+      '<div class="sum-cell ' + (tt.net >= 0 ? 'income' : 'expense') + '"><span>' + t('savings') + '</span><b>' + fmtShort(tt.net) + '</b>' + deltaChip(tt.net, pt.net) + '</div>' +
       '<div class="sum-cell neutral"><span>' + t('savingsRate') + '</span><b>' + rate + '%</b></div>' +
       '</div>' +
+      reportGrid([reportCard(isMonth ? autoInsightsHtml() : '')]) +
 
-      // Charts side by side on a wide screen
-      '<div class="dash">' +
-      reportCard('<div class="section-title">' + t('trend') + '</div>' +
-        '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div></div>') +
-      reportCard('<div class="section-title">' + t('byCategory') + '</div>' +
-        '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div>') +
-      '</div>' +
+      // 2 — Cash flow over time within the period
+      reportGroup('rgFlow', [
+        reportCard('<div class="section-title">' + t('trend') + '</div>' +
+          '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div></div>'),
+        reportCard(isMonth ? dailySpendHtml() : ''),
+      ]) +
 
-      // Remaining sections: balanced 2-column masonry so cards are evenly sized.
-      '<div class="report-grid">' +
-      reportCard(reportPeriod === 'month' ?
-        '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' +
-        budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : '') +
-      // Auto insights + spending calendar (month view only)
-      reportCard(reportPeriod === 'month' ? autoInsightsHtml() : '') +
-      reportCard(reportPeriod === 'month' ? dailySpendHtml() : '') +
-      // Trend analysis & forecast (rolling monthly window, independent of the period selector)
-      reportCard(trendsForecastHtml()) +
-      // Income broken down by category (only when the period has income)
-      reportCard(Object.keys(byIncCat).length ?
-        '<div class="section-title">' + t('incomeByCat') + '</div>' +
-        '<div class="card"><div class="chart-box"><canvas id="repIncDonut"></canvas></div><div id="repIncLegend" class="legend"></div></div>' : '') +
-      // Net worth: assets vs liabilities (current snapshot)
-      reportCard(netWorthHtml()) +
-      // Spending split by who each transaction was spent for (beneficiary)
-      reportCard(byBeneficiaryHtml(pp)) +
-      reportCard('<div class="section-title">' + t('topSpending') + '</div>' +
-        '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>') +
-      '</div>'
+      // 3 — Where money went / came from, and how that tracks the budget
+      reportGroup('rgStructure', [
+        reportCard('<div class="section-title">' + t('byCategory') + '</div>' +
+          '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div>'),
+        reportCard(Object.keys(byIncCat).length ?
+          '<div class="section-title">' + t('incomeByCat') + '</div>' +
+          '<div class="card"><div class="chart-box"><canvas id="repIncDonut"></canvas></div><div id="repIncLegend" class="legend"></div></div>' : ''),
+        reportCard(isMonth ?
+          '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' +
+          budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : ''),
+      ]) +
+
+      // 4 — Deeper analysis: multi-month trend/forecast + who money was spent for
+      reportGroup('rgAnalysis', [
+        reportCard(trendsForecastHtml()),
+        reportCard(byBeneficiaryHtml(pp)),
+      ]) +
+
+      // 5 — Detail: the biggest individual transactions
+      reportGroup('rgDetail', [
+        reportCard('<div class="section-title">' + t('topSpending') + '</div>' +
+          '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>'),
+      ]) +
+
+      // 6 — Assets snapshot + the closing action (done AFTER reading the report)
+      reportGroup('rgAssets', [
+        reportCard(netWorthHtml()),
+        reportCard(isMonth ? monthlyCloseCardHtml() : ''),
+      ])
     );
   }
 
@@ -4657,6 +4749,7 @@
     maybeNotify();
     runRecurring();
     maybeRefreshGoldPrices();
+    maybeFetchDailyQuote();
   }
 
   /* ============== Gold price refresh ============== */
