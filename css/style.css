@@ -244,6 +244,10 @@ button.btn-busy::before {
    .cs width:100% (flex-basis:auto would then eat the row and squash .w-name). */
 .wallet-edit-main .cs { flex: 0 0 auto; width: auto; min-width: 0; }
 .wallet-edit-main .cs-btn { width: auto; min-width: 104px; min-height: 42px; background: var(--bg-secondary); border-radius: 10px; padding: 0 10px; }
+/* Same shrink-wrap fix for the category editor's type dropdown on new rows —
+   without it the .cs wrapper takes the whole row and squashes .c-name. */
+.cat-edit-row .cs { flex: 0 0 auto; width: auto; min-width: 0; }
+.cat-edit-row .cs-btn { width: auto; min-width: 96px; min-height: 42px; background: var(--bg-secondary); border-radius: 10px; padding: 0 10px; }
 .modal .cs-btn { background: var(--bg-secondary); min-height: 48px; }
 /* Filters: month spans both columns on mobile (matches old #fMonth rule). */
 .filters .cs:first-child { grid-column: 1 / -1; }
@@ -544,6 +548,8 @@ button.btn-busy::before {
 .avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
 .avatar-fallback { color: #fff; font-weight: 800; font-size: 15px; user-select: none; }
 .avatar-lg { width: 96px; height: 96px; font-size: 38px; }
+/* Tiny inline avatar in a transaction's meta line (replaces the enterer's name). */
+.avatar-xs { width: 16px; height: 16px; vertical-align: -3px; display: inline-block; }
 .profile-head { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 6px 0 14px; }
 .profile-avatar-btns { display: flex; gap: 8px; }
 .verify-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
@@ -1009,8 +1015,9 @@ main { padding: 4px 12px 92px; }
 .close-movers { display: flex; flex-direction: column; gap: 6px; }
 .close-mover { font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
 .close-mover .ic { width: 15px; height: 15px; flex-shrink: 0; }
-.close-mover.up b { color: var(--expense); }
-.close-mover.down b { color: var(--income); }
+/* Color follows the sign of the change (green = increase, red = decrease). */
+.close-mover.up b { color: var(--income); }
+.close-mover.down b { color: var(--expense); }
 .close-bud-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); }
 .close-bud-row.warning { border-color: rgba(245, 158, 11, .4); color: var(--warning); }
 .close-bud-row.critical { border-color: var(--expense); color: var(--expense); }

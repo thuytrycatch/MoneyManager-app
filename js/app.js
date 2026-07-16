@@ -114,7 +114,7 @@
       weekReview: 'Đánh giá tuần này', vsLastWeek: 'so với tuần trước',
       recent: 'Giao dịch gần đây', seeAll: 'Xem tất cả', noTx: 'Chưa có giao dịch nào.', refresh: 'Làm mới',
       addTx: 'Thêm giao dịch', placeholder: 'ăn sáng 35k, lương 15 triệu, đổ xăng 80k…',
-      week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', trend: 'Diễn biến thu chi',
+      week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', incomeByCat: 'Thu theo danh mục', trend: 'Diễn biến thu chi',
       budgetProgress: 'Tiến độ ngân sách', topSpending: 'Khoản chi lớn nhất', summary: 'Tổng kết',
       save: 'Lưu', cancel: 'Hủy', delete: 'Xóa', edit: 'Sửa', category: 'Danh mục', note: 'Ghi chú', amount: 'Số tiền',
       date: 'Ngày', time: 'Giờ', today: 'Hôm nay', yesterday: 'Hôm qua', pickDate: 'Chọn ngày',
@@ -335,7 +335,7 @@
       weekReview: 'This week review', vsLastWeek: 'vs last week',
       recent: 'Recent transactions', seeAll: 'See all', noTx: 'No transactions yet.', refresh: 'Refresh',
       addTx: 'Add transaction', placeholder: 'breakfast 35k, salary 15 million, gas 80k…',
-      week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', trend: 'Income & expense trend',
+      week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', incomeByCat: 'Income by category', trend: 'Income & expense trend',
       budgetProgress: 'Budget progress', topSpending: 'Top spending', summary: 'Summary',
       save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', category: 'Category', note: 'Note', amount: 'Amount',
       date: 'Date', time: 'Time', today: 'Today', yesterday: 'Yesterday', pickDate: 'Pick date',
@@ -683,6 +683,15 @@
     return '<span class="avatar avatar-fallback ' + (cls || '') + '" style="background:' + tint + '">' +
       esc(name.charAt(0).toUpperCase()) + '</span>';
   }
+  // Who entered a transaction, for the tx-meta line: their avatar when they
+  // have one (name in the tooltip), otherwise their name as text.
+  function memberTag(uid) {
+    const m = householdMembers.find((x) => x.userId === uid);
+    if (m && m.avatar && /^data:image\//.test(m.avatar)) {
+      return '<img class="avatar avatar-xs" src="' + esc(m.avatar) + '" alt="" title="' + esc(memberName(uid)) + '"/>';
+    }
+    return esc(memberName(uid));
+  }
 
   /* ============== Permissions (role-based) ==============
    * Source of truth = the current user's row in household_members (role column),
@@ -738,9 +747,11 @@
     });
     return { income, expense, net: income - expense };
   }
-  function byCategory(txs) {
+  // Sum per category for one side of the ledger ('expense' by default, or 'income').
+  function byCategory(txs, type) {
+    const want = type || 'expense';
     const o = {};
-    txs.forEach((tx) => { if (tx.type === 'expense' && !isAdjust(tx)) o[tx.category] = (o[tx.category] || 0) + tx.amount; });
+    txs.forEach((tx) => { if (tx.type === want && !isAdjust(tx)) o[tx.category] = (o[tx.category] || 0) + tx.amount; });
     return o;
   }
   // Net of every transaction ever (for total balance). Includes balance adjustments (they DO
@@ -1833,7 +1844,7 @@
       return '<div class="tx-row" data-id="' + tx.id + '">' +
         '<div class="tx-ic ' + tx.type + '">' + icon('edit') + '</div>' +
         '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + t('balanceAdjustLabel') + '</span></div>' +
-        '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+        '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
         txActions(tx) + '</div></div>';
     }
@@ -1845,7 +1856,7 @@
       return '<div class="tx-row" data-id="' + tx.id + '">' +
         '<div class="tx-ic transfer">' + icon('transfer') + '</div>' +
         '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || t('transfer')) + '</span>' + attachBadge(tx.id) + '</div>' +
-        '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+        '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '</div>' +
         txActions(tx) + '</div></div>';
     }
@@ -1853,7 +1864,7 @@
     return '<div class="tx-row" data-id="' + tx.id + '">' +
       '<div class="tx-ic ' + tx.type + '">' + catIcon(tx.category) + '</div>' +
       '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || tx.rawInput) + '</span>' + attachBadge(tx.id) + '</div>' +
-      '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) +
+      '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) +
         (tx.beneficiaryId ? ' · ' + t('spentForShort') + ' ' + esc(memberName(tx.beneficiaryId)) : '') + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
       txActions(tx) + '</div></div>';
@@ -1986,7 +1997,7 @@
       '<div class="card-title">' + icon('calendar') + ' ' + t('weekReview') + '</div>' +
       '<div class="week-body">' +
       '<div><div class="week-amount">' + fmtVND(wkExp) + '</div>' +
-      '<div class="week-diff ' + (diffPct > 0 ? 'bad' : 'good') + '">' + icon(diffPct > 0 ? 'trendUp' : 'trendDown') +
+      '<div class="week-diff ' + (diffPct < 0 ? 'bad' : 'good') + '">' + icon(diffPct > 0 ? 'trendUp' : 'trendDown') +
       ' ' + (diffPct > 0 ? '+' : '') + diffPct + '% ' + t('vsLastWeek') + '</div></div>' +
       '<div class="spark-wrap"><canvas id="weekSpark"></canvas></div>' +
       '</div></div>' +
@@ -2029,12 +2040,16 @@
     a.setMonth(a.getMonth() - 1); return { s: startOfMonth(a), e: endOfMonth(a) };
   }
   // Small ▲/▼ delta chip vs the previous period. higherIsGood flips the colour meaning.
-  function deltaChip(cur, prev, higherIsGood) {
+  // Trend chip. Color follows the SIGN of the change (green = increase, red =
+  // decrease), matching the arrow direction — per user preference, NOT
+  // good/bad semantics. Call sites may still pass a legacy third argument
+  // (higherIsGood); it is ignored.
+  function deltaChip(cur, prev) {
     if (!prev && !cur) return '';
     const pct = prev !== 0 ? Math.round((cur - prev) / Math.abs(prev) * 100) : (cur ? 100 : 0);
     if (pct === 0) return '<span class="sum-delta flat">—</span>';
-    const up = pct > 0, good = higherIsGood ? up : !up;
-    return '<span class="sum-delta ' + (good ? 'good' : 'bad') + '">' + icon(up ? 'trendUp' : 'trendDown') + ' ' + Math.abs(pct) + '%</span>';
+    const up = pct > 0;
+    return '<span class="sum-delta ' + (up ? 'good' : 'bad') + '">' + icon(up ? 'trendUp' : 'trendDown') + ' ' + Math.abs(pct) + '%</span>';
   }
   // "Wrap-up" headline card summarising the selected period vs the previous one.
   function reportWrapUpHtml(tt, pt, byCat) {
@@ -2389,6 +2404,15 @@
         prevAmount: p, deltaPct: p ? Math.round((curCat[c] - p) / p * 100) : null };
     }).sort((a, b) => b.amount - a.amount);
 
+    // Income broken down by category (multiple income categories exist since
+    // the custom-category feature). pct is the share of total income.
+    const curInc = byCategory(cur, 'income'), prevInc = byCategory(prev, 'income');
+    const incCats = Object.keys(curInc).map((c) => {
+      const p = prevInc[c] || 0;
+      return { category: c, amount: curInc[c], pct: tt.income ? Math.round(curInc[c] / tt.income * 100) : 0,
+        prevAmount: p, deltaPct: p ? Math.round((curInc[c] - p) / p * 100) : null };
+    }).sort((a, b) => b.amount - a.amount);
+
     const allCats = {}; Object.keys(curCat).forEach((c) => { allCats[c] = 1; }); Object.keys(prevCat).forEach((c) => { allCats[c] = 1; });
     const movers = Object.keys(allCats).map((c) => {
       const a = curCat[c] || 0, p = prevCat[c] || 0;
@@ -2416,7 +2440,7 @@
 
     return { period: monthKey(anchor), income: tt.income, expense: tt.expense, net: tt.net, savingsRate: rate,
       prev: { income: pt.income, expense: pt.expense, net: pt.net }, avg3m: avg3m,
-      categories: cats, movers: movers, budget: budget, recurring: recurring, recurringTotal: recurringTotal, wins: wins };
+      categories: cats, incomeCategories: incCats, movers: movers, budget: budget, recurring: recurring, recurringTotal: recurringTotal, wins: wins };
   }
 
   // Safe, aggregated payload for the AI — NO per-transaction notes, NO beneficiary names.
@@ -2424,6 +2448,7 @@
     return { period: m.period, income: m.income, expense: m.expense, net: m.net, savingsRate: m.savingsRate,
       prevExpense: m.prev.expense, avg3mExpense: m.avg3m,
       topCategories: m.categories.slice(0, 8).map((c) => ({ name: c.category, amount: c.amount, pct: c.pct, deltaPct: c.deltaPct })),
+      incomeCategories: (m.incomeCategories || []).slice(0, 5).map((c) => ({ name: c.category, amount: c.amount, pct: c.pct })),
       movers: m.movers.map((x) => ({ name: x.category, deltaAbs: x.deltaAbs, deltaPct: x.deltaPct })),
       overBudget: m.budget.filter((b) => b.status !== 'ok').map((b) => ({ name: b.category, budget: b.budget, spent: b.spent })),
       recurring: m.recurring.map((r) => ({ name: r.name, amount: r.amount })), recurringTotal: m.recurringTotal };
@@ -2468,6 +2493,14 @@
           '<span class="cc-name">' + esc(catLabel(c.category)) + '</span>' +
           '<span class="cc-amt">' + mask(fmtShort(c.amount)) + ' · ' + c.pct + '%</span>' +
           (c.deltaPct != null ? deltaChip(c.amount, c.prevAmount, false) : '') + '</div>').join('') + '</div>';
+    }
+    // Older snapshots (closed before this feature) have no incomeCategories → skip.
+    if ((m.incomeCategories || []).length) {
+      h += '<div class="section-title">' + t('incomeByCat') + '</div><div class="close-cats">' +
+        m.incomeCategories.map((c) => '<div class="close-cat-row">' + catIcon(c.category) +
+          '<span class="cc-name">' + esc(catLabel(c.category)) + '</span>' +
+          '<span class="cc-amt">' + mask(fmtShort(c.amount)) + ' · ' + c.pct + '%</span>' +
+          (c.deltaPct != null ? deltaChip(c.amount, c.prevAmount, true) : '') + '</div>').join('') + '</div>';
     }
     if (m.movers.length) {
       h += '<div class="section-title">' + t('movers') + '</div><div class="close-movers">' +
@@ -2572,6 +2605,7 @@
     const txs = inRange(s, e);
     const tt = totals(txs);
     const byCat = byCategory(txs);
+    const byIncCat = byCategory(txs, 'income');
     const rate = tt.income ? Math.round(tt.net / tt.income * 100) : 0;
     const pr = prevReportRange();
     const pt = totals(inRange(pr.s, pr.e));
@@ -2583,6 +2617,9 @@
 
     setTimeout(() => {
       window.Charts.donut('repDonut', 'repLegend', byCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); currentTab = 'transactions'; render(); }, catLabel);
+      if (Object.keys(byIncCat).length) {
+        window.Charts.donut('repIncDonut', 'repIncLegend', byIncCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); currentTab = 'transactions'; render(); }, catLabel);
+      }
       window.Charts.bars('repTrend', td.labels, [
         { label: t('income'), data: td.inc, color: incColor },
         { label: t('expense'), data: td.exp, color: expColor },
@@ -2631,6 +2668,10 @@
       reportCard(reportPeriod === 'month' ? spendingHeatmapHtml() : '') +
       // Trend analysis & forecast (rolling monthly window, independent of the period selector)
       reportCard(trendsForecastHtml()) +
+      // Income broken down by category (only when the period has income)
+      reportCard(Object.keys(byIncCat).length ?
+        '<div class="section-title">' + t('incomeByCat') + '</div>' +
+        '<div class="card"><div class="chart-box"><canvas id="repIncDonut"></canvas></div><div id="repIncLegend" class="legend"></div></div>' : '') +
       // Net worth: assets vs liabilities (current snapshot)
       reportCard(netWorthHtml()) +
       // Spending split by who each transaction was spent for (beneficiary)
@@ -3508,7 +3549,7 @@
     return '<div class="tx-row wh-row' + (editable ? ' wh-edit' : '') + '"' + (editable ? ' data-whedit="' + tx.id + '"' : '') + '>' +
       '<div class="tx-ic ' + (h.delta >= 0 ? 'income' : 'expense') + '">' + (ic ? icon(ic) : catIcon(tx.category)) + '</div>' +
       '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + label + '</span></div>' +
-      '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + esc(memberName(tx.userId)) + '</div></div>' +
+      '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + amtCls + '">' + sign + mask(fmtShort(Math.abs(h.delta))) + '</div>' +
       '<div class="wh-after">' + t('balanceAfter') + ' ' + mask(fmtShort(h.balanceAfter)) + '</div></div></div>';
   }

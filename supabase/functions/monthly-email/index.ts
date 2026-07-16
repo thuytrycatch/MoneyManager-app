@@ -38,6 +38,7 @@ type Metrics = {
   prev?: { income: number; expense: number; net: number };
   avg3m?: number | null;
   categories?: { category: string; amount: number; pct: number; prevAmount: number; deltaPct: number | null }[];
+  incomeCategories?: { category: string; amount: number; pct: number; prevAmount: number; deltaPct: number | null }[];
   movers?: { category: string; deltaAbs: number; deltaPct: number | null }[];
   budget?: { category: string; budget: number; spent: number; pctUsed: number; status: string }[];
 };
@@ -72,7 +73,8 @@ function pctDelta(cur: number, prev: number | undefined | null): string {
   const d = Math.round(((cur - prev) / prev) * 100);
   if (!isFinite(d) || d === 0) return "";
   const up = d > 0;
-  const color = up ? "#ef4444" : "#10b981";
+  // Color follows the sign of the change (green = increase, red = decrease).
+  const color = up ? "#10b981" : "#ef4444";
   return ` <span style="color:${color};font-size:12px">${up ? "▲" : "▼"} ${Math.abs(d)}%</span>`;
 }
 
@@ -86,6 +88,10 @@ function reportHtml(hhName: string, metrics: Metrics, ai: AiReview, appUrl: stri
   const catRows = (m.categories || []).slice(0, 5).map((c) =>
     `<tr><td style="padding:6px 0;color:#111827">${esc(c.category)}</td>
          <td style="padding:6px 0;text-align:right;color:#111827;font-weight:600">${vnd(c.amount)}</td>
+         <td style="padding:6px 0 6px 10px;text-align:right;color:#6b7280;font-size:12px">${c.pct}%${c.deltaPct != null ? " · " + (c.deltaPct > 0 ? "+" : "") + c.deltaPct + "%" : ""}</td></tr>`).join("");
+  const incRows = (m.incomeCategories || []).slice(0, 5).map((c) =>
+    `<tr><td style="padding:6px 0;color:#111827">${esc(c.category)}</td>
+         <td style="padding:6px 0;text-align:right;color:#059669;font-weight:600">${vnd(c.amount)}</td>
          <td style="padding:6px 0 6px 10px;text-align:right;color:#6b7280;font-size:12px">${c.pct}%${c.deltaPct != null ? " · " + (c.deltaPct > 0 ? "+" : "") + c.deltaPct + "%" : ""}</td></tr>`).join("");
   const overBudget = (m.budget || []).filter((b) => b.status !== "ok");
   const budgetRows = overBudget.map((b) =>
@@ -113,6 +119,7 @@ function reportHtml(hhName: string, metrics: Metrics, ai: AiReview, appUrl: stri
     </tr></table>
     ${m.avg3m ? `<div style="color:#6b7280;font-size:13px;margin:8px 0 0">Trung bình chi 3 tháng trước: <b style="color:#111827">${vnd(m.avg3m)}</b></div>` : ""}
     ${catRows ? `<h3 style="font-size:14px;margin:22px 0 6px">Chi theo danh mục (top 5)</h3><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${catRows}</table>` : ""}
+    ${incRows ? `<h3 style="font-size:14px;margin:22px 0 6px">Thu theo danh mục</h3><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${incRows}</table>` : ""}
     ${budgetRows ? `<h3 style="font-size:14px;margin:22px 0 6px">⚠️ Ngân sách cần chú ý</h3><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${budgetRows}</table>` : ""}
     ${moverRows ? `<h3 style="font-size:14px;margin:22px 0 6px">Biến động lớn nhất so tháng trước</h3><ul style="margin:0;padding-left:18px">${moverRows}</ul>` : ""}
     ${aiBlock}
@@ -128,6 +135,7 @@ function reportText(hhName: string, m: Metrics): string {
     `Thu vao: ${vnd(m.income)} | Chi ra: ${vnd(m.expense)} | Chenh lech: ${vnd(m.net)} | Tiet kiem: ${m.savingsRate || 0}%`,
   ];
   (m.categories || []).slice(0, 5).forEach((c) => lines.push(`- ${c.category}: ${vnd(c.amount)} (${c.pct}%)`));
+  (m.incomeCategories || []).slice(0, 5).forEach((c) => lines.push(`+ ${c.category}: ${vnd(c.amount)} (${c.pct}%)`));
   return lines.join("\n");
 }
 
