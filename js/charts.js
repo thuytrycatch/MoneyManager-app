@@ -162,6 +162,40 @@
     });
   }
 
+  /* Mixed bar + line chart (daily spending view).
+   * datasets: [{type:'line'|'bar', label, data, color, dashed, fill, flat}]
+   * `flat` marks a constant reference line (no points, no curve). */
+  function mixed(canvasId, labels, datasets) {
+    const ctx = document.getElementById(canvasId); if (!ctx) return;
+    destroy(canvasId); const c = colors();
+    reg[canvasId] = new Chart(ctx, {
+      data: {
+        labels,
+        datasets: datasets.map((d) => (d.type === 'bar'
+          ? { type: 'bar', label: d.label, data: d.data, backgroundColor: d.color, borderRadius: 3, maxBarThickness: 12, order: 2 }
+          : {
+            type: 'line', label: d.label, data: d.data, borderColor: d.color,
+            backgroundColor: d.fill ? d.color + '22' : 'transparent', fill: !!d.fill,
+            tension: d.flat ? 0 : 0.3, borderDash: d.dashed ? [6, 5] : [],
+            pointRadius: d.flat ? 0 : 2, pointHoverRadius: d.flat ? 0 : 4,
+            borderWidth: 2, spanGaps: true, order: 1,
+          })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: c.text, boxWidth: 9, boxHeight: 9, usePointStyle: true, font: { size: 11, family: FONT } } },
+          tooltip: { callbacks: { label: (it) => it.parsed.y == null ? '' : ' ' + it.dataset.label + ': ' + fmtVND(it.parsed.y) } },
+        },
+        scales: {
+          x: { ticks: { color: c.text, font: { size: 10, family: FONT }, maxRotation: 0, autoSkip: true }, grid: { display: false }, border: { display: false } },
+          y: { beginAtZero: true, ticks: { color: c.text, font: { size: 10, family: FONT }, callback: (v) => fmtAxis(v) }, grid: { color: c.grid }, border: { display: false } },
+        },
+      },
+    });
+  }
+
   /* Small sparkline (7 days) */
   function sparkline(canvasId, data, color) {
     const ctx = document.getElementById(canvasId); if (!ctx) return;
@@ -173,5 +207,5 @@
     });
   }
 
-  window.Charts = { donut, bars, line, lines, sparkline, fmtVND, fmtShort, PALETTE };
+  window.Charts = { donut, bars, line, lines, mixed, sparkline, fmtVND, fmtShort, PALETTE };
 })();

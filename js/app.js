@@ -230,7 +230,10 @@
       noTemplates: 'Chưa có mẫu nào.', templatePrefix: 'Mẫu: ',
       templatesHint: 'Tạo mẫu cho khoản hay lặp lại (gửi xe, cơm trưa…). Ở trang Thêm, chạm 1 cái là ghi ngay (có thể Hoàn tác). Mẫu lưu trên thiết bị này.',
       // Auto insights & spending calendar
-      insights: 'Nhận xét tự động', spendingCalendar: 'Lịch chi tiêu', less: 'Ít', more: 'Nhiều',
+      insights: 'Nhận xét tự động',
+      dailySpend: 'Chi tiêu theo ngày', stdLine: 'Chuẩn ngân sách/ngày', stdPerDay: 'Chuẩn/ngày',
+      daysOverStd: 'Ngày vượt chuẩn', peakDay: 'Chi cao nhất', dayWord: 'ngày',
+      noBudgetForStd: 'Đặt ngân sách tháng để có đường chuẩn so sánh.',
       insMoreAvg: 'Tháng này chi nhiều hơn {n}% so với trung bình gần đây.',
       insLessAvg: 'Tháng này chi ít hơn {n}% so với trung bình gần đây.',
       insWeekend: 'Cuối tuần bạn chi gấp {n} lần ngày thường.',
@@ -451,7 +454,10 @@
       noTemplates: 'No templates yet.', templatePrefix: 'Template: ',
       templatesHint: 'Create templates for frequent entries (parking, lunch…). On the Add page, one tap logs it instantly (with Undo). Templates are stored on this device.',
       // Auto insights & spending calendar
-      insights: 'Insights', spendingCalendar: 'Spending calendar', less: 'Less', more: 'More',
+      insights: 'Insights',
+      dailySpend: 'Daily spending', stdLine: 'Budget standard/day', stdPerDay: 'Standard/day',
+      daysOverStd: 'Days over standard', peakDay: 'Biggest day', dayWord: 'day',
+      noBudgetForStd: 'Set a monthly budget to get the reference line.',
       insMoreAvg: 'This month is {n}% above your recent average.',
       insLessAvg: 'This month is {n}% below your recent average.',
       insWeekend: 'You spend {n}× more on weekends than weekdays.',
@@ -2110,38 +2116,70 @@
     return '<div class="section-title">' + t('insights') + '</div>' +
       '<div class="alerts">' + items.map((i) => alertItem(i.kind, i.ic, i.text)).join('') + '</div>';
   }
-  // Month calendar heat-map: each day shaded by how much was spent.
-  function spendingHeatmapHtml() {
+  // Daily spending chart (replaces the old calendar heat-map): actual expense
+  // per day (line) vs a flat "budget standard per day" reference line (total
+  // monthly budget / days in month, dashed) plus income per day (bars).
+  function dailySpendHtml() {
     const anchor = reportAnchor;
     const mk = monthKey(anchor);
-    const first = startOfMonth(anchor);
     const days = endOfMonth(anchor).getDate();
-    const byDay = {}; let maxv = 0;
+    const expDay = new Array(days).fill(0);
+    const incDay = new Array(days).fill(0);
     DATA.transactions.forEach((tx) => {
-      if (tx.type !== 'expense' || isAdjust(tx) || tx.date.slice(0, 7) !== mk) return;
-      const d = parseInt(tx.date.slice(8, 10), 10);
-      byDay[d] = (byDay[d] || 0) + tx.amount;
-      if (byDay[d] > maxv) maxv = byDay[d];
+      if (isAdjust(tx) || tx.date.slice(0, 7) !== mk) return;
+      const d = parseInt(tx.date.slice(8, 10), 10) - 1;
+      if (d < 0 || d >= days) return;
+      if (tx.type === 'expense') expDay[d] += tx.amount;
+      else if (tx.type === 'income') incDay[d] += tx.amount;
     });
-    const lead = (first.getDay() + 6) % 7; // Monday-first offset
-    const todayStr = ymd(new Date());
-    let cells = '';
-    for (let i = 0; i < lead; i++) cells += '<div class="hm-cell empty"></div>';
+    // Viewing the current month → stop the series at today so days that have
+    // not happened yet don't render as misleading zeros.
+    const today = new Date();
+    const lastDay = monthKey(today) === mk ? Math.min(today.getDate(), days) : days;
+    const budgetTotal = Object.keys(DATA.budgets || {}).reduce((a, c) => a + (DATA.budgets[c] > 0 ? DATA.budgets[c] : 0), 0);
+    const stdPerDay = budgetTotal ? Math.round(budgetTotal / days) : 0;
+
+    const labels = [], expLine = [], stdLine = [], incBars = [];
     for (let d = 1; d <= days; d++) {
-      const v = byDay[d] || 0;
-      const lvl = (v === 0 || maxv === 0) ? 0 : Math.min(4, Math.ceil(v / maxv * 4));
-      const dateStr = mk + '-' + pad(d);
-      cells += '<button class="hm-cell lvl-' + lvl + (dateStr === todayStr ? ' today' : '') + '" data-hmday="' + dateStr + '"' +
-        (v ? ' title="' + fmtShort(v) + '"' : '') + '>' + d + '</button>';
+      labels.push(String(d));
+      expLine.push(d <= lastDay ? expDay[d - 1] : null);
+      incBars.push(d <= lastDay ? incDay[d - 1] : null);
+      stdLine.push(stdPerDay || null);
     }
-    const head = t('dows').map((dn) => '<div class="hm-dow">' + dn + '</div>').join('');
-    return '<div class="section-title">' + t('spendingCalendar') + '</div>' +
-      '<div class="card hm-card">' +
-      '<div class="hm-grid hm-head">' + head + '</div>' +
-      '<div class="hm-grid">' + cells + '</div>' +
-      '<div class="hm-legend"><span>' + t('less') + '</span>' +
-      [0, 1, 2, 3, 4].map((l) => '<span class="hm-cell sw lvl-' + l + '"></span>').join('') +
-      '<span>' + t('more') + '</span></div></div>';
+
+    setTimeout(() => {
+      const incColor = getComputedStyle(document.body).getPropertyValue('--income').trim() || '#10b981';
+      const expColor = getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444';
+      const accColor = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#6366f1';
+      const ds = [
+        { type: 'bar', label: t('income'), data: incBars, color: incColor + 'aa' },
+        { type: 'line', label: t('expense'), data: expLine, color: expColor, fill: true },
+      ];
+      if (stdPerDay) ds.push({ type: 'line', label: t('stdLine'), data: stdLine, color: accColor, dashed: true, flat: true });
+      window.Charts.mixed('repDaily', labels, ds);
+    }, 0);
+
+    // Companion numbers for tracking: actual average vs the standard, how many
+    // days went over it, and the single biggest spending day.
+    const spent = expDay.slice(0, lastDay).reduce((a, b) => a + b, 0);
+    const avg = lastDay ? Math.round(spent / lastDay) : 0;
+    let over = 0, maxV = 0, maxD = 0;
+    for (let d = 1; d <= lastDay; d++) {
+      const v = expDay[d - 1];
+      if (stdPerDay && v > stdPerDay) over++;
+      if (v > maxV) { maxV = v; maxD = d; }
+    }
+    const stats = [];
+    if (stdPerDay) stats.push(t('stdPerDay') + ': <b>' + fmtShort(stdPerDay) + '</b>');
+    stats.push(t('avgPerDay') + ': <b>' + fmtShort(avg) + '</b>');
+    if (stdPerDay) stats.push(t('daysOverStd') + ': <b>' + over + '/' + lastDay + '</b>');
+    if (maxV) stats.push(t('peakDay') + ': <b>' + fmtShort(maxV) + '</b> (' + t('dayWord') + ' ' + maxD + ')');
+
+    return '<div class="section-title">' + t('dailySpend') + '</div>' +
+      '<div class="card"><div class="chart-box tall"><canvas id="repDaily"></canvas></div>' +
+      '<div class="close-cmp hint">' + stats.join('  ·  ') + '</div>' +
+      (!stdPerDay ? '<div class="hint">' + t('noBudgetForStd') + '</div>' : '') +
+      '</div>';
   }
   function trendData(txs, range) {
     let labels = [], inc = [], exp = [];
@@ -2665,7 +2703,7 @@
         budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : '') +
       // Auto insights + spending calendar (month view only)
       reportCard(reportPeriod === 'month' ? autoInsightsHtml() : '') +
-      reportCard(reportPeriod === 'month' ? spendingHeatmapHtml() : '') +
+      reportCard(reportPeriod === 'month' ? dailySpendHtml() : '') +
       // Trend analysis & forecast (rolling monthly window, independent of the period selector)
       reportCard(trendsForecastHtml()) +
       // Income broken down by category (only when the period has income)
@@ -3730,7 +3768,6 @@
     document.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => { reportPeriod = b.dataset.period; render(); }));
     document.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', () => shiftReport(parseInt(b.dataset.shift, 10))));
     // spending calendar: tap a day → open that month's transactions
-    document.querySelectorAll('[data-hmday]').forEach((b) => b.addEventListener('click', () => { filterMonth = b.dataset.hmday.slice(0, 7); filterCategory = ''; filterType = ''; currentTab = 'transactions'; render(); }));
     // budgets
     const sb = document.getElementById('saveBudgetBtn');
     if (sb) sb.addEventListener('click', () => busy(sb, async () => {
