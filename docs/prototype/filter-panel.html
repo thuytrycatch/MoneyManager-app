@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Filter Panel — Prototype (React + Tailwind + Chart.js)</title>
+<!-- Prototype ĐỘC LẬP với app chính (app là vanilla JS): mở trực tiếp file này
+     trong browser (cần internet cho CDN). Không import vào index.html. -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef } = React;
+
+/* =====================================================================
+ *  Icons — inline SVG, không cần thư viện icon.
+ * ===================================================================== */
+const Svg = (d, extra) => (props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+       strokeLinecap="round" strokeLinejoin="round"
+       className={"w-4 h-4 " + (props.className || "")}>{d}{extra || null}</svg>
+);
+const IconCalendar = Svg(<rect x="3" y="4" width="18" height="18" rx="2"/>, <><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>);
+const IconUsers    = Svg(<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>, <><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>);
+const IconBasket   = Svg(<path d="M5.5 21h13l1.5-11h-16z"/>, <><path d="M8 10V6a4 4 0 0 1 8 0v4"/></>);
+const IconChevron  = Svg(<polyline points="6 9 12 15 18 9"/>);
+const IconX        = Svg(<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>);
+const IconAlert    = Svg(<><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>);
+
+/* =====================================================================
+ *  Mock data — sinh deterministic để demo filter làm biểu đồ/bảng đổi theo.
+ * ===================================================================== */
+const MEMBERS = [
+  { id: "m1", name: "Bố",   emoji: "👨", color: "#6366f1" },
+  { id: "m2", name: "Mẹ",   emoji: "👩", color: "#ec4899" },
+  { id: "m3", name: "Bin",  emoji: "🧒", color: "#f59e0b" },
+  { id: "m4", name: "Na",   emoji: "👧", color: "#10b981" },
+];
+// warn = danh mục đang vượt ngân sách → tag active tô ĐỎ (cảnh báo), còn lại XANH.
+const CATEGORIES = [
+  { name: "Ăn uống",   icon: "🍜", color: "#ef4444", warn: true  },
+  { name: "Di chuyển", icon: "🛵", color: "#3b82f6", warn: false },
+  { name: "Mua sắm",   icon: "🛍️", color: "#8b5cf6", warn: false },
+  { name: "Giải trí",  icon: "🎮", color: "#f97316", warn: true  },
+  { name: "Sức khỏe",  icon: "💊", color: "#14b8a6", warn: false },
+  { name: "Hóa đơn",   icon: "🧾", color: "#64748b", warn: false },
+  { name: "Giáo dục",  icon: "📚", color: "#0ea5e9", warn: false },
+  { name: "Khác",      icon: "📦", color: "#a3a3a3", warn: false },
+];
+const MONTHS = ["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07"];
+
+// Pseudo-random có seed → dữ liệu ổn định giữa các lần mở.
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+const rand = mulberry32(20260717);
+const TXS = [];
+MONTHS.forEach((m) => {
+  const days = m === "2026-02" ? 28 : 30;
+  for (let i = 0; i < 34; i++) {
+    const d = 1 + Math.floor(rand() * days);
+    TXS.push({
+      id: m + "-" + i,
+      date: m + "-" + String(d).padStart(2, "0"),
+      month: m,
+      member: MEMBERS[Math.floor(rand() * MEMBERS.length)].id,
+      cat: CATEGORIES[Math.floor(rand() * CATEGORIES.length)].name,
+      amount: (2 + Math.floor(rand() * 40)) * 10000,
+      note: "Giao dịch mẫu " + (i + 1),
+    });
+  }
+});
+const fmt = (n) => new Intl.NumberFormat("vi-VN").format(n) + " ₫";
+const quarterOf = (m) => "Q" + (Math.floor((+m.slice(5) - 1) / 3) + 1) + "/" + m.slice(0, 4);
+
+/* =====================================================================
+ *  FilterCard — khung chung cho một nhóm filter.
+ *  Desktop: card mở sẵn, xếp ngang. Mobile: header bấm để gập/mở (accordion).
+ * ===================================================================== */
+function FilterCard({ icon: I, title, activeCount, onClear, children }) {
+  const [open, setOpen] = useState(false); // chỉ có tác dụng ở mobile
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <button type="button" onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-4 py-3 md:cursor-default">
+        <span className="grid place-items-center w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600"><I/></span>
+        <span className="font-semibold text-sm">{title}</span>
+        {activeCount > 0 && (
+          <span className="ml-1 text-[11px] font-bold bg-indigo-600 text-white rounded-full px-2 py-0.5">{activeCount}</span>
+        )}
+        <span className="ml-auto flex items-center gap-2">
+          {activeCount > 0 && (
+            <span role="button" onClick={(e) => { e.stopPropagation(); onClear(); }}
+              className="text-[11px] font-semibold text-slate-400 hover:text-red-500">Xóa</span>
+          )}
+          <IconChevron className={"md:hidden transition-transform " + (open ? "rotate-180" : "")}/>
+        </span>
+      </button>
+      <div className={(open ? "block" : "hidden") + " md:block px-4 pb-4"}>{children}</div>
+    </div>
+  );
+}
+
+/* =====================================================================
+ *  FilterPanel — component chính, controlled & tái sử dụng:
+ *    value    = { periodType, period, memberIds, cats }
+ *    onChange = (patch) => void
+ * ===================================================================== */
+function FilterPanel({ value, onChange, members, categories }) {
+  const periodOpts =
+    value.periodType === "month"   ? MONTHS
+    : value.periodType === "quarter" ? [...new Set(MONTHS.map(quarterOf))]
+    : [...new Set(MONTHS.map((m) => m.slice(0, 4)))];
+
+  const toggle = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  return (
+    <section className="grid gap-3 md:grid-cols-3">
+      {/* ---- 1. Thời gian ---- */}
+      <FilterCard icon={IconCalendar} title="Thời gian" activeCount={0} onClear={() => {}}>
+        <div className="flex rounded-xl bg-slate-100 p-1 mb-3">
+          {[["month","Tháng"],["quarter","Quý"],["year","Năm"]].map(([k, label]) => (
+            <button key={k} type="button"
+              onClick={() => onChange({ periodType: k, period: null })}
+              className={"flex-1 text-sm font-semibold rounded-lg py-1.5 transition " +
+                (value.periodType === k ? "bg-white shadow text-indigo-600" : "text-slate-500 hover:text-slate-700")}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={value.period || periodOpts[periodOpts.length - 1]}
+          onChange={(e) => onChange({ period: e.target.value })}
+          className="w-full rounded-xl border-slate-200 bg-slate-50 text-sm font-medium px-3 py-2.5 border focus:ring-2 focus:ring-indigo-400 outline-none">
+          {periodOpts.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </FilterCard>
+
+      {/* ---- 2. Thành viên (multi-select avatar) ---- */}
+      <FilterCard icon={IconUsers} title="Thành viên" activeCount={value.memberIds.length}
+        onClear={() => onChange({ memberIds: [] })}>
+        <div className="flex flex-wrap gap-2">
+          {members.map((m) => {
+            const on = value.memberIds.includes(m.id);
+            return (
+              <button key={m.id} type="button"
+                onClick={() => onChange({ memberIds: toggle(value.memberIds, m.id) })}
+                className={"flex items-center gap-2 rounded-full border pl-1 pr-3 py-1 text-sm font-semibold transition " +
+                  (on ? "bg-emerald-50 border-emerald-400 text-emerald-700 ring-1 ring-emerald-300"
+                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300")}>
+                <span className="grid place-items-center w-6 h-6 rounded-full text-sm"
+                      style={{ background: m.color + "22" }}>{m.emoji}</span>
+                {m.name}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">Bỏ trống = tất cả thành viên.</p>
+      </FilterCard>
+
+      {/* ---- 3. Danh mục (tag filter; đỏ = đang vượt ngân sách) ---- */}
+      <FilterCard icon={IconBasket} title="Danh mục chi tiêu" activeCount={value.cats.length}
+        onClear={() => onChange({ cats: [] })}>
+        <div className="flex flex-wrap gap-1.5">
+          {categories.map((c) => {
+            const on = value.cats.includes(c.name);
+            const cls = on
+              ? (c.warn
+                  ? "bg-red-50 border-red-400 text-red-600 ring-1 ring-red-300"
+                  : "bg-emerald-50 border-emerald-400 text-emerald-700 ring-1 ring-emerald-300")
+              : "bg-white border-slate-200 text-slate-600 hover:border-slate-300";
+            return (
+              <button key={c.name} type="button"
+                onClick={() => onChange({ cats: toggle(value.cats, c.name) })}
+                className={"flex items-center gap-1 rounded-full border px-2.5 py-1 text-[13px] font-semibold transition " + cls}>
+                <span>{c.icon}</span>{c.name}
+                {c.warn && on && <IconAlert className="w-3.5 h-3.5"/>}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">🔴 = danh mục đang vượt ngân sách.</p>
+      </FilterCard>
+    </section>
+  );
+}
+
+/* ---- Thanh tóm tắt filter đang áp (chip có nút ✕, kèm Xóa tất cả) ---- */
+function ActiveFilterBar({ value, onChange, members }) {
+  const chips = [];
+  value.memberIds.forEach((id) => {
+    const m = members.find((x) => x.id === id);
+    chips.push({ key: "m:" + id, label: m.emoji + " " + m.name,
+      remove: () => onChange({ memberIds: value.memberIds.filter((x) => x !== id) }) });
+  });
+  value.cats.forEach((c) => chips.push({ key: "c:" + c, label: c,
+    remove: () => onChange({ cats: value.cats.filter((x) => x !== c) }) }));
+  if (!chips.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {chips.map((ch) => (
+        <span key={ch.key} className="flex items-center gap-1 bg-indigo-600 text-white text-[12px] font-semibold rounded-full pl-2.5 pr-1 py-0.5">
+          {ch.label}
+          <button onClick={ch.remove} className="hover:bg-indigo-500 rounded-full p-0.5"><IconX className="w-3 h-3"/></button>
+        </span>
+      ))}
+      <button onClick={() => onChange({ memberIds: [], cats: [] })}
+        className="text-[12px] font-semibold text-slate-400 hover:text-red-500 ml-1">Xóa tất cả</button>
+    </div>
+  );
+}
+
+/* =====================================================================
+ *  Chart wrappers — Chart.js qua ref; hủy & vẽ lại khi dữ liệu lọc đổi.
+ * ===================================================================== */
+function useChart(build, deps) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const chart = new Chart(ref.current, build());
+    return () => chart.destroy();
+  }, deps);
+  return ref;
+}
+const Card = ({ title, children }) => (
+  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+    <h3 className="text-[13px] font-bold uppercase tracking-wide text-slate-500 mb-3">{title}</h3>
+    {children}
+  </div>
+);
+function PieCard({ byCat }) {
+  const labels = Object.keys(byCat);
+  const ref = useChart(() => ({
+    type: "doughnut",
+    data: { labels, datasets: [{ data: labels.map((l) => byCat[l]), borderWidth: 0,
+      backgroundColor: labels.map((l) => (CATEGORIES.find((c) => c.name === l) || {}).color || "#ccc") }] },
+    options: { cutout: "62%", plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } } } },
+  }), [JSON.stringify(byCat)]);
+  return <Card title="Cơ cấu chi theo danh mục"><div className="h-64"><canvas ref={ref}/></div></Card>;
+}
+function BarCard({ byMember }) {
+  const labels = Object.keys(byMember).map((id) => (MEMBERS.find((m) => m.id === id) || {}).name || id);
+  const ref = useChart(() => ({
+    type: "bar",
+    data: { labels, datasets: [{ label: "Chi", data: Object.values(byMember), borderRadius: 6,
+      backgroundColor: Object.keys(byMember).map((id) => (MEMBERS.find((m) => m.id === id) || {}).color) }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => v / 1e6 + "tr" } } } },
+  }), [JSON.stringify(byMember)]);
+  return <Card title="Chi theo thành viên"><div className="h-64"><canvas ref={ref}/></div></Card>;
+}
+function LineCard({ byDay }) {
+  const labels = Object.keys(byDay).sort();
+  const ref = useChart(() => ({
+    type: "line",
+    data: { labels: labels.map((d) => d.slice(8)), datasets: [{ label: "Chi/ngày", data: labels.map((l) => byDay[l]),
+      borderColor: "#6366f1", backgroundColor: "#6366f122", fill: true, tension: 0.35, pointRadius: 2 }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => v / 1e6 + "tr" } } } },
+  }), [JSON.stringify(byDay)]);
+  return <Card title="Diễn biến chi theo ngày"><div className="h-64"><canvas ref={ref}/></div></Card>;
+}
+
+/* =====================================================================
+ *  Dashboard demo — filter đổi là số liệu, 3 biểu đồ và bảng đổi theo.
+ * ===================================================================== */
+function App() {
+  const [filter, setFilterState] = useState({ periodType: "month", period: "2026-07", memberIds: [], cats: [] });
+  const setFilter = (patch) => setFilterState((f) => {
+    const next = { ...f, ...patch };
+    if (patch.periodType && !patch.period) {
+      const opts = patch.periodType === "month" ? MONTHS
+        : patch.periodType === "quarter" ? [...new Set(MONTHS.map(quarterOf))]
+        : [...new Set(MONTHS.map((m) => m.slice(0, 4)))];
+      next.period = opts[opts.length - 1];
+    }
+    return next;
+  });
+
+  const filtered = useMemo(() => TXS.filter((tx) => {
+    const inPeriod =
+      filter.periodType === "month"   ? tx.month === filter.period
+      : filter.periodType === "quarter" ? quarterOf(tx.month) === filter.period
+      : tx.month.slice(0, 4) === filter.period;
+    return inPeriod &&
+      (!filter.memberIds.length || filter.memberIds.includes(tx.member)) &&
+      (!filter.cats.length || filter.cats.includes(tx.cat));
+  }), [filter]);
+
+  const total = filtered.reduce((a, t) => a + t.amount, 0);
+  const agg = (key) => filtered.reduce((o, t) => ((o[t[key]] = (o[t[key]] || 0) + t.amount), o), {});
+  const byCat = useMemo(() => agg("cat"), [filtered]);
+  const byMember = useMemo(() => agg("member"), [filtered]);
+  const byDay = useMemo(() => agg("date"), [filtered]);
+  const top = [...filtered].sort((a, b) => b.amount - a.amount).slice(0, 8);
+
+  return (
+    <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4">
+      <header className="flex items-end justify-between">
+        <div>
+          <h1 className="text-xl font-extrabold">Báo cáo tài chính gia đình</h1>
+          <p className="text-sm text-slate-500">Prototype Filter Panel · dữ liệu mẫu</p>
+        </div>
+        <div className="text-right">
+          <div className="text-[11px] font-bold uppercase text-slate-400">Tổng chi ({filter.period})</div>
+          <div className="text-lg font-extrabold text-indigo-600">{fmt(total)}</div>
+        </div>
+      </header>
+
+      <FilterPanel value={filter} onChange={setFilter} members={MEMBERS} categories={CATEGORIES}/>
+      <ActiveFilterBar value={filter} onChange={setFilter} members={MEMBERS}/>
+
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400">
+          Không có giao dịch khớp bộ lọc.
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <PieCard byCat={byCat}/><BarCard byMember={byMember}/><LineCard byDay={byDay}/>
+          </div>
+          <Card title={"Giao dịch lớn nhất (" + filtered.length + " giao dịch khớp lọc)"}>
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-[11px] uppercase text-slate-400 border-b border-slate-100">
+                <th className="py-2">Ngày</th><th>Thành viên</th><th>Danh mục</th><th className="text-right">Số tiền</th>
+              </tr></thead>
+              <tbody>
+                {top.map((tx) => {
+                  const m = MEMBERS.find((x) => x.id === tx.member);
+                  return (
+                    <tr key={tx.id} className="border-b border-slate-50 last:border-0">
+                      <td className="py-2 text-slate-500">{tx.date}</td>
+                      <td><span className="mr-1">{m.emoji}</span>{m.name}</td>
+                      <td>{tx.cat}</td>
+                      <td className="text-right font-bold text-red-500">−{fmt(tx.amount)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
