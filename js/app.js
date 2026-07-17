@@ -184,6 +184,21 @@
       verifySent: 'Đã gửi email xác thực — kiểm tra hộp thư.',
       verifyWait: 'Vui lòng đợi một lát rồi gửi lại.',
       profileSchemaHint: 'Cần chạy lại supabase-schema.sql để bật hồ sơ (tên, ảnh).',
+      // Debts (công nợ)
+      debts: 'Công nợ', addDebt: 'Thêm khoản nợ', debtDirection: 'Loại',
+      lend: 'Cho vay', borrow: 'Đi vay', walletLend: 'Cho vay', walletBorrow: 'Đi vay',
+      debtPerson: 'Tên người vay / cho vay', needPerson: 'Vui lòng nhập tên người.',
+      debtDue: 'Hạn trả', debtRemain: 'Còn lại', debtPayNote: 'Trả nợ',
+      theyOweYou: 'Người khác nợ bạn', youOweThem: 'Bạn nợ người khác',
+      lendOpen: 'Đang cho vay', borrowOpen: 'Đang nợ', noDebts: 'Không có khoản nợ nào đang mở.',
+      debtRecordPay: 'Ghi nhận trả', debtAdded: 'Đã ghi khoản nợ.', debtPaidSaved: 'Đã ghi nhận trả nợ.',
+      overpay: 'Số tiền vượt quá phần còn lại.', debtHistory: 'Đã tất toán',
+      confirmDeleteDebt: 'Xóa khoản nợ này? Mọi giao dịch chuyển tiền và ảnh bằng chứng kèm theo sẽ bị xóa, số dư ví hồi lại như trước.',
+      debtsSchemaHint: 'Cần chạy lại supabase-schema.sql để bật Công nợ.',
+      debtReminder: '{n} khoản nợ đã quá hạn — mở Công nợ để xem.',
+      overdue: 'Quá hạn', dueSoon: 'Sắp hạn', photosSelected: 'ảnh',
+      debtsHint: 'Cho vay / đi vay với người ngoài hộ. Tiền đi bằng chuyển khoản qua ví hệ thống nên KHÔNG lẫn vào thống kê thu chi; tài sản ròng vẫn phản ánh đúng.',
+      entDebt: 'khoản công nợ',
       grpAccount: 'Hộ gia đình & Tài khoản', grpMoney: 'Quản lý tiền', grpGeneral: 'Cài đặt chung', grpAdvanced: 'Nâng cao',
       chooseLanguage: 'Chọn ngôn ngữ', darkMode: 'Chế độ tối',
       members: 'Thành viên', roleOwner: 'Chủ hộ', roleAdmin: 'Quản trị viên', roleMember: 'Thành viên', you: 'bạn', unknownMember: '(chưa rõ email)',
@@ -410,6 +425,21 @@
       verifySent: 'Verification email sent — check your inbox.',
       verifyWait: 'Please wait a moment before resending.',
       profileSchemaHint: 'Re-run supabase-schema.sql to enable profiles (name, photo).',
+      // Debts (công nợ)
+      debts: 'Debts', addDebt: 'Add debt', debtDirection: 'Type',
+      lend: 'Lend', borrow: 'Borrow', walletLend: 'Lent out', walletBorrow: 'Borrowed',
+      debtPerson: 'Person', needPerson: 'Please enter a name.',
+      debtDue: 'Due date', debtRemain: 'Remaining', debtPayNote: 'Repayment',
+      theyOweYou: 'They owe you', youOweThem: 'You owe them',
+      lendOpen: 'Lent out', borrowOpen: 'Owed', noDebts: 'No open debts.',
+      debtRecordPay: 'Record payment', debtAdded: 'Debt recorded.', debtPaidSaved: 'Payment recorded.',
+      overpay: 'Amount exceeds the remaining balance.', debtHistory: 'Settled',
+      confirmDeleteDebt: 'Delete this debt? All linked transfers and photo evidence will be removed and wallet balances rolled back.',
+      debtsSchemaHint: 'Re-run supabase-schema.sql to enable Debts.',
+      debtReminder: '{n} debt(s) are overdue — open Debts to review.',
+      overdue: 'Overdue', dueSoon: 'Due soon', photosSelected: 'photo(s)',
+      debtsHint: 'Lending / borrowing with people outside the household. Money moves as transfers through system wallets, so income/expense statistics stay clean while net worth stays correct.',
+      entDebt: 'debt',
       grpAccount: 'Household & Account', grpMoney: 'Money', grpGeneral: 'General', grpAdvanced: 'Advanced',
       chooseLanguage: 'Choose language', darkMode: 'Dark mode',
       members: 'Members', roleOwner: 'Owner', roleAdmin: 'Admin', roleMember: 'Member', you: 'you', unknownMember: '(email unknown)',
@@ -1819,6 +1849,25 @@
       btn.innerHTML = oldHtml;
     }
   }
+  // Upload a FileList as evidence onto a saved transaction (used by the debt
+  // forms). Pushes into DATA.attachments; the caller re-renders afterwards.
+  async function uploadEvidenceFiles(txId, fileList) {
+    for (const f of Array.from(fileList || [])) {
+      try {
+        const out = await compressImage(f);
+        const path = await window.Store.uploadReceipt(txId, out.blob, 'jpg');
+        const att = await window.Store.insertAttachment({
+          transactionId: txId, storagePath: path, mime: 'image/jpeg',
+          sizeBytes: out.blob.size, width: out.width, height: out.height,
+        });
+        DATA.attachments = DATA.attachments || []; DATA.attachments.push(att);
+      } catch (err) {
+        const msg = (err && err.message === 'decode') ? t('photoUnsupported')
+          : (t('photoUploadFailed') + (err && err.message ? ': ' + err.message : ''));
+        toast(msg, 'error');
+      }
+    }
+  }
   // Upload all pending Add-page photos onto a freshly-saved transaction. Pushes into
   // DATA.attachments but does NOT render (the caller renders once afterwards).
   async function attachPendingTo(txId) {
@@ -1951,6 +2000,141 @@
       '<div class="wallet-strip">' + cards + '</div>';
   }
 
+  /* ============== Debts (Công nợ) ==============
+   * The debts table holds each loan's principal; every money movement is a
+   * TRANSFER transaction linked via tx.debtId through the system wallets
+   * (accounts.systemKind), so income/expense statistics stay clean. The
+   * remaining balance is always recomputed from the linked transactions. */
+  function debtWallet(direction) {
+    const kind = direction === 'borrow' ? 'debt_borrow' : 'debt_lend';
+    return (DATA.accounts || []).find((a) => a.systemKind === kind) || null;
+  }
+  function debtTxs(debtId) {
+    return DATA.transactions.filter((tx) => tx.debtId === debtId)
+      .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+  }
+  // A linked transfer is a REPAYMENT when it flows back out of (lend) / into
+  // (borrow) the system wallet; the opposite direction is the disbursement.
+  function debtIsPayment(debt, tx) {
+    const w = debtWallet(debt.direction);
+    if (!w) return false;
+    return debt.direction === 'lend' ? tx.accountId === w.id : tx.toAccountId === w.id;
+  }
+  function debtPaid(debt) {
+    return debtTxs(debt.id).reduce((a, tx) => a + (debtIsPayment(debt, tx) ? tx.amount : 0), 0);
+  }
+  function debtOutstanding(debt) { return Math.max(0, debt.amount - debtPaid(debt)); }
+  function openDebts() {
+    return (Array.isArray(DATA.debts) ? DATA.debts : []).filter((d) => debtOutstanding(d) > 0);
+  }
+  function dueBadgeHtml(debt) {
+    if (!debt.dueDate) return '';
+    const today = ymd(new Date());
+    if (debt.dueDate < today) return ' <span class="debt-badge overdue">' + t('overdue') + '</span>';
+    const in3 = ymd(new Date(Date.now() + 3 * 86400000));
+    if (debt.dueDate <= in3) return ' <span class="debt-badge due">' + t('dueSoon') + ' ' + esc(debt.dueDate.slice(5)) + '</span>';
+    return ' <span class="debt-badge">' + t('debtDue') + ' ' + esc(debt.dueDate) + '</span>';
+  }
+  // One overdue toast per day at most.
+  function maybeDebtReminder() {
+    try {
+      if (!Array.isArray(DATA.debts)) return;
+      const today = ymd(new Date());
+      if (localStorage.getItem('mm_debt_remind') === today) return;
+      const overdue = openDebts().filter((d) => d.dueDate && d.dueDate < today);
+      if (!overdue.length) return;
+      localStorage.setItem('mm_debt_remind', today);
+      toast('⏰ ' + t('debtReminder').replace('{n}', overdue.length), 'warn');
+    } catch (e) { /* never block startup */ }
+  }
+  // Real wallets a debt can pay from / into (system wallets excluded).
+  function debtWalletOpts(selId) {
+    return spendableAccounts().filter((a) => !a.systemKind)
+      .map((a) => '<option value="' + esc(a.id) + '"' + (a.id === selId ? ' selected' : '') + '>' +
+        esc(a.name) + ' · ' + fmtShort(accountBalance(a.id)) + '</option>').join('');
+  }
+  function debtRowHtml(d) {
+    const out = debtOutstanding(d);
+    const today = ymd(new Date());
+    const txs = debtTxs(d.id);
+    const mini = txs.map((tx) => {
+      const pay = debtIsPayment(d, tx);
+      return '<div class="debt-tx"><span>' + tx.date + '</span>' +
+        '<span class="debt-tx-amt">' + (pay ? '↩ −' : '→ ') + fmtShort(tx.amount) + '</span>' +
+        attachBadge(tx.id) + '</div>';
+    }).join('');
+    return '<div class="debt-row">' +
+      '<div class="debt-main">' +
+      '<div class="debt-person">' + esc(d.person) + (d.note ? ' <span class="debt-note">· ' + esc(d.note) + '</span>' : '') + '</div>' +
+      '<div class="debt-amts">' + t('debtRemain') + ' <b>' + fmtShort(out) + '</b> / ' + fmtShort(d.amount) + dueBadgeHtml(d) + '</div>' +
+      (mini ? '<div class="debt-txs">' + mini + '</div>' : '') +
+      '</div>' +
+      '<div class="debt-actions">' +
+      (out > 0 ? '<button class="ghost-btn sm" data-debtpay="' + esc(d.id) + '">' + t('debtRecordPay') + '</button>' : '') +
+      '<button class="icon-btn danger" data-debtdel="' + esc(d.id) + '" title="' + t('delete') + '">' + icon('trash') + '</button>' +
+      '</div>' +
+      (out > 0 ?
+        '<div class="debt-payform conn-form hidden" data-payform="' + esc(d.id) + '">' +
+        '<div class="conn-row"><label>' + t('amount') + '</label><input type="text" inputmode="numeric" class="js-money dp-amount" value="' + groupMoney(out) + '"/></div>' +
+        '<div class="conn-row"><label>' + t('wallet') + '</label><select class="dp-account">' + debtWalletOpts(defaultAccountId()) + '</select></div>' +
+        '<div class="conn-row"><label>' + t('date') + '</label><input type="date" class="dp-date" value="' + today + '" max="' + today + '"/></div>' +
+        '<input type="file" class="dp-files" accept="image/*" multiple style="display:none"/>' +
+        '<div class="debt-evi"><button type="button" class="ghost-btn sm dp-evi">📷 ' + t('addPhoto') + '</button><span class="hint dp-evicount"></span></div>' +
+        '<button class="primary-btn dp-save">' + icon('check') + ' ' + t('save') + '</button>' +
+        '</div>' : '') +
+      '</div>';
+  }
+  function debtsPageHtml() {
+    if (!Array.isArray(DATA.debts)) return '<div class="warn-hint">' + icon('alert') + ' ' + t('debtsSchemaHint') + '</div>';
+    const today = ymd(new Date());
+    const open = openDebts();
+    const lendOpen = open.filter((d) => d.direction === 'lend');
+    const borrowOpen = open.filter((d) => d.direction === 'borrow');
+    const settled = DATA.debts.filter((d) => debtOutstanding(d) <= 0);
+    const sumL = lendOpen.reduce((a, d) => a + debtOutstanding(d), 0);
+    const sumB = borrowOpen.reduce((a, d) => a + debtOutstanding(d), 0);
+    const byDue = (a, b) => String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
+    let h = '<div class="hint">' + t('debtsHint') + '</div>' +
+      '<div class="debt-sums">' +
+      '<div class="debt-sum lend"><span>' + t('lendOpen') + '</span><b>' + fmtShort(sumL) + '</b></div>' +
+      '<div class="debt-sum borrow"><span>' + t('borrowOpen') + '</span><b>' + fmtShort(sumB) + '</b></div></div>' +
+      '<button id="addDebtBtn" class="ghost-btn">' + icon('plus') + ' ' + t('addDebt') + '</button>' +
+      '<div id="debtForm" class="conn-form hidden">' +
+      '<div class="conn-row"><label>' + t('debtDirection') + '</label><select id="dDir"><option value="lend">' + t('lend') + '</option><option value="borrow">' + t('borrow') + '</option></select></div>' +
+      '<div class="conn-row"><label>' + t('debtPerson') + '</label><input id="dPerson" type="text" maxlength="60" autocomplete="off"/></div>' +
+      '<div class="conn-row"><label>' + t('amount') + '</label><input id="dAmount" type="text" inputmode="numeric" class="js-money"/></div>' +
+      '<div class="conn-row"><label>' + t('wallet') + '</label><select id="dAccount">' + debtWalletOpts(defaultAccountId()) + '</select></div>' +
+      '<div class="conn-row"><label>' + t('date') + '</label><input id="dDate" type="date" value="' + today + '" max="' + today + '"/></div>' +
+      '<div class="conn-row"><label>' + t('debtDue') + ' (' + t('optional') + ')</label><input id="dDue" type="date"/></div>' +
+      '<div class="conn-row"><label>' + t('note') + '</label><input id="dNote" type="text" autocomplete="off"/></div>' +
+      '<input type="file" id="dFiles" accept="image/*" multiple style="display:none"/>' +
+      '<div class="debt-evi"><button type="button" class="ghost-btn sm" id="dEviBtn">📷 ' + t('addPhoto') + '</button><span class="hint" id="dEviCount"></span></div>' +
+      '<button id="dSave" class="primary-btn">' + icon('check') + ' ' + t('save') + '</button>' +
+      '</div>';
+    if (lendOpen.length) h += '<div class="ios-grp-h">' + t('theyOweYou') + '</div>' + lendOpen.slice().sort(byDue).map(debtRowHtml).join('');
+    if (borrowOpen.length) h += '<div class="ios-grp-h">' + t('youOweThem') + '</div>' + borrowOpen.slice().sort(byDue).map(debtRowHtml).join('');
+    if (!open.length) h += '<div class="empty">' + t('noDebts') + '</div>';
+    if (settled.length) h += '<details class="debt-history"><summary>' + t('debtHistory') + ' (' + settled.length + ')</summary>' + settled.map(debtRowHtml).join('') + '</details>';
+    return h;
+  }
+  // Compact Overview card — only when there are open debts; taps into the page.
+  function debtsSectionHtml() {
+    if (!Array.isArray(DATA.debts)) return '';
+    const open = openDebts();
+    if (!open.length) return '';
+    const sumL = open.filter((d) => d.direction === 'lend').reduce((a, d) => a + debtOutstanding(d), 0);
+    const sumB = open.filter((d) => d.direction === 'borrow').reduce((a, d) => a + debtOutstanding(d), 0);
+    const parts = [];
+    if (sumL) parts.push(t('lendOpen') + ' <b>' + fmtShort(sumL) + '</b>');
+    if (sumB) parts.push(t('borrowOpen') + ' <b>' + fmtShort(sumB) + '</b>');
+    const od = open.some((d) => d.dueDate && d.dueDate < ymd(new Date()));
+    return '<button class="card debt-overview" id="debtsOverviewCard">' +
+      '<span class="debt-ov-title">' + icon('transfer') + ' ' + t('debts') +
+      (od ? ' <span class="debt-badge overdue">' + t('overdue') + '</span>' : '') + '</span>' +
+      '<span class="debt-ov-sums">' + parts.join(' · ') + '</span>' +
+      icon('right') + '</button>';
+  }
+
   /* ============== Daily quote ============== */
   // A short inspirational quote with its author, shown on Overview under the
   // hero. A curated built-in list rotates by day-of-year; when the household
@@ -2069,6 +2253,9 @@
 
       // Savings goals
       goalsSectionHtml() +
+
+      // Open debts summary (taps into Settings → Debts)
+      debtsSectionHtml() +
 
       // Weekly review
       '<div class="card week-card">' +
@@ -3072,6 +3259,7 @@
         iosRow({ ic: 'zap', tint: 'green', label: t('quickTemplates'), value: getTemplates().length ? String(getTemplates().length) : '', page: 'templates' }),
         iosRow({ ic: 'piggy', tint: 'pink', label: t('savingsGoals'), value: (DATA.goals && DATA.goals.length) ? String(DATA.goals.length) : '', page: 'goals' }),
         iosRow({ ic: 'refresh', tint: 'blue', label: t('recurring'), value: (DATA.recurring && DATA.recurring.length) ? String(DATA.recurring.length) : '', page: 'recurring' }),
+        iosRow({ ic: 'transfer', tint: 'indigo', label: t('debts'), value: (Array.isArray(DATA.debts) && openDebts().length) ? String(openDebts().length) : '', page: 'debts' }),
       ], t('grpMoney')) +
       iosGroup([
         iosRow({ ic: 'globe', tint: 'teal', label: t('language'), value: (lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'), action: 'lang' }),
@@ -3139,10 +3327,12 @@
   const ENTITY_LABEL = {
     transactions: 'entTransaction', budgets: 'entBudget', accounts: 'entAccount',
     goals: 'entGoal', recurring: 'entRecurring', household_members: 'entMember', households: 'entHousehold',
+    debts: 'entDebt',
   };
   const ENTITY_ICON = {
     transactions: 'file', budgets: 'target', accounts: 'card',
     goals: 'piggy', recurring: 'refresh', household_members: 'more', households: 'wallet',
+    debts: 'transfer',
   };
   function entityLabel(entity) { return t(ENTITY_LABEL[entity] || 'entTransaction'); }
   function entityIcon(entity) { return ENTITY_ICON[entity] || 'more'; }
@@ -3165,6 +3355,7 @@
       case 'recurring': return d.name || '';
       case 'household_members': return (d.email || '') + (d.role ? ' (' + roleLabel(d.role) + ')' : '');
       case 'households': return d.name || '';
+      case 'debts': return (d.person || '') + (d.amount != null ? ' · ' + fmtShort(d.amount) : '');
       default: return '';
     }
   }
@@ -3395,6 +3586,9 @@
         '<div class="conn-row" style="margin-top:16px"><label>' + t('joinHousehold') + '</label>' +
         '<input id="joinCode" type="text" placeholder="' + t('joinCodePh') + '"/></div>' +
         '<button id="joinHhBtn" class="ghost-btn">' + icon('check') + ' ' + t('join') + '</button>';
+    } else if (page === 'debts') {
+      title = t('debts');
+      body = debtsPageHtml();
     } else if (page === 'members') {
       title = t('members');
       const m = membersHtml();
@@ -4404,6 +4598,96 @@
         toast(t('verifySent'), 'success');
       } catch (err) { toast(friendlyAuthError(err.message), 'error'); }
     }));
+    // Debts (Công nợ): add form toggle + save, per-row repay forms, delete ----
+    const adb = document.getElementById('addDebtBtn');
+    if (adb) adb.addEventListener('click', () => {
+      const f = document.getElementById('debtForm');
+      if (!f) return;
+      f.classList.toggle('hidden');
+      const p = document.getElementById('dPerson');
+      if (p && !f.classList.contains('hidden')) p.focus();
+    });
+    const dEviBtn = document.getElementById('dEviBtn');
+    const dFiles = document.getElementById('dFiles');
+    if (dEviBtn && dFiles) {
+      dEviBtn.addEventListener('click', () => dFiles.click());
+      dFiles.addEventListener('change', () => {
+        const c = document.getElementById('dEviCount');
+        if (c) c.textContent = dFiles.files.length ? dFiles.files.length + ' ' + t('photosSelected') : '';
+      });
+    }
+    const dSave = document.getElementById('dSave');
+    if (dSave) dSave.addEventListener('click', () => busy(dSave, async () => {
+      const today = ymd(new Date());
+      const person = document.getElementById('dPerson').value.trim();
+      const amount = readMoney(document.getElementById('dAmount'));
+      const accountId = document.getElementById('dAccount').value;
+      const date = document.getElementById('dDate').value || today;
+      const dueDate = document.getElementById('dDue').value || null;
+      const note = document.getElementById('dNote').value.trim();
+      const direction = document.getElementById('dDir').value === 'borrow' ? 'borrow' : 'lend';
+      if (!person) { toast(t('needPerson'), 'warn'); return; }
+      if (!amount) { toast(t('needAmount'), 'warn'); return; }
+      if (!accountId) { toast(t('noWallets'), 'warn'); return; }
+      try {
+        const res = await window.Store.addDebt({
+          person: person, direction: direction, amount: amount, date: date,
+          dueDate: dueDate, note: note, accountId: accountId,
+          time: date === today ? new Date().toTimeString().slice(0, 5) : '',
+        });
+        await uploadEvidenceFiles(res.tx.id, dFiles ? dFiles.files : null);
+        await refreshData(true);
+        toast(t('debtAdded'), 'success');
+      } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
+    document.querySelectorAll('[data-debtpay]').forEach((b) => b.addEventListener('click', () => {
+      const row = b.closest('.debt-row');
+      const f = row && row.querySelector('.debt-payform');
+      if (f) f.classList.toggle('hidden');
+    }));
+    document.querySelectorAll('.debt-payform').forEach((f) => {
+      const files = f.querySelector('.dp-files');
+      const eviBtn = f.querySelector('.dp-evi');
+      if (eviBtn && files) {
+        eviBtn.addEventListener('click', () => files.click());
+        files.addEventListener('change', () => {
+          const c = f.querySelector('.dp-evicount');
+          if (c) c.textContent = files.files.length ? files.files.length + ' ' + t('photosSelected') : '';
+        });
+      }
+      const save = f.querySelector('.dp-save');
+      if (save) save.addEventListener('click', () => busy(save, async () => {
+        const debt = (Array.isArray(DATA.debts) ? DATA.debts : []).find((x) => x.id === f.dataset.payform);
+        if (!debt) return;
+        const today = ymd(new Date());
+        const amount = readMoney(f.querySelector('.dp-amount'));
+        const accountId = f.querySelector('.dp-account').value;
+        const date = f.querySelector('.dp-date').value || today;
+        const out = debtOutstanding(debt);
+        if (!amount) { toast(t('needAmount'), 'warn'); return; }
+        if (amount > out) { toast(t('overpay'), 'warn'); return; }
+        try {
+          const tx = await window.Store.addDebtPayment(debt, {
+            amount: amount, accountId: accountId, date: date,
+            time: date === today ? new Date().toTimeString().slice(0, 5) : '',
+            settle: amount >= out,
+          });
+          await uploadEvidenceFiles(tx.id, files ? files.files : null);
+          await refreshData(true);
+          toast(t('debtPaidSaved'), 'success');
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      }));
+    });
+    document.querySelectorAll('[data-debtdel]').forEach((b) => b.addEventListener('click', () => {
+      if (!confirm(t('confirmDeleteDebt'))) return;
+      busy(b, async () => {
+        try {
+          await window.Store.deleteDebt(b.dataset.debtdel);
+          await refreshData(true);
+          toast(t('deleted'), 'success');
+        } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+      });
+    }));
     // Settings: navigate into a sub-page (Activity lazy-loads its data on open)
     document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', async () => {
       settingsPage = b.dataset.page;
@@ -4750,7 +5034,17 @@
     runRecurring();
     maybeRefreshGoldPrices();
     maybeFetchDailyQuote();
+    maybeDebtReminder();
   }
+
+  // Overview debts card → jump straight into Settings → Debts.
+  document.addEventListener('click', (e) => {
+    const c = e.target && e.target.closest ? e.target.closest('#debtsOverviewCard') : null;
+    if (!c) return;
+    currentTab = 'settings';
+    settingsPage = 'debts';
+    render();
+  });
 
   /* ============== Gold price refresh ============== */
   // On-demand refresh (button on the Net worth card). The Edge Function updates the

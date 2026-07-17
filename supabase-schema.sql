@@ -871,6 +871,70 @@ $$;
 revoke all on function public.get_storage_usage() from public;
 grant execute on function public.get_storage_usage() to authenticated;
 
+-- =====================================================================
+--  Debts (Công nợ) — sổ theo dõi cho vay / đi vay với người ngoài hộ.
+--  Tiền KHÔNG đi qua thu/chi: mỗi lần giải ngân / trả là một transaction
+--  CHUYỂN KHOẢN gắn transactions.debt_id, chảy qua hai ví hệ thống
+--  (accounts.system_kind = 'debt_lend' tài sản / 'debt_borrow' nợ) nên
+--  thống kê thu/chi/tiết kiệm/chốt sổ sạch, còn tài sản ròng vẫn đúng.
+--  "Còn lại" luôn tính từ transactions phía client — không lưu số dư ở đây.
+--  An toàn chạy lại.
+-- =====================================================================
+-- Ví hệ thống của tính năng Công nợ (nhận diện không theo tên — user đổi tên được)
+alter table public.accounts add column if not exists system_kind text;
+
+create table if not exists public.debts (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  person       text not null,
+  direction    text not null check (direction in ('lend', 'borrow')),
+  amount       bigint not null check (amount > 0),
+  date         date not null default current_date,
+  due_date     date,
+  note         text,
+  status       text not null default 'open' check (status in ('open', 'settled')),
+  created_by   uuid references auth.users(id) on delete set null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_debts_hh on public.debts (household_id, status, due_date);
+
+alter table public.transactions add column if not exists debt_id uuid references public.debts(id) on delete set null;
+create index if not exists idx_tx_debt on public.transactions (debt_id) where debt_id is not null;
+
+alter table public.debts enable row level security;
+-- Mirror of the transactions policies: every member records debts; only the
+-- creator or an owner/admin may edit or delete them.
+drop policy if exists debts_select on public.debts;
+create policy debts_select on public.debts for select
+  using (household_id in (select public.user_households()));
+drop policy if exists debts_insert on public.debts;
+create policy debts_insert on public.debts for insert
+  with check (household_id in (select public.user_households()) and created_by = auth.uid());
+drop policy if exists debts_update on public.debts;
+create policy debts_update on public.debts for update
+  using (
+    household_id in (select public.user_households())
+    and (created_by = auth.uid() or public.is_household_admin(household_id))
+  )
+  with check (
+    household_id in (select public.user_households())
+    and (created_by = auth.uid() or public.is_household_admin(household_id))
+  );
+drop policy if exists debts_delete on public.debts;
+create policy debts_delete on public.debts for delete
+  using (
+    household_id in (select public.user_households())
+    and (created_by = auth.uid() or public.is_household_admin(household_id))
+  );
+
+do $$
+begin
+  begin alter publication supabase_realtime add table public.debts; exception when duplicate_object then null; end;
+end $$;
+drop trigger if exists trg_log_debts on public.debts;
+create trigger trg_log_debts after insert or update or delete on public.debts
+  for each row execute function public.log_activity();
+
 -- ---------------------------------------------------------------------
 -- LAST: make PostgREST (Supabase's API layer) reload its schema cache so
 -- the columns/tables added above are usable IMMEDIATELY. Without this,

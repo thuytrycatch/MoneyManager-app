@@ -366,7 +366,21 @@
       accountId: r.account_id || null,
       toAccountId: r.to_account_id || null,
       recurringId: r.recurring_id || null,
+      debtId: r.debt_id || null,
       createdAt: r.created_at,
+    };
+  }
+  function mapDebt(r) {
+    return {
+      id: r.id,
+      person: r.person,
+      direction: r.direction === 'borrow' ? 'borrow' : 'lend',
+      amount: Number(r.amount),
+      date: r.date,
+      dueDate: r.due_date || null,
+      note: r.note || '',
+      status: r.status || 'open',
+      createdBy: r.created_by || null,
     };
   }
   function mapRecurring(r) {
@@ -404,6 +418,7 @@
       sortOrder: a.sort_order || 0,
       isDefault: !!a.is_default,
       allowTx: a.allow_tx !== false,   // column absent (old schema) → true
+      systemKind: a.system_kind || null, // 'debt_lend' | 'debt_borrow' | null
     };
   }
   function mapGoal(g) {
@@ -509,6 +524,11 @@
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true })
       .then((r) => (r.error ? [] : (r.data || []).map(mapCategory))).catch(() => []);
+    // Debts (công nợ): null = table missing (schema not re-run → the app shows
+    // a hint), [] = table present but empty.
+    const debts = await sb.from('debts').select('*').eq('household_id', hid)
+      .order('date', { ascending: false })
+      .then((r) => (r.error ? null : (r.data || []).map(mapDebt))).catch(() => null);
     // Household-wide shared settings (AI keys…). null = no row/table yet (fall back
     // to this browser's localStorage) — distinct from {} (row exists but empty).
     const aiConfig = await sb.from('household_settings').select('settings').eq('household_id', hid).limit(1)
@@ -529,7 +549,7 @@
         return out;
       }).catch(() => ({}));
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, categories, goldPrices, aiConfig };
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, categories, debts, goldPrices, aiConfig };
     idbSet('data:' + hid, data).catch(() => {});
     return data;
   }
@@ -568,9 +588,10 @@
       to_account_id: tx.toAccountId || null,
       beneficiary_id: tx.beneficiaryId || null,
     };
-    // Only reference recurring_id when set — keeps inserts working even before the
-    // schema with that column has been re-run (a plain add never sends it).
+    // Only reference recurring_id/debt_id when set — keeps inserts working even
+    // before the schema with those columns has been re-run (a plain add never sends them).
     if (tx.recurringId) row.recurring_id = tx.recurringId;
+    if (tx.debtId) row.debt_id = tx.debtId;
     const { data, error } = await sb.from('transactions').insert(row).select().single();
     if (error) throw new Error(error.message);
     return mapRow(data);
@@ -1038,6 +1059,116 @@
     }));
   }
 
+  /* ---------------- Debts (công nợ) ----------------
+   * The debts table only holds the principal per person; every actual money
+   * movement is a TRANSFER transaction linked via transactions.debt_id,
+   * flowing through one of two lazily-created system wallets ("Cho vay" asset
+   * / "Đi vay" liability, both allow_tx=false). That keeps income/expense
+   * statistics clean while net worth stays correct. Outstanding amounts are
+   * always computed client-side from the linked transactions. */
+  async function ensureDebtWallet(direction) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const sb = getClient();
+    const kind = direction === 'borrow' ? 'debt_borrow' : 'debt_lend';
+    const { data: found, error: e1 } = await sb.from('accounts')
+      .select('*').eq('household_id', household.id).eq('system_kind', kind).limit(1);
+    if (e1) throw new Error(e1.message);
+    if (found && found.length) return mapAccount(found[0]);
+    const { data, error } = await sb.from('accounts').insert({
+      household_id: household.id,
+      name: kind === 'debt_lend' ? tr('walletLend', 'Cho vay') : tr('walletBorrow', 'Đi vay'),
+      type: 'savings',
+      class: kind === 'debt_lend' ? 'asset' : 'liability',
+      allow_tx: false,
+      system_kind: kind,
+      sort_order: 90,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return mapAccount(data);
+  }
+
+  // Create a debt + its disbursement transfer. Returns { debt, tx }.
+  async function addDebt(d) {
+    if (!household) throw new Error(tr('errNoHousehold', 'Chưa có hộ.'));
+    const user = await getUser();
+    const sb = getClient();
+    const { data: row, error } = await sb.from('debts').insert({
+      household_id: household.id,
+      person: d.person,
+      direction: d.direction,
+      amount: Math.round(d.amount),
+      date: d.date,
+      due_date: d.dueDate || null,
+      note: d.note || null,
+      created_by: user ? user.id : null,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    const debt = mapDebt(row);
+    const w = await ensureDebtWallet(debt.direction);
+    const lend = debt.direction === 'lend';
+    const tx = await addTransaction({
+      date: d.date,
+      time: d.time || '',
+      type: 'transfer',
+      category: 'Chuyển khoản',
+      note: (lend ? tr('walletLend', 'Cho vay') : tr('walletBorrow', 'Đi vay')) + ': ' + debt.person + (d.note ? ' — ' + d.note : ''),
+      amount: debt.amount,
+      accountId: lend ? d.accountId : w.id,
+      toAccountId: lend ? w.id : d.accountId,
+      debtId: debt.id,
+      rawInput: '',
+    });
+    return { debt: debt, tx: tx };
+  }
+
+  // One (possibly partial) repayment: the reverse transfer, linked to the debt.
+  // p.settle marks the debt settled (the caller computes paid + amount >= principal).
+  async function addDebtPayment(debt, p) {
+    const w = await ensureDebtWallet(debt.direction);
+    const lend = debt.direction === 'lend';
+    const tx = await addTransaction({
+      date: p.date,
+      time: p.time || '',
+      type: 'transfer',
+      category: 'Chuyển khoản',
+      note: tr('debtPayNote', 'Trả nợ') + ': ' + debt.person,
+      amount: Math.round(p.amount),
+      accountId: lend ? w.id : p.accountId,
+      toAccountId: lend ? p.accountId : w.id,
+      debtId: debt.id,
+      rawInput: '',
+    });
+    if (p.settle) {
+      // Status is a label only (lists are computed from transactions) — never
+      // fail the payment because the label update was rejected.
+      try { await updateDebt(debt.id, { status: 'settled' }); } catch (e) { /* ignore */ }
+    }
+    return tx;
+  }
+
+  async function updateDebt(id, fields) {
+    const sb = getClient();
+    const patch = {};
+    if ('person' in fields) patch.person = fields.person;
+    if ('dueDate' in fields) patch.due_date = fields.dueDate || null;
+    if ('note' in fields) patch.note = fields.note || null;
+    if ('status' in fields) patch.status = fields.status;
+    if (!Object.keys(patch).length) return;
+    const { error } = await sb.from('debts').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
+  // Delete a debt AND its linked transfers (deleteTransaction also cleans up
+  // any evidence files on Storage) so wallet balances roll back entirely.
+  async function deleteDebt(id) {
+    const sb = getClient();
+    const { data, error } = await sb.from('transactions').select('id').eq('debt_id', id);
+    if (error) throw new Error(error.message);
+    for (const r of (data || [])) await deleteTransaction(r.id);
+    const { error: e2 } = await sb.from('debts').delete().eq('id', id);
+    if (e2) throw new Error(e2.message);
+  }
+
   /* ---------------- Realtime sync ---------------- */
   let channel = null;
   function subscribeChanges(onChange) {
@@ -1054,6 +1185,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_attachments', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_reports', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: 'household_id=eq.' + hid }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'debts', filter: 'household_id=eq.' + hid }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'household_settings', filter: 'household_id=eq.' + hid }, onChange)
       // member joins/leaves/removals update the member list live, and let a
       // removed device notice its own eviction (refreshData handles it).
@@ -1133,6 +1265,10 @@
     updateRecurring,
     deleteRecurring,
     upsertMonthlyReport,
+    addDebt,
+    addDebtPayment,
+    updateDebt,
+    deleteDebt,
     saveHouseholdSettings,
     sendTestMonthlyEmail,
     getStorageUsage,

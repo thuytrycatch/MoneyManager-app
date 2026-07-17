@@ -564,6 +564,35 @@ button.btn-busy::before {
 [data-theme="dark"] .verify-badge.warn { color: #fbbf24; }
 .member-sub { font-size: 11.5px; color: var(--text-secondary); }
 
+/* ---------- Debts (Công nợ) ---------- */
+.debt-sums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.debt-sum { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px; }
+.debt-sum span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-secondary); }
+.debt-sum.lend b { color: var(--income); font-size: 17px; }
+.debt-sum.borrow b { color: var(--expense); font-size: 17px; }
+.debt-row { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); margin-bottom: 8px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.debt-main { flex: 1; min-width: 0; }
+.debt-person { font-weight: 700; }
+.debt-note { color: var(--text-secondary); font-weight: 500; font-size: 12.5px; }
+.debt-amts { font-size: 13px; margin-top: 2px; }
+.debt-actions { display: flex; gap: 6px; align-items: center; }
+.debt-txs { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.debt-tx { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.debt-badge { display: inline-flex; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: var(--bg-secondary); color: var(--text-secondary); vertical-align: 1px; }
+.debt-badge.due { background: rgba(245, 158, 11, .15); color: #b45309; }
+.debt-badge.overdue { background: rgba(239, 68, 68, .12); color: var(--expense); }
+[data-theme="dark"] .debt-badge.due { color: #fbbf24; }
+.debt-payform { flex-basis: 100%; border-top: 1px dashed var(--border); padding-top: 10px; margin: 2px 0 0; }
+.debt-evi { display: flex; align-items: center; gap: 8px; }
+.debt-history { margin-top: 14px; }
+.debt-history summary { cursor: pointer; font-weight: 700; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+.debt-history .debt-row { opacity: .72; }
+.debt-overview { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 14px; text-align: left; cursor: pointer; font: inherit; color: var(--text-primary); }
+.debt-ov-title { font-weight: 700; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.debt-ov-title .ic { width: 16px; height: 16px; color: var(--accent); }
+.debt-ov-sums { flex: 1; min-width: 0; text-align: right; font-size: 13px; color: var(--text-secondary); }
+.debt-overview > .ic:last-child { width: 16px; height: 16px; color: var(--text-secondary); flex-shrink: 0; }
+
 /* ---------- Daily quote ---------- */
 .quote-card { margin: 12px 0 2px; padding: 12px 16px; background: var(--bg-elev); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); }
 .quote-text { font-size: 13.5px; font-style: italic; line-height: 1.55; color: var(--text-primary); }
