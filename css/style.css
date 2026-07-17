@@ -594,9 +594,10 @@ button.btn-busy::before {
 .debt-overview > .ic:last-child { width: 16px; height: 16px; color: var(--text-secondary); flex-shrink: 0; }
 
 /* ---------- Daily quote ---------- */
-.quote-card { margin: 12px 0 2px; padding: 12px 16px; background: var(--bg-elev); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); }
-.quote-text { font-size: 13.5px; font-style: italic; line-height: 1.55; color: var(--text-primary); }
-.quote-author { margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--text-secondary); text-align: right; }
+/* Slim centered line at the very top of Overview: quote + author flow as one
+   inline text, so wide screens never pull them apart. */
+.quote-card { margin: 2px 0 12px; padding: 7px 14px; text-align: center; font-size: 12.5px; font-style: italic; line-height: 1.5; color: var(--text-secondary); background: color-mix(in srgb, var(--accent) 7%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 14px; }
+.quote-author { font-style: normal; font-weight: 700; font-size: 11.5px; color: var(--accent); white-space: nowrap; }
 
 /* ---------- Member list ---------- */
 .member-list { display: flex; flex-direction: column; gap: 8px; }

@@ -2178,9 +2178,9 @@
   }
   function quoteCardHtml() {
     const q = currentQuote();
-    return '<div class="quote-card">' +
-      '<div class="quote-text">“' + esc(q.text) + '”</div>' +
-      '<div class="quote-author">— ' + esc(q.author) + '</div></div>';
+    // One flowing inline line (author right after the text) so wide screens
+    // never split the quote and the attribution apart.
+    return '<div class="quote-card">“' + esc(q.text) + '” <span class="quote-author">— ' + esc(q.author) + '</span></div>';
   }
   // Rotating topics keep the AI picks varied across the week.
   const QUOTE_TOPICS = ['lạc quan và niềm vui sống', 'tiết kiệm và quản lý tiền bạc', 'gia đình và yêu thương', 'kiên trì và nỗ lực', 'hạnh phúc giản dị', 'ước mơ và mục tiêu', 'sức khỏe và cân bằng cuộc sống'];
@@ -2227,6 +2227,9 @@
     const recent = DATA.transactions.slice().sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || ''))).slice(0, 5);
 
     return (
+      // Daily inspirational quote — a slim line at the very top of Overview
+      quoteCardHtml() +
+
       '<div class="hero">' +
       '<div class="hero-label">' + icon('wallet') + ' ' + t('balanceAvail') +
       '<button id="eyeAvail" class="eye-btn" title="' + (hideBalAvail ? t('showBalance') : t('hideBalance')) + '">' + icon(hideBalAvail ? 'eyeOff' : 'eye') + '</button></div>' +
@@ -2237,9 +2240,6 @@
       '<div class="hero-chip"><span>' + icon('down') + ' ' + t('thisMonth') + ' ' + t('income').toLowerCase() + '</span><b>' + fmtShort(mt.income) + '</b></div>' +
       '<div class="hero-chip"><span>' + icon('up') + ' ' + t('thisMonth') + ' ' + t('expense').toLowerCase() + '</span><b>' + fmtShort(mt.expense) + '</b></div>' +
       '</div></div>' +
-
-      // Daily inspirational quote (rotates every day; AI-refreshed when a key is set)
-      quoteCardHtml() +
 
       '<div class="tiles">' +
       statTile(t('remaining') + ' ' + t('budget').toLowerCase(), remain, remain >= 0 ? 'income' : 'expense', 'target') +
