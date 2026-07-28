@@ -7,8 +7,9 @@
 
   /* ============== Settings (localStorage) ============== */
   window.CONFIG = window.CONFIG || {
-    SUPABASE_URL: '', SUPABASE_ANON_KEY: '', ANTHROPIC_API_KEY: '', GEMINI_API_KEY: '',
+    SUPABASE_URL: '', SUPABASE_ANON_KEY: '', ANTHROPIC_API_KEY: '', GEMINI_API_KEY: '', APP_TITLE: '',
   };
+  const DEFAULT_DOC_TITLE = document.title;
   const SETTINGS_KEY = 'mm_settings';
   function loadSettings() {
     try {
@@ -29,11 +30,12 @@
   // Whitelisted merge into window.CONFIG: the DB row must never override the
   // Supabase connection itself (bootstrap credentials stay on this device).
   // An existing row is authoritative — an empty value means "key cleared".
-  const DB_CONFIG_KEYS = ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY'];
+  const DB_CONFIG_KEYS = ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'APP_TITLE'];
   function applyDbConfig() {
     const s = DATA && DATA.aiConfig;
     if (!s) return; // no row / table yet → keep this browser's local values
     DB_CONFIG_KEYS.forEach((k) => { window.CONFIG[k] = String(s[k] || '').trim(); });
+    document.title = window.CONFIG.APP_TITLE || DEFAULT_DOC_TITLE;
   }
 
   /* ============== SVG icons (Lucide-style) ============== */
@@ -168,6 +170,7 @@
       household: 'Hộ gia đình', householdName: 'Tên hộ', inviteCode: 'Mã mời (chia sẻ để người thân cùng dùng)',
       copyCode: 'Sao chép mã', copied: 'Đã sao chép', joinHousehold: 'Tham gia hộ khác', joinCodePh: 'Dán mã mời vào đây',
       join: 'Tham gia', joined: 'Đã tham gia hộ', renameOk: 'Đã đổi tên hộ', account: 'Tài khoản',
+      appTitleLbl: 'Tên ứng dụng', appTitleHint: 'Đổi tên hiển thị của ứng dụng (thanh trên cùng, tiêu đề trang) cho cả hộ. Để trống để dùng tên mặc định "Sổ Thu Chi".',
       switchHousehold: 'Chọn hộ đang xem',
       myHouseholds: 'Hộ của tôi', currentHh: 'Đang xem', hhSwitched: 'Đã chuyển hộ',
       createHousehold: 'Tạo hộ mới', hhCreated: 'Đã tạo hộ mới', errEnterHhName: 'Vui lòng nhập tên hộ.',
@@ -292,6 +295,7 @@
       goldValueNow: 'Giá trị hiện tại',
       goldNoPrice: 'Chưa có giá cho loại vàng này — bấm "Cập nhật giá vàng" hoặc chọn Tự nhập giá.',
       goldBuyPrice: 'Giá mua lúc đầu /chỉ', goldBuyDate: 'Ngày mua',
+      goldMarketShort: 'Giá TT', goldBuyShort: 'Giá mua',
       unrealizedPnl: 'Lãi/lỗ tạm tính', goldPnlTotal: 'Lãi/lỗ vàng (tạm tính)',
       goldBuyHint: 'Giá thực trả cho 1 chỉ khi mua (đã gồm chênh lệch mua–bán); mua nhiều đợt thì nhập giá trung bình.',
       goldSpreadHint: 'Định giá dùng giá tiệm MUA VÀO, còn lúc mua bạn trả giá BÁN RA — nên ngay sau khi mua thường lỗ nhẹ do chênh lệch, là bình thường.',
@@ -410,6 +414,7 @@
       household: 'Household', householdName: 'Household name', inviteCode: 'Invite code (share with family)',
       copyCode: 'Copy code', copied: 'Copied', joinHousehold: 'Join another household', joinCodePh: 'Paste invite code here',
       join: 'Join', joined: 'Joined household', renameOk: 'Household renamed', account: 'Account',
+      appTitleLbl: 'App title', appTitleHint: 'Change the app\'s displayed name (top bar, page title) for the whole household. Leave blank to use the default "Sổ Thu Chi".',
       switchHousehold: 'Active household',
       myHouseholds: 'My households', currentHh: 'Current', hhSwitched: 'Switched household',
       createHousehold: 'Create household', hhCreated: 'Household created', errEnterHhName: 'Please enter a household name.',
@@ -534,6 +539,7 @@
       goldValueNow: 'Current value',
       goldNoPrice: 'No price for this kind yet — tap "Update gold price" or pick Custom price.',
       goldBuyPrice: 'Avg. buy price /chỉ', goldBuyDate: 'Purchase date',
+      goldMarketShort: 'Mkt', goldBuyShort: 'Buy',
       unrealizedPnl: 'Unrealized P&L', goldPnlTotal: 'Gold P&L (unrealized)',
       goldBuyHint: 'What you actually paid per chỉ (includes the buy/sell spread); for several purchases enter the average.',
       goldSpreadHint: 'Valuation uses the dealer BUY-BACK price while you bought at the SELL price, so a small loss right after buying is normal (the spread).',
@@ -592,7 +598,10 @@
     },
   };
   let lang = localStorage.getItem('lang') || 'vi';
-  function t(k) { return (I18N[lang] && I18N[lang][k]) || k; }
+  function t(k) {
+    if (k === 'appName' && window.CONFIG.APP_TITLE) return window.CONFIG.APP_TITLE;
+    return (I18N[lang] && I18N[lang][k]) || k;
+  }
   window.t = t; // expose so store.js / charts.js can localize their messages
 
   // Category display labels per language (the underlying value stays canonical Vietnamese).
@@ -2631,7 +2640,8 @@
         const per = goldBuyPerChi(a);
         const bits = [fmtChi(a.goldWeightChi) + ' ' + t('unitChi'), goldKindLabel(a.goldKind)];
         if ((a.goldFactor || 1) !== 1) bits.push(Math.round((a.goldFactor || 1) * 100) + '%');
-        if (per) bits.push('~' + fmtShort(per) + '/' + t('unitChi'));
+        if (per) bits.push(t('goldMarketShort') + ' ' + fmtShort(per) + '/' + t('unitChi'));
+        if (a.goldBuyPerChi) bits.push(t('goldBuyShort') + ' ' + fmtShort(a.goldBuyPerChi) + '/' + t('unitChi'));
         let pnlBit = '';
         if (a.goldBuyPerChi) {
           const p = goldPnl(a);
@@ -3621,7 +3631,17 @@
         : '<div class="conn-form"><div class="conn-row"><label>' + t('householdName') + '</label>' +
           '<input type="text" value="' + esc(hh.name) + '" readonly/></div></div>' +
           '<div class="hint">' + t('ownerOnlyRename') + '</div>';
-      body = myHhBlock + renameBlock +
+      // App display name is a shared branding setting (like the AI keys): owner/admin
+      // edit it, members see it read-only. Stored in household_settings, not a DB column.
+      const appTitleBlock = '<div class="ios-grp-h" style="margin-top:18px">' + t('appTitleLbl') + '</div>' +
+        (canManageConfig()
+          ? '<div class="conn-form"><div class="conn-row"><label>' + t('appTitleLbl') + '</label>' +
+            '<input id="appTitleInp" type="text" value="' + esc(C.APP_TITLE || '') + '" placeholder="Sổ Thu Chi" maxlength="40" autocomplete="off"/></div></div>' +
+            '<button id="saveAppTitleBtn" class="ghost-btn">' + icon('check') + ' ' + t('save') + '</button>'
+          : '<div class="conn-form"><div class="conn-row"><label>' + t('appTitleLbl') + '</label>' +
+            '<input type="text" value="' + esc(C.APP_TITLE || '') + '" readonly/></div></div>') +
+        '<div class="hint">' + t('appTitleHint') + '</div>';
+      body = myHhBlock + renameBlock + appTitleBlock +
         '<div class="conn-row" style="margin-top:16px"><label>' + t('inviteCode') + '</label>' +
         '<input id="inviteCodeBox" type="text" value="' + esc(hh.id) + '" readonly/></div>' +
         '<button id="copyCodeBtn" class="ghost-btn">' + icon('file') + ' ' + t('copyCode') + '</button>' +
@@ -4470,6 +4490,20 @@
       if (!name) return;
       try { await window.Store.renameHousehold(name); if (DATA.household) DATA.household.name = name; toast(t('renameOk'), 'success'); render(); }
       catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
+    }));
+    // Save app title: same household_settings + localStorage-fallback pattern as the AI keys.
+    const sat = document.getElementById('saveAppTitleBtn');
+    if (sat) sat.addEventListener('click', () => busy(sat, async () => {
+      const patch = { APP_TITLE: document.getElementById('appTitleInp').value.trim() };
+      try {
+        DATA.aiConfig = await window.Store.saveHouseholdSettings(patch);
+        applyDbConfig();
+        toast(t('aiSavedShared'), 'success');
+      } catch (err) {
+        saveSettings(patch);
+        toast(t('aiSavedLocal'), 'warn');
+      }
+      render();
     }));
     // Copy invite code
     const cc = document.getElementById('copyCodeBtn');
