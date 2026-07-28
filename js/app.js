@@ -1924,7 +1924,9 @@
     if (bal == null || !tx.accountId) return '';
     const acc = accountById(tx.accountId);
     const name = acc ? acc.name : t('unassignedWallet');
-    return '<div class="wh-after">' + esc(name) + ' · ' + t('balanceAfter') + ' ' + fmtShort(bal) + '</div>';
+    // .tx-foot: a sibling of .tx-right, NOT nested inside it — keeps this on its own
+    // full-width line under the row instead of adding height to the amount column.
+    return '<div class="tx-foot wh-after">' + esc(name) + ' · ' + t('balanceAfter') + ' ' + fmtShort(bal) + '</div>';
   }
   // When an old transaction was entered well after the fact (backfilled), show WHEN it
   // was actually recorded alongside the date it happened — lets you tell "happened on"
@@ -1941,7 +1943,7 @@
         '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + t('balanceAdjustLabel') + '</span></div>' +
         '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + txEnteredLateHtml(tx) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
-        txBalanceAfterHtml(tx) + txActions(tx) + '</div></div>';
+        txActions(tx) + '</div>' + txBalanceAfterHtml(tx) + '</div>';
     }
     if (tx.type === 'transfer') {
       const from = accountById(tx.accountId);
@@ -1953,7 +1955,7 @@
         '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || t('transfer')) + '</span>' + attachBadge(tx.id) + '</div>' +
         '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + txEnteredLateHtml(tx) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '</div>' +
-        txBalanceAfterHtml(tx) + txActions(tx) + '</div></div>';
+        txActions(tx) + '</div>' + txBalanceAfterHtml(tx) + '</div>';
     }
     const sign = tx.type === 'income' ? '+' : '−';
     return '<div class="tx-row" data-id="' + tx.id + '">' +
@@ -1962,7 +1964,7 @@
       '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) +
         (tx.beneficiaryId ? ' · ' + t('spentForShort') + ' ' + esc(memberName(tx.beneficiaryId)) : '') + txEnteredLateHtml(tx) + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
-      txBalanceAfterHtml(tx) + txActions(tx) + '</div></div>';
+      txActions(tx) + '</div>' + txBalanceAfterHtml(tx) + '</div>';
   }
   // Fraction of the anchored month already elapsed (1 for past months — they're fully done).
   function monthElapsedFraction(anchor) {

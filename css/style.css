@@ -166,7 +166,7 @@ button.btn-busy::before {
 
 /* ---------- Transactions ---------- */
 .tx-list { display: flex; flex-direction: column; gap: 8px; }
-.tx-row { display: flex; align-items: center; gap: 12px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px; box-shadow: var(--shadow); }
+.tx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px; box-shadow: var(--shadow); }
 .tx-ic { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(99, 102, 241, .1); color: var(--accent); }
 .tx-ic .ic { width: 20px; height: 20px; }
 .tx-ic.income { background: rgba(16, 185, 129, .12); color: var(--income); }
@@ -321,6 +321,10 @@ button.btn-busy::before {
 .wh-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; min-height: 0; }
 .wh-row.wh-edit { cursor: pointer; }
 .wh-after { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+/* Balance-after on the main transaction list: a full-width footer line under the
+   row (not stacked inside .tx-right) so it doesn't add extra height to the amount
+   column — most noticeable on phones where every row is already tight on space. */
+.tx-foot { flex-basis: 100%; margin-top: 2px; padding-left: 52px; overflow: hidden; text-overflow: ellipsis; }
 
 /* Privacy eye toggle (hero) */
 .eye-btn { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; width: 30px; height: 30px; padding: 0; background: rgba(255,255,255,.18); border: none; border-radius: 9px; color: #fff; cursor: pointer; }
@@ -839,6 +843,7 @@ main { padding: 4px 12px 92px; }
   }
   .tx-row .tx-right { flex-direction: row; align-items: center; justify-content: flex-end; gap: 10px; }
   .tx-row .tx-amount { font-size: 16px; }
+  .tx-row .tx-foot { grid-column: 1 / -1; }
 }
 
 /* ---------- Wide desktop ---------- */
