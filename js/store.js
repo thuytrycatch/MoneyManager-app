@@ -493,7 +493,11 @@
       sb.from('transactions').select('*')
         .eq('household_id', hid)
         .order('date', { ascending: false })
-        .order('time', { ascending: false, nullsFirst: false }),
+        .order('time', { ascending: false, nullsFirst: false })
+        // Tie-break khi trùng ngày+giờ (hay gặp khi nhập nhiều giao dịch cũ cùng
+        // lúc, không có giờ cụ thể): dùng created_at để thứ tự luôn ổn định và
+        // đúng thứ tự nhập, thay vì phụ thuộc thứ tự trả về ngẫu nhiên của DB.
+        .order('created_at', { ascending: false }),
       sb.from('budgets').select('category,amount').eq('household_id', hid),
       sb.from('accounts').select('*').eq('household_id', hid)
         .order('sort_order', { ascending: true })

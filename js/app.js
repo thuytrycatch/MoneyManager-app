@@ -133,6 +133,7 @@
       adjustBalance: 'Đổi số dư', realBalance: 'Số dư thực tế', balanceAdjustLabel: 'Điều chỉnh số dư',
       balanceAdjusted: 'Đã cập nhật số dư', adjustHint: 'App sẽ ghi một khoản điều chỉnh cho phần chênh lệch.',
       walletHistory: 'Lịch sử ví', balanceAfter: 'Số dư sau', noWalletHistory: 'Ví chưa có giao dịch nào.',
+      enteredAt: 'Nhập lúc',
       showBalance: 'Hiện số dư', hideBalance: 'Ẩn số dư',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
       budgetNotSet: 'Chưa thiết lập ngân sách.', noExpenseData: 'Chưa có dữ liệu chi tiêu.',
@@ -374,6 +375,7 @@
       adjustBalance: 'Adjust balance', realBalance: 'Actual balance', balanceAdjustLabel: 'Balance adjustment',
       balanceAdjusted: 'Balance updated', adjustHint: 'The app records an adjustment for the difference.',
       walletHistory: 'Wallet history', balanceAfter: 'Balance after', noWalletHistory: 'No transactions in this wallet yet.',
+      enteredAt: 'Entered',
       showBalance: 'Show balances', hideBalance: 'Hide balances',
       allCats: 'All categories', allTypes: 'Income & expense',
       budgetNotSet: 'No budget set yet.', noExpenseData: 'No expense data yet.',
@@ -1897,15 +1899,49 @@
     return '<div class="tx-actions">' +
       '<button class="icon-btn" data-act="del" data-id="' + tx.id + '">' + icon('trash') + '</button></div>';
   }
+  // Live balance-after lookup for txBalanceAfterHtml(): account_id -> Map(txId ->
+  // balanceAfter), built lazily (once per wallet actually shown, not all of them) and
+  // reset every render() so it never goes stale. Reuses walletHistory()'s exact ledger
+  // math — no separate stored column, so it can never drift from reality.
+  let balanceAfterByAccount = {};
+  function resetBalanceAfterCache() { balanceAfterByAccount = {}; }
+  function txBalanceAfter(tx) {
+    if (!tx.accountId) return null;
+    let m = balanceAfterByAccount[tx.accountId];
+    if (!m) {
+      m = new Map();
+      walletHistory(tx.accountId).forEach((h) => m.set(h.tx.id, h.balanceAfter));
+      balanceAfterByAccount[tx.accountId] = m;
+    }
+    return m.has(tx.id) ? m.get(tx.id) : null;
+  }
+  // Small "<wallet> · Số dư sau: X" line under the amount — the wallet's balance right
+  // after this transaction (tx.accountId — the "ví rút"), computed live from the same
+  // ledger math as the "Lịch sử ví" drawer (walletHistory()) — always matches reality,
+  // updates instantly if an earlier transaction is edited, no DB column to keep in sync.
+  function txBalanceAfterHtml(tx) {
+    const bal = txBalanceAfter(tx);
+    if (bal == null || !tx.accountId) return '';
+    const acc = accountById(tx.accountId);
+    const name = acc ? acc.name : t('unassignedWallet');
+    return '<div class="wh-after">' + esc(name) + ' · ' + t('balanceAfter') + ' ' + fmtShort(bal) + '</div>';
+  }
+  // When an old transaction was entered well after the fact (backfilled), show WHEN it
+  // was actually recorded alongside the date it happened — lets you tell "happened on"
+  // apart from "logged on" while tracing/reconciling a batch of old entries.
+  function txEnteredLateHtml(tx) {
+    if (!tx.createdAt || tx.createdAt.slice(0, 10) === tx.date) return '';
+    return ' · ' + t('enteredAt') + ' ' + fmtDateTime(tx.createdAt);
+  }
   function txRow(tx) {
     if (isAdjust(tx)) {
       const sign = tx.type === 'income' ? '+' : '−';
       return '<div class="tx-row" data-id="' + tx.id + '">' +
         '<div class="tx-ic ' + tx.type + '">' + icon('edit') + '</div>' +
         '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + t('balanceAdjustLabel') + '</span></div>' +
-        '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + '</div></div>' +
+        '<div class="tx-meta">' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + txEnteredLateHtml(tx) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
-        txActions(tx) + '</div></div>';
+        txBalanceAfterHtml(tx) + txActions(tx) + '</div></div>';
     }
     if (tx.type === 'transfer') {
       const from = accountById(tx.accountId);
@@ -1915,18 +1951,18 @@
       return '<div class="tx-row" data-id="' + tx.id + '">' +
         '<div class="tx-ic transfer">' + icon('transfer') + '</div>' +
         '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || t('transfer')) + '</span>' + attachBadge(tx.id) + '</div>' +
-        '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + '</div></div>' +
+        '<div class="tx-meta">' + esc(fromN) + ' → ' + esc(toN) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) + txEnteredLateHtml(tx) + '</div></div>' +
         '<div class="tx-right"><div class="tx-amount transfer">' + fmtShort(tx.amount) + '</div>' +
-        txActions(tx) + '</div></div>';
+        txBalanceAfterHtml(tx) + txActions(tx) + '</div></div>';
     }
     const sign = tx.type === 'income' ? '+' : '−';
     return '<div class="tx-row" data-id="' + tx.id + '">' +
       '<div class="tx-ic ' + tx.type + '">' + catIcon(tx.category) + '</div>' +
       '<div class="tx-main"><div class="tx-note"><span class="tx-note-txt">' + esc(tx.note || tx.rawInput) + '</span>' + attachBadge(tx.id) + '</div>' +
       '<div class="tx-meta">' + esc(catLabel(tx.category)) + ' · ' + tx.date + (tx.time ? ' ' + tx.time : '') + ' · ' + memberTag(tx.userId) +
-        (tx.beneficiaryId ? ' · ' + t('spentForShort') + ' ' + esc(memberName(tx.beneficiaryId)) : '') + '</div></div>' +
+        (tx.beneficiaryId ? ' · ' + t('spentForShort') + ' ' + esc(memberName(tx.beneficiaryId)) : '') + txEnteredLateHtml(tx) + '</div></div>' +
       '<div class="tx-right"><div class="tx-amount ' + tx.type + '">' + sign + fmtShort(tx.amount) + '</div>' +
-      txActions(tx) + '</div></div>';
+      txBalanceAfterHtml(tx) + txActions(tx) + '</div></div>';
   }
   // Fraction of the anchored month already elapsed (1 for past months — they're fully done).
   function monthElapsedFraction(anchor) {
@@ -2011,7 +2047,7 @@
   }
   function debtTxs(debtId) {
     return DATA.transactions.filter((tx) => tx.debtId === debtId)
-      .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+      .sort((a, b) => (a.date + (a.time || '') + (a.createdAt || '')).localeCompare(b.date + (b.time || '') + (b.createdAt || '')));
   }
   // A linked transfer is a REPAYMENT when it flows back out of (lend) / into
   // (borrow) the system wallet; the opposite direction is the disbursement.
@@ -2224,7 +2260,9 @@
     for (let i = 6; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); spark.push(totals(DATA.transactions.filter((x) => x.date === ymd(d) && x.type === 'expense')).expense); }
     setTimeout(() => window.Charts.sparkline('weekSpark', spark, getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444'), 0);
 
-    const recent = DATA.transactions.slice().sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || ''))).slice(0, 5);
+    const recent = DATA.transactions.slice()
+      .sort((a, b) => (b.date + (b.time || '') + (b.createdAt || '')).localeCompare(a.date + (a.time || '') + (a.createdAt || '')))
+      .slice(0, 5);
 
     return (
       // Daily inspirational quote — a slim line at the very top of Overview
@@ -3004,7 +3042,9 @@
     let list = DATA.transactions.filter((tx) => tx.date.slice(0, 7) === filterMonth);
     if (filterCategory) list = list.filter((tx) => tx.category === filterCategory);
     if (filterType) list = list.filter((tx) => tx.type === filterType);
-    list.sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
+    // Tie-break on createdAt (entry order) when date+time match — matters most when
+    // several old transactions are backfilled at once with no specific time set.
+    list.sort((a, b) => (b.date + (b.time || '') + (b.createdAt || '')).localeCompare(a.date + (a.time || '') + (a.createdAt || '')));
 
     // group by date
     const groups = {};
@@ -3980,6 +4020,7 @@
   /* ============== Render + wire ============== */
   function render() {
     rebuildAttachIndex();
+    resetBalanceAfterCache();
     if (currentTab !== 'add') clearPendingAddFiles(); // don't carry chosen photos to other tabs
     if (currentTab !== 'settings') settingsPage = null; // leaving Settings resets the sub-page stack
     document.getElementById('appName').textContent = t('appName');
