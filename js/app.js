@@ -91,6 +91,7 @@
     x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     gold: '<path d="M9 4h6l2 5H7l2-5z"/><path d="M4.5 13h6l2 5h-10l2-5z"/><path d="M13.5 13h6l2 5h-10l2-5z"/>',
     mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+    search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -138,6 +139,8 @@
       enteredAt: 'Nhập lúc',
       showBalance: 'Hiện số dư', hideBalance: 'Ẩn số dư',
       allCats: 'Tất cả danh mục', allTypes: 'Thu & chi',
+      searchTx: 'Tìm giao dịch...', last7d: '7 ngày', last30d: '30 ngày', lastMonthChip: 'Tháng trước',
+      addAndContinue: 'Thêm & tiếp',
       budgetNotSet: 'Chưa thiết lập ngân sách.', noExpenseData: 'Chưa có dữ liệu chi tiêu.',
       weekLabel: 'Tuần', moPrefix: 'T', dows: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
       errNotConfigured: 'Chưa cấu hình Supabase (thiếu URL hoặc anon key).',
@@ -249,7 +252,7 @@
       // Quick templates
       quickTemplates: 'Mẫu chi nhanh', addTemplate: 'Thêm mẫu', templateName: 'Tên mẫu',
       noTemplates: 'Chưa có mẫu nào.', templatePrefix: 'Mẫu: ',
-      templatesHint: 'Tạo mẫu cho khoản hay lặp lại (gửi xe, cơm trưa…). Ở trang Thêm, chạm 1 cái là ghi ngay (có thể Hoàn tác). Mẫu lưu trên thiết bị này.',
+      templatesHint: 'Tạo mẫu cho khoản hay lặp lại (gửi xe, cơm trưa…). Ở popup Thêm, chạm 1 cái là ghi ngay (có thể Hoàn tác). Mẫu lưu trên thiết bị này.',
       // Auto insights & spending calendar
       insights: 'Nhận xét tự động',
       dailySpend: 'Chi tiêu theo ngày', stdLine: 'Chuẩn ngân sách/ngày', stdPerDay: 'Chuẩn/ngày',
@@ -382,6 +385,8 @@
       enteredAt: 'Entered',
       showBalance: 'Show balances', hideBalance: 'Hide balances',
       allCats: 'All categories', allTypes: 'Income & expense',
+      searchTx: 'Search transactions...', last7d: '7 days', last30d: '30 days', lastMonthChip: 'Last month',
+      addAndContinue: 'Add & continue',
       budgetNotSet: 'No budget set yet.', noExpenseData: 'No expense data yet.',
       weekLabel: 'Week', moPrefix: 'M', dows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
       errNotConfigured: 'Supabase is not configured (missing URL or anon key).',
@@ -493,7 +498,7 @@
       // Quick templates
       quickTemplates: 'Quick templates', addTemplate: 'Add template', templateName: 'Template name',
       noTemplates: 'No templates yet.', templatePrefix: 'Template: ',
-      templatesHint: 'Create templates for frequent entries (parking, lunch…). On the Add page, one tap logs it instantly (with Undo). Templates are stored on this device.',
+      templatesHint: 'Create templates for frequent entries (parking, lunch…). In the Add popup, one tap logs it instantly (with Undo). Templates are stored on this device.',
       // Auto insights & spending calendar
       insights: 'Insights',
       dailySpend: 'Daily spending', stdLine: 'Budget standard/day', stdPerDay: 'Standard/day',
@@ -665,6 +670,9 @@
   let filterMonth = monthKey(new Date());
   let filterCategory = '';
   let filterType = '';
+  let filterSearch = '';
+  let filterRangeDays = null; // null = use filterMonth; 7 | 30 = rolling window from today
+  let searchDebounce = null;
   // Reports
   let reportPeriod = 'month'; // week | month | year
   let reportAnchor = new Date();
@@ -1328,8 +1336,10 @@
     const drafts = recognized.map((p) => buildDraft(p, picked, today, accountId, beneficiaryId));
 
     // Single entry → fast save with an Undo bar. Multiple → confirm sheet first.
-    if (drafts.length === 1) await saveDrafts(drafts, accountId, { undo: true });
-    else openEntryPreview(drafts, accountId, dropped);
+    // Forward the result so callers (e.g. the Add popup) can tell a direct save
+    // (array, possibly empty on error) apart from "handed off to the preview sheet" (undefined).
+    if (drafts.length === 1) return saveDrafts(drafts, accountId, { undo: true });
+    openEntryPreview(drafts, accountId, dropped);
   }
 
   // Assemble a parsed result into a storable draft, applying the date priority.
@@ -2020,8 +2030,11 @@
       '<input type="date" id="' + inputId + '" class="date-input" value="' + today + '" max="' + today + '" title="' + t('pickDate') + '"/>' +
       '</div>';
   }
-  function wireDateBar() {
-    document.querySelectorAll('.date-bar').forEach((bar) => {
+  // root: scope the query so re-wiring #view on every render() doesn't also
+  // re-bind a date-bar living inside a persistent modal (e.g. the Add popup) —
+  // that one gets wired once, separately, when the modal is created.
+  function wireDateBar(root) {
+    (root || document).querySelectorAll('.date-bar').forEach((bar) => {
       const input = bar.querySelector('.date-input');
       const chips = bar.querySelectorAll('.date-chip');
       const syncChips = () => chips.forEach((c) => c.classList.toggle('active', input && c.dataset.dateset === input.value));
@@ -2974,9 +2987,9 @@
     const top = txs.filter((x) => x.type === 'expense' && !isAdjust(x)).sort((a, b) => b.amount - a.amount).slice(0, 5);
 
     setTimeout(() => {
-      window.Charts.donut('repDonut', 'repLegend', byCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); currentTab = 'transactions'; render(); }, catLabel);
+      window.Charts.donut('repDonut', 'repLegend', byCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); filterRangeDays = null; currentTab = 'transactions'; render(); }, catLabel);
       if (Object.keys(byIncCat).length) {
-        window.Charts.donut('repIncDonut', 'repIncLegend', byIncCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); currentTab = 'transactions'; render(); }, catLabel);
+        window.Charts.donut('repIncDonut', 'repIncLegend', byIncCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); filterRangeDays = null; currentTab = 'transactions'; render(); }, catLabel);
       }
       window.Charts.bars('repTrend', td.labels, [
         { label: t('income'), data: td.inc, color: incColor },
@@ -3050,10 +3063,22 @@
   }
 
   /* ============== VIEW: Transactions ============== */
+  // Accent/case-insensitive match for the free-text search box.
+  function normSearch(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/đ/gi, 'd').toLowerCase();
+  }
   function viewTransactions() {
-    let list = DATA.transactions.filter((tx) => tx.date.slice(0, 7) === filterMonth);
+    // Time-range filter: a rolling window (last 7/30 days) when set, otherwise the picked month.
+    let list = filterRangeDays
+      ? DATA.transactions.filter((tx) => tx.date >= ymd(addDays(new Date(), -(filterRangeDays - 1))))
+      : DATA.transactions.filter((tx) => tx.date.slice(0, 7) === filterMonth);
     if (filterCategory) list = list.filter((tx) => tx.category === filterCategory);
     if (filterType) list = list.filter((tx) => tx.type === filterType);
+    if (filterSearch.trim()) {
+      const q = normSearch(filterSearch);
+      list = list.filter((tx) => normSearch(tx.note).includes(q) || normSearch(tx.rawInput).includes(q) || normSearch(catLabel(tx.category)).includes(q));
+    }
     // Tie-break on createdAt (entry order) when date+time match — matters most when
     // several old transactions are backfilled at once with no specific time set.
     list.sort((a, b) => (b.date + (b.time || '') + (b.createdAt || '')).localeCompare(a.date + (a.time || '') + (a.createdAt || '')));
@@ -3066,6 +3091,15 @@
     const monthOpts = Array.from(months).sort().reverse().map((m) => '<option value="' + m + '"' + (m === filterMonth ? ' selected' : '') + '>' + t('month') + ' ' + m + '</option>').join('');
     const catOpts = '<option value="">' + t('allCats') + '</option>' + cats().map((c) => '<option value="' + c + '"' + (c === filterCategory ? ' selected' : '') + '>' + catLabel(c) + '</option>').join('');
     const typeOpts = '<option value="">' + t('allTypes') + '</option><option value="expense"' + (filterType === 'expense' ? ' selected' : '') + '>' + t('expense') + '</option><option value="income"' + (filterType === 'income' ? ' selected' : '') + '>' + t('income') + '</option>';
+    const thisMonth = monthKey(new Date());
+    const lastMonth = monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
+    const rangeChip = (range, label) => {
+      const on = range === '7' ? filterRangeDays === 7
+        : range === '30' ? filterRangeDays === 30
+        : range === 'thisMonth' ? (!filterRangeDays && filterMonth === thisMonth)
+        : (!filterRangeDays && filterMonth === lastMonth);
+      return '<button type="button" class="range-chip' + (on ? ' active' : '') + '" data-range="' + range + '">' + label + '</button>';
+    };
 
     let body = '';
     const dates = Object.keys(groups).sort().reverse();
@@ -3082,19 +3116,35 @@
       '<datalist id="txSuggest">' + inputSuggestions().map((s) => '<option value="' + esc(s) + '"></option>').join('') + '</datalist>' +
       dateBar('txDate') +
       (accountSelect('txAccount') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccount') + '</div>' : '') +
+      '<div class="tx-search-row">' + icon('search') +
+      '<input id="fSearch" type="search" value="' + esc(filterSearch) + '" placeholder="' + t('searchTx') + '"/></div>' +
+      '<div class="range-chips">' +
+      rangeChip('7', t('last7d')) + rangeChip('30', t('last30d')) +
+      rangeChip('thisMonth', t('thisMonth')) + rangeChip('lastMonth', t('lastMonthChip')) +
+      '</div>' +
       '<div class="filters">' +
       '<select id="fMonth">' + monthOpts + '</select>' +
       '<select id="fCat">' + catOpts + '</select>' +
       '<select id="fType">' + typeOpts + '</select>' +
       '</div>' +
-      '<div class="tx-list grouped">' + body + '</div>'
+      '<div class="tx-list-wrap"><div class="tx-list grouped">' + body + '</div></div>'
     );
   }
 
-  /* ============== VIEW: Add ============== */
-  function viewAdd() {
-    return '<div class="add-page">' +
-      '<div class="section-title">' + t('addTx') + '</div>' +
+  /* ============== Add popup (compose a transaction) ==============
+   * Opened from the nav FAB over whatever tab is currently showing — a
+   * modal instead of a full tab so it never eats a permanent slot of
+   * screen real estate. Appended straight to <body> (like the other
+   * open*() modals), so it survives background render() calls; its own
+   * fields are wired once here rather than through the global wire(),
+   * which would otherwise re-bind duplicate listeners on every re-render
+   * while the popup stays open. */
+  let addModalOpen = false;
+  function openAddModal() {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="modal-backdrop" id="addModalBackdrop"><div class="modal add-modal">' +
+      '<div class="card-title">' + icon('plus') + ' ' + t('addTx') + '</div>' +
+      '<div class="add-modal-body">' +
       '<textarea id="txInputBig" rows="3" placeholder="' + t('placeholder') + '"></textarea>' +
       dateBar('txDateBig') +
       (accountSelect('txAccountBig') ? '<div class="acct-row">' + icon('wallet') + accountSelect('txAccountBig') + '</div>' : '') +
@@ -3102,13 +3152,48 @@
         '<label class="sr-only" for="txBeneficiaryBig">' + t('spentFor') + '</label>' + beneficiarySelect('txBeneficiaryBig', '') + '</div>' +
       '<div class="add-photos-label">' + t('evidence') + ' <span class="add-photos-opt">(' + t('optional') + ')</span></div>' +
       '<div class="add-photos" id="addPhotos"></div>' +
-      '<button id="addBtnBig" class="primary-btn">' + icon('plus') + ' ' + t('add') + '</button>' +
-      (spendableAccounts().length >= 2 ? '<button id="transferBtn" class="ghost-btn transfer-btn">' + icon('transfer') + ' ' + t('transferBetween') + '</button>' : '') +
+      (spendableAccounts().length >= 2 ? '<button type="button" id="transferBtn" class="ghost-btn transfer-btn">' + icon('transfer') + ' ' + t('transferBetween') + '</button>' : '') +
       templateChipsHtml() +
       '<div class="examples">' +
       ['ăn sáng 35k', 'lương 15 triệu', 'đổ xăng 80k', 'cafe 2 triệu rưỡi', 'grab 1tr2', 'tiền điện 500 nghìn', 'mua giày 800k', 'khám bệnh 250k']
-        .map((ex) => '<button class="chip" data-ex="' + ex + '">' + ex + '</button>').join('') +
+        .map((ex) => '<button type="button" class="chip" data-ex="' + ex + '">' + ex + '</button>').join('') +
+      '</div>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="ghost-btn" id="addBtnBigMore">' + icon('refresh') + ' ' + t('addAndContinue') + '</button>' +
+      '<button class="primary-btn" id="addBtnBig">' + icon('plus') + ' ' + t('add') + '</button></div>' +
       '</div></div>';
+    document.body.appendChild(wrap.firstChild);
+    addModalOpen = true;
+    if (window.CustomSelect) window.CustomSelect.enhanceAll();
+    renderAddPhotos();
+    const modalEl = document.getElementById('addModalBackdrop');
+    wireDateBar(modalEl);
+    const ta = document.getElementById('txInputBig');
+    ta.focus();
+    modalEl.querySelectorAll('.chip[data-ex]').forEach((c) => c.addEventListener('click', () => { ta.value = c.dataset.ex; ta.focus(); }));
+    modalEl.querySelectorAll('[data-usetpl]').forEach((b) => b.addEventListener('click', () => busy(b, () => addFromTemplate(b.dataset.usetpl))));
+    const close = () => {
+      const m = document.getElementById('addModalBackdrop'); if (m) m.remove();
+      addModalOpen = false; clearPendingAddFiles();
+    };
+    modalEl.addEventListener('click', (e) => { if (e.target.id === 'addModalBackdrop') close(); });
+    // Transfer is a separate flow, not "part of" composing a free-text entry —
+    // close this popup first so its backdrop can't shadow the transfer modal's.
+    const trBtn = document.getElementById('transferBtn');
+    if (trBtn) trBtn.addEventListener('click', () => { close(); openTransfer(null); });
+    // "Thêm": save then close. "Thêm & tiếp": save, clear the form, keep going.
+    // A multi-entry input (comma-separated) hands off to its own confirm sheet
+    // (addFromInputInner returns undefined then) — leave this popup open as-is.
+    const doSave = async (btn, keepOpen) => {
+      const val = (ta.value || '').trim();
+      if (!val) { toast(t('emptyInput'), 'warn'); return; }
+      const result = await addFromInput(val, btn.id, 'txDateBig', 'txAccountBig');
+      if (!result) return;
+      if (keepOpen) { ta.value = ''; clearPendingAddFiles(); renderAddPhotos(); ta.focus(); }
+      else close();
+    };
+    document.getElementById('addBtnBig').addEventListener('click', (e) => doSave(e.currentTarget, false));
+    document.getElementById('addBtnBigMore').addEventListener('click', (e) => doSave(e.currentTarget, true));
   }
 
   /* ============== VIEW: Settings ============== */
@@ -4033,21 +4118,24 @@
     nav.innerHTML =
       item('overview', 'wallet', t('overview')) +
       item('reports', 'chart', t('reports')) +
-      '<button class="nav-fab ' + (currentTab === 'add' ? 'active' : '') + '" data-tab="add" data-label="' + esc(t('add')) + '" title="' + esc(t('add')) + '">' + icon('plus') + '</button>' +
+      '<button class="nav-fab" data-tab="add" data-label="' + esc(t('add')) + '" title="' + esc(t('add')) + '">' + icon('plus') + '</button>' +
       item('transactions', 'list', t('txs')) +
       item('settings', 'settings', t('settings'));
-    nav.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { currentTab = b.dataset.tab; render(); }));
+    nav.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.tab === 'add') { openAddModal(); return; }
+      currentTab = b.dataset.tab; render();
+    }));
   }
 
   /* ============== Render + wire ============== */
   function render() {
     rebuildAttachIndex();
     resetBalanceAfterCache();
-    if (currentTab !== 'add') clearPendingAddFiles(); // don't carry chosen photos to other tabs
+    if (!addModalOpen) clearPendingAddFiles(); // don't carry chosen photos across popup sessions
     if (currentTab !== 'settings') settingsPage = null; // leaving Settings resets the sub-page stack
     document.getElementById('appName').textContent = t('appName');
     const view = document.getElementById('view');
-    const map = { overview: viewOverview, reports: viewReports, transactions: viewTransactions, add: viewAdd, settings: viewSettings };
+    const map = { overview: viewOverview, reports: viewReports, transactions: viewTransactions, settings: viewSettings };
     view.innerHTML = (map[currentTab] || viewOverview)();
     view.scrollTop = 0;
     renderNav();
@@ -4059,20 +4147,35 @@
     // quick add (transactions)
     const ti = document.getElementById('txInput');
     if (ti) { document.getElementById('addBtn').addEventListener('click', () => addFromInput(ti.value, 'addBtn', 'txDate', 'txAccount')); ti.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFromInput(ti.value, 'addBtn', 'txDate', 'txAccount'); }); }
-    // add page
-    const tib = document.getElementById('txInputBig');
-    if (tib) document.getElementById('addBtnBig').addEventListener('click', () => addFromInput(tib.value, 'addBtnBig', 'txDateBig', 'txAccountBig'));
-    renderAddPhotos(); // Add page: photo picker (no-op elsewhere)
-    document.querySelectorAll('.chip[data-ex]').forEach((c) => c.addEventListener('click', () => { if (tib) { tib.value = c.dataset.ex; tib.focus(); } }));
-    // transfer between wallets
-    const trBtn = document.getElementById('transferBtn');
-    if (trBtn) trBtn.addEventListener('click', () => openTransfer(null));
     // date bar: "Hôm nay" / "Hôm qua" chips set the date input; manual change clears chip highlight
-    wireDateBar();
+    // (scoped to #view — the Add popup wires its own date-bar separately, once, at open time)
+    wireDateBar(document.getElementById('view'));
     // filters
-    const fm = document.getElementById('fMonth'); if (fm) fm.addEventListener('change', () => { filterMonth = fm.value; render(); });
+    const fm = document.getElementById('fMonth'); if (fm) fm.addEventListener('change', () => { filterMonth = fm.value; filterRangeDays = null; render(); });
     const fc = document.getElementById('fCat'); if (fc) fc.addEventListener('change', () => { filterCategory = fc.value; render(); });
     const ft = document.getElementById('fType'); if (ft) ft.addEventListener('change', () => { filterType = ft.value; render(); });
+    // search box: debounced so a long list isn't re-filtered on every keystroke
+    const fs = document.getElementById('fSearch');
+    if (fs) {
+      fs.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          filterSearch = fs.value; render();
+          const el = document.getElementById('fSearch');
+          if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+        }, 250);
+      });
+    }
+    // quick time-range chips (rolling 7/30 days, or jump the month select to this/last month)
+    document.querySelectorAll('.range-chip').forEach((b) => b.addEventListener('click', () => {
+      const r = b.dataset.range;
+      if (r === '7' || r === '30') { filterRangeDays = Number(r); }
+      else {
+        filterRangeDays = null;
+        filterMonth = r === 'thisMonth' ? monthKey(new Date()) : monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
+      }
+      render();
+    }));
     // tx actions
     document.querySelectorAll('.tx-actions .icon-btn').forEach((b) => b.addEventListener('click', () => { b.dataset.act === 'del' ? deleteTx(b.dataset.id, b) : openEdit(b.dataset.id); }));
     // tap a transaction row (anywhere but its delete button / attachment badge) to open its editor
@@ -4286,8 +4389,6 @@
         } catch (err) { toast(t('syncError') + ': ' + err.message, 'error'); }
       });
     }));
-    // Quick templates: tap a chip (Add page) to log it instantly
-    document.querySelectorAll('[data-usetpl]').forEach((b) => b.addEventListener('click', () => busy(b, () => addFromTemplate(b.dataset.usetpl))));
     // Quick templates: add a blank editor row
     const atpl = document.getElementById('addTplBtn');
     if (atpl) atpl.addEventListener('click', () => {

@@ -198,6 +198,15 @@ button.btn-busy::before {
 .add-btn-inline { display: flex; align-items: center; justify-content: center; min-width: 50px; height: 50px; background: var(--accent); color: #fff; border: none; border-radius: 14px; cursor: pointer; box-shadow: var(--shadow-lg); }
 .add-btn-inline .ic { width: 24px; height: 24px; }
 .add-btn-inline:disabled { opacity: .6; }
+/* Free-text search over the transactions currently shown (this month / range). */
+.tx-search-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; box-shadow: var(--shadow); }
+.tx-search-row .ic { width: 17px; height: 17px; color: var(--text-secondary); flex-shrink: 0; }
+.tx-search-row input { flex: 1; min-width: 0; min-height: 42px; background: none; border: none; color: var(--text-primary); }
+.tx-search-row input:focus { outline: none; }
+/* Quick time-range shortcuts, same look as the date-bar chips. */
+.range-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.range-chip { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 20px; padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary); box-shadow: var(--shadow); }
+.range-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* Filters: 2 rows on mobile (month full-width, then category + type) so the
    long Vietnamese labels fit without overflowing the viewport. min-width:0 lets
    each <select> shrink below its intrinsic content width. */
@@ -205,6 +214,9 @@ button.btn-busy::before {
 .filters #fMonth { grid-column: 1 / -1; }
 .filters select { min-width: 0; min-height: 44px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; color: var(--text-primary); box-shadow: var(--shadow); text-overflow: ellipsis; }
 .acct-row select { flex: 1; min-width: 0; }
+/* Cap the list to roughly a week of typical activity so it never pushes the
+   quick-add/filters off-screen — it scrolls internally for the rest. */
+.tx-list-wrap { max-height: min(58vh, 520px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 /* ---------- Date bar (quick-add date picker) ---------- */
 .date-bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
@@ -457,9 +469,11 @@ button.btn-busy::before {
 .gold-pnl-total.income, .nw-acc-sub .income { color: var(--income); }
 .gold-pnl-total.expense, .nw-acc-sub .expense { color: var(--expense); }
 
-/* ---------- Add page ---------- */
-.add-page textarea { width: 100%; min-height: 100px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 14px; resize: vertical; box-shadow: var(--shadow); }
-.add-page textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+/* ---------- Add popup ---------- */
+.add-modal { max-height: 90vh; display: flex; flex-direction: column; }
+.add-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; min-height: 0; margin: 0 -2px; padding: 2px; }
+.add-modal-body textarea { width: 100%; min-height: 100px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 14px; resize: vertical; box-shadow: var(--shadow); }
+.add-modal-body textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .chip { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; box-shadow: var(--shadow); }
 .chip:active { background: var(--accent); color: #fff; }
