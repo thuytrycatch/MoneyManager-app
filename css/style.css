@@ -416,12 +416,23 @@ button.btn-busy::before {
 .forecast-pill .ic { width: 16px; height: 16px; }
 .forecast-pill b { font-weight: 800; }
 
-/* ---------- Net worth (assets vs liabilities) ---------- */
-.nw-hero { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow-lg); }
-.nw-hero-label { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; opacity: .92; }
-.nw-hero-label .ic { width: 17px; height: 17px; }
-.nw-hero-val { font-size: 27px; font-weight: 800; margin-top: 6px; letter-spacing: -.4px; }
-.nw-hero-val.neg { color: #fde68a; }
+/* ---------- Net worth (assets vs liabilities) ----------
+   Pinned above the period filter on Reports. Plain elevated card on purpose:
+   the accent gradient belongs to .wrap-card (the selected period), and two
+   identical gradients stacked would read as one duplicated block. */
+.nw-card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-top: 8px; }
+.nw-hero { display: flex; flex-direction: column; gap: 2px; padding-bottom: 14px; }
+.nw-hero-label { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-secondary); }
+.nw-hero-label .ic { width: 16px; height: 16px; color: var(--accent); }
+.nw-now { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; background: var(--bg-secondary); border-radius: 8px; padding: 2px 8px; font-size: 11px; }
+.nw-hero-val { font-size: 30px; font-weight: 800; letter-spacing: -.6px; color: var(--accent); }
+.nw-hero-val.neg { color: var(--expense); }
+.nw-gold-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.nw-detail { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 4px; }
+.nw-detail > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 8px 2px; font-size: 12.5px; font-weight: 700; color: var(--accent); }
+.nw-detail > summary::-webkit-details-marker { display: none; }
+.nw-detail > summary::after { content: '▾'; margin-left: auto; transition: transform .2s; }
+.nw-detail[open] > summary::after { transform: rotate(180deg); }
 .summary-grid + .nw-group-title { margin-top: 16px; }
 .nw-group-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); margin: 14px 4px 8px; }
 .nw-list { display: flex; flex-direction: column; gap: 8px; }
@@ -461,9 +472,7 @@ button.btn-busy::before {
 .wg-pnl.income { color: var(--income); }
 .wg-pnl.expense { color: var(--expense); }
 
-/* ---------- Net worth card: gold price bar & per-wallet P&L ---------- */
-.gold-price-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.gold-price-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
+/* ---------- Net worth card: gold price line & per-wallet P&L ---------- */
 .gold-stale { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 8px; padding: 2px 8px; font-weight: 600; font-size: 11.5px; }
 .gold-pnl-total { font-weight: 700; }
 .gold-pnl-total.income, .nw-acc-sub .income { color: var(--income); }
@@ -725,6 +734,11 @@ main { padding: 4px 12px 92px; }
 .ios-row-chev .ic { width: 18px; height: 18px; }
 .ios-row.danger { justify-content: center; }
 .ios-row.danger .ios-row-label { flex: 0 0 auto; color: var(--expense); font-weight: 600; }
+/* Iconless rows (report-card toggles): divider spans the full width instead of
+   indenting past an icon slot that isn't there. */
+.ios-row + .ios-row:not(:has(.ios-ic))::before { left: 16px; }
+.ios-row:has(.rc-note) .ios-row-label { white-space: normal; text-align: left; }
+.rc-note { display: block; font-size: 11.5px; font-weight: 500; color: var(--text-secondary); }
 
 /* Icon tints (iOS system colors — readable on both light and dark) */
 .tint-indigo { background: #5856d6; } .tint-blue { background: #007aff; }
@@ -787,6 +801,12 @@ main { padding: 4px 12px 92px; }
   .report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
   .report-grid > .dash-card { min-width: 0; }
   .report-grid > .dash-card:nth-child(odd):last-child { grid-column: 1 / -1; }
+  /* Net worth sits outside the grid (above the period filter) — give its two
+     halves room side by side instead of stacking on a wide screen. */
+  .nw-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 8px 24px; align-items: center; }
+  .nw-card .nw-hero { padding-bottom: 0; }
+  .nw-card .nw-gold-line, .nw-card .nw-detail { grid-column: 1 / -1; }
+  .nw-card .nw-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---------- Desktop: sidebar shell ---------- */

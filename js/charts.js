@@ -182,18 +182,27 @@
     return total;
   }
 
-  /* Multi-dataset bars (income/expense) */
-  function bars(canvasId, labels, datasets) {
+  /* Multi-dataset bars (income/expense). opts.tooltipTitles: optional array parallel to
+   * labels, shown as the tooltip title in place of the (possibly terse) axis label —
+   * e.g. the real date range a "Tuần 2" bucket covers. Omitted entirely when not passed,
+   * so callers that don't need it (repBeneficiary) keep Chart.js's default title. */
+  function bars(canvasId, labels, datasets, opts) {
     const ctx = document.getElementById(canvasId); if (!ctx) return;
     destroy(canvasId); const c = colors();
+    const tooltipTitles = opts && opts.tooltipTitles;
+    const tooltipCallbacks = { label: (it) => ' ' + it.dataset.label + ': ' + fmtVND(it.parsed.y) };
+    if (tooltipTitles) tooltipCallbacks.title = (items) => (items.length ? tooltipTitles[items[0].dataIndex] : '');
     reg[canvasId] = new Chart(ctx, {
       type: 'bar',
       data: { labels, datasets: datasets.map((d) => ({ label: d.label, data: d.data, backgroundColor: d.color, borderRadius: 5, maxBarThickness: 18 })) },
       options: {
         responsive: true, maintainAspectRatio: false,
+        // Index mode lets a tap anywhere in the column band open the tooltip —
+        // on a phone, hitting an 18px-wide bar exactly is otherwise a coin flip.
+        interaction: tooltipTitles ? { mode: 'index', intersect: false } : undefined,
         plugins: {
           legend: { labels: { color: c.text, boxWidth: 9, boxHeight: 9, usePointStyle: true, pointStyle: 'circle', font: { size: 11, family: FONT } } },
-          tooltip: { callbacks: { label: (it) => ' ' + it.dataset.label + ': ' + fmtVND(it.parsed.y) } },
+          tooltip: { callbacks: tooltipCallbacks },
         },
         scales: {
           x: { ticks: { color: c.text, font: { size: 10, family: FONT }, maxRotation: 0, autoSkip: true }, grid: { display: false }, border: { display: false } },

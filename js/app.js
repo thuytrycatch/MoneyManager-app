@@ -120,7 +120,11 @@
       week: 'Tuần', month: 'Tháng', year: 'Năm', byCategory: 'Chi theo danh mục', incomeByCat: 'Thu theo danh mục', trend: 'Diễn biến thu chi', totalLabel: 'Tổng',
       budgetProgress: 'Tiến độ ngân sách', topSpending: 'Khoản chi lớn nhất', summary: 'Tổng kết',
       rgOverview: 'Tổng quan', rgFlow: 'Dòng tiền trong kỳ', rgStructure: 'Cơ cấu danh mục',
-      rgAnalysis: 'Phân tích & dự báo', rgDetail: 'Chi tiết', rgAssets: 'Tài sản & chốt sổ',
+      rgAnalysis: 'Phân tích & dự báo', rgDetail: 'Chi tiết', rgAssets: 'Chốt sổ',
+      byWallet: 'Chi tiết theo ví', trendTapHint: 'Chạm vào cột để xem khoảng ngày.',
+      reportCardsMgmt: 'Hiển thị báo cáo',
+      reportCardsHint: 'Chọn khối báo cáo muốn thấy ở màn Báo cáo. Cài đặt lưu trên thiết bị này.',
+      monthOnlyNote: 'chỉ có ở báo cáo tháng',
       save: 'Lưu', cancel: 'Hủy', delete: 'Xóa', edit: 'Sửa', category: 'Danh mục', note: 'Ghi chú', amount: 'Số tiền',
       date: 'Ngày', time: 'Giờ', today: 'Hôm nay', yesterday: 'Hôm qua', pickDate: 'Chọn ngày',
       wallets: 'Ví / Tài khoản', wallet: 'Ví', walletCash: 'Tiền mặt', addWallet: 'Thêm ví',
@@ -294,15 +298,14 @@
       goldKind: 'Loại vàng', goldKindSjc: 'Vàng miếng SJC', goldKindRing: 'Nhẫn 9999 (24k)',
       goldKindJewelry: 'Vàng tây (18k…)', goldKindCustom: 'Tự nhập giá',
       goldFactor: 'Hệ số giá (%)', goldCustomBuy: 'Giá mua vào /chỉ', goldPerLuong: '/lượng',
-      updateGoldPrice: 'Cập nhật giá vàng', priceUpdatedAt: 'Giá lúc', priceStale: 'Giá có thể đã cũ',
+      priceUpdatedAt: 'Giá lúc', priceStale: 'Giá có thể đã cũ',
       goldValueNow: 'Giá trị hiện tại',
-      goldNoPrice: 'Chưa có giá cho loại vàng này — bấm "Cập nhật giá vàng" hoặc chọn Tự nhập giá.',
+      goldNoPrice: 'Chưa có giá cho loại vàng này — giá tự cập nhật khi mở app, hoặc chọn Tự nhập giá.',
       goldBuyPrice: 'Giá mua lúc đầu /chỉ', goldBuyDate: 'Ngày mua',
       goldMarketShort: 'Giá TT', goldBuyShort: 'Giá mua',
       unrealizedPnl: 'Lãi/lỗ tạm tính', goldPnlTotal: 'Lãi/lỗ vàng (tạm tính)',
       goldBuyHint: 'Giá thực trả cho 1 chỉ khi mua (đã gồm chênh lệch mua–bán); mua nhiều đợt thì nhập giá trung bình.',
       goldSpreadHint: 'Định giá dùng giá tiệm MUA VÀO, còn lúc mua bạn trả giá BÁN RA — nên ngay sau khi mua thường lỗ nhẹ do chênh lệch, là bình thường.',
-      goldPriceUpdated: 'Đã cập nhật giá vàng', goldPriceUpdateFailed: 'Không lấy được giá vàng — đang dùng giá đã lưu.',
       goldSchemaHint: 'Lưu ví thất bại: database thiếu cột mới của ví. Hãy chạy lại TOÀN BỘ supabase-schema.sql trong Supabase SQL Editor rồi thử lại.',
       walletAllowTx: 'Cho phép giao dịch trực tiếp',
       walletAllowTxHint: 'Tắt với ví lưu trữ (tiết kiệm, vàng…): ví sẽ không hiện trong form nhập giao dịch — muốn chi tiêu phải Chuyển ví sang ví khác trước. Số dư và báo cáo không đổi.',
@@ -366,7 +369,11 @@
       week: 'Week', month: 'Month', year: 'Year', byCategory: 'Spending by category', incomeByCat: 'Income by category', trend: 'Income & expense trend', totalLabel: 'Total',
       budgetProgress: 'Budget progress', topSpending: 'Top spending', summary: 'Summary',
       rgOverview: 'Overview', rgFlow: 'Cash flow', rgStructure: 'Category breakdown',
-      rgAnalysis: 'Analysis & forecast', rgDetail: 'Details', rgAssets: 'Assets & closing',
+      rgAnalysis: 'Analysis & forecast', rgDetail: 'Details', rgAssets: 'Monthly close',
+      byWallet: 'By wallet', trendTapHint: 'Tap a bar to see its date range.',
+      reportCardsMgmt: 'Report cards',
+      reportCardsHint: 'Pick which blocks show up on the Reports screen. Saved on this device.',
+      monthOnlyNote: 'monthly report only',
       save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit', category: 'Category', note: 'Note', amount: 'Amount',
       date: 'Date', time: 'Time', today: 'Today', yesterday: 'Yesterday', pickDate: 'Pick date',
       wallets: 'Wallets / Accounts', wallet: 'Wallet', walletCash: 'Cash', addWallet: 'Add wallet',
@@ -540,15 +547,14 @@
       goldKind: 'Gold kind', goldKindSjc: 'SJC bullion', goldKindRing: '9999 ring (24k)',
       goldKindJewelry: 'Jewelry gold (18k…)', goldKindCustom: 'Custom price',
       goldFactor: 'Price factor (%)', goldCustomBuy: 'Buy-back price /chỉ', goldPerLuong: '/lượng',
-      updateGoldPrice: 'Update gold price', priceUpdatedAt: 'Price as of', priceStale: 'Price may be stale',
+      priceUpdatedAt: 'Price as of', priceStale: 'Price may be stale',
       goldValueNow: 'Current value',
-      goldNoPrice: 'No price for this kind yet — tap "Update gold price" or pick Custom price.',
+      goldNoPrice: 'No price for this kind yet — prices refresh when you open the app, or pick Custom price.',
       goldBuyPrice: 'Avg. buy price /chỉ', goldBuyDate: 'Purchase date',
       goldMarketShort: 'Mkt', goldBuyShort: 'Buy',
       unrealizedPnl: 'Unrealized P&L', goldPnlTotal: 'Gold P&L (unrealized)',
       goldBuyHint: 'What you actually paid per chỉ (includes the buy/sell spread); for several purchases enter the average.',
       goldSpreadHint: 'Valuation uses the dealer BUY-BACK price while you bought at the SELL price, so a small loss right after buying is normal (the spread).',
-      goldPriceUpdated: 'Gold prices updated', goldPriceUpdateFailed: 'Could not fetch gold prices — using saved prices.',
       goldSchemaHint: 'Save failed: the database is missing newer wallet columns. Re-run the ENTIRE supabase-schema.sql in the Supabase SQL Editor, then try again.',
       walletAllowTx: 'Allow direct transactions',
       walletAllowTxHint: 'Turn off for storage wallets (savings, gold…): the wallet disappears from entry forms — spending requires a wallet transfer first. Balances and reports are unchanged.',
@@ -713,6 +719,32 @@
   // no longer unmasks everything at once. hideAmounts keeps governing the rest.
   let hideBalAvail = (localStorage.getItem('hideBalAvail') || '1') === '1';
   let hideBalTotal = (localStorage.getItem('hideBalTotal') || '1') === '1';
+  // Per-wallet breakdown inside the Net worth card — collapsed by default so the card
+  // stays short where it now sits (top of Reports, above the period filter).
+  let nwWalletsOpen = localStorage.getItem('nwWalletsOpen') === '1';
+
+  // Which report cards this device shows. Display preference (like hideAmounts), so it
+  // lives in localStorage rather than the shared household_settings. Anything missing
+  // from the stored object counts as visible → new cards appear for existing users.
+  const REPORT_CARDS = [
+    { key: 'autoInsights', labelKey: 'insights', monthOnly: true },
+    { key: 'trend', labelKey: 'trend' },
+    { key: 'dailySpend', labelKey: 'dailySpend', monthOnly: true },
+    { key: 'byCategory', labelKey: 'byCategory' },
+    { key: 'incomeByCat', labelKey: 'incomeByCat' },
+    { key: 'budgetProgress', labelKey: 'budgetProgress', monthOnly: true },
+    { key: 'trendsForecast', labelKey: 'trendForecast' },
+    { key: 'byBeneficiary', labelKey: 'byBeneficiary' },
+    { key: 'topSpending', labelKey: 'topSpending' },
+  ];
+  let reportCardsCfg = {};
+  try { reportCardsCfg = JSON.parse(localStorage.getItem('reportCardsCfg') || '{}') || {}; } catch (e) { reportCardsCfg = {}; }
+  function reportCardVisible(key) { return reportCardsCfg[key] !== false; }
+  function hiddenReportCardCount() { return REPORT_CARDS.filter((c) => !reportCardVisible(c.key)).length; }
+  function setReportCardVisible(key, on) {
+    reportCardsCfg[key] = !!on;
+    try { localStorage.setItem('reportCardsCfg', JSON.stringify(reportCardsCfg)); } catch (e) { /* ignore */ }
+  }
 
   // Display name of whoever entered a transaction (from tx.userId → household member).
   // Prefers the self-chosen profile name, falls back to the email prefix.
@@ -778,6 +810,10 @@
   function endOfWeek(d) { const s = startOfWeek(d); const e = new Date(s); e.setDate(s.getDate() + 6); return e; }
   function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
+  function fmtDayRange(from, to) {
+    const one = (d) => pad(d.getDate()) + '/' + pad(d.getMonth() + 1);
+    return (from.getTime() === to.getTime()) ? one(from) : one(from) + ' – ' + one(to);
+  }
   // Whole days from today until a "YYYY-MM-DD" date (negative = already past).
   function daysUntil(ymdStr) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -2439,19 +2475,18 @@
   }
   // Daily spending chart (replaces the old calendar heat-map): actual expense
   // per day (line) vs a flat "budget standard per day" reference line (total
-  // monthly budget / days in month, dashed) plus income per day (bars).
+  // monthly budget / days in month, dashed). Expense only — income lives in the
+  // "Diễn biến thu chi" card and only muddied the daily read.
   function dailySpendHtml() {
     const anchor = reportAnchor;
     const mk = monthKey(anchor);
     const days = endOfMonth(anchor).getDate();
     const expDay = new Array(days).fill(0);
-    const incDay = new Array(days).fill(0);
     DATA.transactions.forEach((tx) => {
-      if (isAdjust(tx) || tx.date.slice(0, 7) !== mk) return;
+      if (isAdjust(tx) || tx.type !== 'expense' || tx.date.slice(0, 7) !== mk) return;
       const d = parseInt(tx.date.slice(8, 10), 10) - 1;
       if (d < 0 || d >= days) return;
-      if (tx.type === 'expense') expDay[d] += tx.amount;
-      else if (tx.type === 'income') incDay[d] += tx.amount;
+      expDay[d] += tx.amount;
     });
     // Viewing the current month → stop the series at today so days that have
     // not happened yet don't render as misleading zeros.
@@ -2460,22 +2495,17 @@
     const budgetTotal = Object.keys(DATA.budgets || {}).reduce((a, c) => a + (DATA.budgets[c] > 0 ? DATA.budgets[c] : 0), 0);
     const stdPerDay = budgetTotal ? Math.round(budgetTotal / days) : 0;
 
-    const labels = [], expLine = [], stdLine = [], incBars = [];
+    const labels = [], expLine = [], stdLine = [];
     for (let d = 1; d <= days; d++) {
       labels.push(String(d));
       expLine.push(d <= lastDay ? expDay[d - 1] : null);
-      incBars.push(d <= lastDay ? incDay[d - 1] : null);
       stdLine.push(stdPerDay || null);
     }
 
     setTimeout(() => {
-      const incColor = getComputedStyle(document.body).getPropertyValue('--income').trim() || '#10b981';
       const expColor = getComputedStyle(document.body).getPropertyValue('--expense').trim() || '#ef4444';
       const accColor = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#6366f1';
-      const ds = [
-        { type: 'bar', label: t('income'), data: incBars, color: incColor + 'aa' },
-        { type: 'line', label: t('expense'), data: expLine, color: expColor, fill: true },
-      ];
+      const ds = [{ type: 'line', label: t('expense'), data: expLine, color: expColor, fill: true }];
       if (stdPerDay) ds.push({ type: 'line', label: t('stdLine'), data: stdLine, color: accColor, dashed: true, flat: true });
       window.Charts.mixed('repDaily', labels, ds);
     }, 0);
@@ -2502,20 +2532,29 @@
       (!stdPerDay ? '<div class="hint">' + t('noBudgetForStd') + '</div>' : '') +
       '</div>';
   }
+  // `ranges` runs parallel to `labels`: the actual calendar span each bar covers.
+  // Week/month labels alone ("T4", "Tuần 2") don't say which dates they are, so the
+  // chart tooltip shows the range. Year labels (T1…T12) already read unambiguously.
   function trendData(txs, range) {
-    let labels = [], inc = [], exp = [];
+    let labels = [], inc = [], exp = [], ranges = null;
     if (reportPeriod === 'week') {
       labels = t('dows').slice();
+      ranges = [];
       const s = startOfWeek(reportAnchor);
-      for (let i = 0; i < 7; i++) { const d = new Date(s); d.setDate(s.getDate() + i); const dt = ymd(d); const dd = txs.filter((x) => x.date === dt); inc.push(totals(dd).income); exp.push(totals(dd).expense); }
+      for (let i = 0; i < 7; i++) { const d = new Date(s); d.setDate(s.getDate() + i); const dt = ymd(d); const dd = txs.filter((x) => x.date === dt); inc.push(totals(dd).income); exp.push(totals(dd).expense); ranges.push({ from: d, to: d }); }
     } else if (reportPeriod === 'year') {
       for (let m = 0; m < 12; m++) { labels.push(t('moPrefix') + (m + 1)); const mk = reportAnchor.getFullYear() + '-' + pad(m + 1); const dd = txs.filter((x) => x.date.slice(0, 7) === mk); inc.push(totals(dd).income); exp.push(totals(dd).expense); }
     } else {
       const days = endOfMonth(reportAnchor).getDate(); const weeks = Math.ceil(days / 7);
-      for (let w = 0; w < weeks; w++) { labels.push(t('weekLabel') + ' ' + (w + 1)); inc.push(0); exp.push(0); }
+      const y = reportAnchor.getFullYear(), mo = reportAnchor.getMonth();
+      ranges = [];
+      for (let w = 0; w < weeks; w++) {
+        labels.push(t('weekLabel') + ' ' + (w + 1)); inc.push(0); exp.push(0);
+        ranges.push({ from: new Date(y, mo, w * 7 + 1), to: new Date(y, mo, Math.min(days, (w + 1) * 7)) });
+      }
       txs.forEach((x) => { if (isAdjust(x)) return; const day = parseInt(x.date.slice(8, 10), 10); const wi = Math.min(weeks - 1, Math.floor((day - 1) / 7)); if (x.type === 'income') inc[wi] += x.amount; else exp[wi] += x.amount; });
     }
-    return { labels, inc, exp };
+    return { labels, inc, exp, ranges };
   }
 
   /* ============== Trend analysis & forecast ============== */
@@ -2628,10 +2667,13 @@
   }
 
   /* ============== Net worth (assets vs liabilities) ============== */
+  // One self-contained card pinned above the period filter on the Reports screen:
+  // it is a snapshot of RIGHT NOW, unaffected by the week/month/year selection.
+  // The per-wallet breakdown collapses so the card stays short at the top.
   function netWorthHtml() {
     const accs = activeAccounts();
-    if (!accs.length) return '<div class="section-title">' + t('netWorth') + '</div>' +
-      '<div class="empty">' + t('noAccountsNw') + '</div>';
+    if (!accs.length) return '<section class="nw-card"><div class="nw-hero-label">' + icon('scale') + ' ' + t('netWorth') + '</div>' +
+      '<div class="empty">' + t('noAccountsNw') + '</div></section>';
     const nw = netWorth();
     const assetAccs = accs.filter((a) => accountClass(a) !== 'liability');
     const liabAccs = accs.filter((a) => accountClass(a) === 'liability');
@@ -2670,7 +2712,8 @@
         sub + '</div>';
     };
 
-    // Gold strip: price freshness + total unrealized P&L + on-demand refresh.
+    // Gold line: price freshness + total unrealized P&L. Prices refresh silently in
+    // the background (maybeRefreshGoldPrices) — no manual button here any more.
     const goldAccs = assetAccs.filter((a) => a.type === 'gold');
     let goldBar = '';
     if (goldAccs.length) {
@@ -2681,28 +2724,40 @@
         ? '<span class="gold-stale">' + t('priceStale') + '</span>' : '';
       const hasBasis = goldAccs.some((a) => a.goldBuyPerChi);
       const pnlTotal = totalGoldPnl();
-      goldBar = '<div class="gold-price-bar">' +
-        '<div class="gold-price-info">' + (when ? '<span>' + when + '</span>' : '') + stale +
+      goldBar = '<div class="nw-gold-line">' + (when ? '<span>' + when + '</span>' : '') + stale +
         (hasBasis ? '<span class="gold-pnl-total ' + (pnlTotal >= 0 ? 'income' : 'expense') + '">' + t('goldPnlTotal') + ': ' +
-          mask((pnlTotal >= 0 ? '+' : '−') + fmtShort(Math.abs(pnlTotal))) + '</span>' : '') + '</div>' +
-        (usesMarket ? '<button type="button" id="goldRefreshBtn" class="ghost-btn sm">' + icon('refresh') + ' ' + t('updateGoldPrice') + '</button>' : '') +
-        '</div>';
+          mask((pnlTotal >= 0 ? '+' : '−') + fmtShort(Math.abs(pnlTotal))) + '</span>' : '') + '</div>';
     }
 
-    return '<div class="section-title">' + t('netWorth') + ' · ' + t('netWorthNow') + '</div>' +
-      '<div class="nw-hero"><div class="nw-hero-label">' + icon('scale') + ' ' + t('netWorth') + '</div>' +
-      '<div class="nw-hero-val ' + (nw.net < 0 ? 'neg' : '') + '">' + mask(fmtVND(nw.net)) + '</div></div>' +
-      '<div class="summary-grid">' +
+    const detail =
+      (assetAccs.length ? '<div class="nw-group-title">' + t('assets') + '</div><div class="nw-list">' + assetAccs.map(accRow).join('') + '</div>' : '') +
+      (liabAccs.length ? '<div class="nw-group-title">' + t('liabilities') + '</div><div class="nw-list">' + liabAccs.map(accRow).join('') + '</div>' : '');
+
+    return '<section class="nw-card">' +
+      '<div class="nw-hero">' +
+      '<div class="nw-hero-label">' + icon('scale') + ' ' + t('netWorth') +
+      '<span class="nw-now">' + t('netWorthNow') + '</span></div>' +
+      '<div class="nw-hero-val ' + (nw.net < 0 ? 'neg' : '') + '">' + mask(fmtVND(nw.net)) + '</div>' +
+      '</div>' +
+      '<div class="summary-grid nw-totals">' +
       '<div class="sum-cell income"><span>' + t('totalAssets') + '</span><b>' + mask(fmtShort(nw.assets)) + '</b></div>' +
       '<div class="sum-cell expense"><span>' + t('totalLiabilities') + '</span><b>' + mask(fmtShort(nw.liabilities)) + '</b></div>' +
       '</div>' + goldBar +
-      (assetAccs.length ? '<div class="nw-group-title">' + t('assets') + '</div><div class="nw-list">' + assetAccs.map(accRow).join('') + '</div>' : '') +
-      (liabAccs.length ? '<div class="nw-group-title">' + t('liabilities') + '</div><div class="nw-list">' + liabAccs.map(accRow).join('') + '</div>' : '');
+      (detail ? '<details class="nw-detail" id="nwDetail"' + (nwWalletsOpen ? ' open' : '') + '>' +
+        '<summary>' + t('byWallet') + ' (' + accs.length + ')</summary>' + detail + '</details>' : '') +
+      '</section>';
   }
 
   // Wrap a report section as an atomic card (skipped when empty so the masonry
   // grid never gets blank cells). See .report-grid / .dash-card in style.css.
-  function reportCard(inner) { return inner ? '<section class="dash-card">' + inner + '</section>' : ''; }
+  // `key` is a REPORT_CARDS key: cards the user switched off are skipped before
+  // `inner` runs, so hidden cards cost nothing (no aggregation, no chart draw).
+  // Pass `inner` as a function for anything expensive; a plain string is fine too.
+  function reportCard(key, inner) {
+    if (key && !reportCardVisible(key)) return '';
+    const html = typeof inner === 'function' ? inner() : inner;
+    return html ? '<section class="dash-card">' + html + '</section>' : '';
+  }
   // Reports screen grouping (spec: docs/prompt-sap-xep-man-bao-cao.md).
   // Empty cards are dropped; a group with no content disappears entirely,
   // heading included — no orphan titles on the week/year views.
@@ -2991,10 +3046,12 @@
       if (Object.keys(byIncCat).length) {
         window.Charts.donut('repIncDonut', 'repIncLegend', byIncCat, (cat) => { filterCategory = cat; filterMonth = monthKey(reportAnchor); filterRangeDays = null; currentTab = 'transactions'; render(); }, catLabel);
       }
+      // Week/month bars cover a span of days; the tooltip title spells that span out
+      // ("08/06 – 14/06") since "Tuần 2" / "T4" alone don't say which dates they are.
       window.Charts.bars('repTrend', td.labels, [
         { label: t('income'), data: td.inc, color: incColor },
         { label: t('expense'), data: td.exp, color: expColor },
-      ]);
+      ], td.ranges ? { tooltipTitles: td.ranges.map((r) => fmtDayRange(r.from, r.to)) } : null);
       const benL = [], benE = [];
       pp.keys.forEach((k, i) => { if (pp.exp[i]) { benL.push(pp.labels[i]); benE.push(pp.exp[i]); } });
       if (benE.length) window.Charts.bars('repBeneficiary', benL, [
@@ -3007,6 +3064,10 @@
     // Blocks ordered general → detail (spec: docs/prompt-sap-xep-man-bao-cao.md).
     const isMonth = reportPeriod === 'month';
     return (
+      // Net worth is a snapshot of right now, not of the selected period — it sits
+      // above the period filter so nobody reads it as a filtered figure.
+      netWorthHtml() +
+
       '<div class="seg period-seg">' + periodBtn('week', t('week')) + periodBtn('month', t('month')) + periodBtn('year', t('year')) + '</div>' +
       '<div class="period-nav"><button class="nav-arrow" data-shift="-1">' + icon('left') + '</button>' +
       '<span class="period-label">' + reportLabel() + '</span>' +
@@ -3021,43 +3082,43 @@
       '<div class="sum-cell ' + (tt.net >= 0 ? 'income' : 'expense') + '"><span>' + t('savings') + '</span><b>' + fmtShort(tt.net) + '</b>' + deltaChip(tt.net, pt.net) + '</div>' +
       '<div class="sum-cell neutral"><span>' + t('savingsRate') + '</span><b>' + rate + '%</b></div>' +
       '</div>' +
-      reportGrid([reportCard(isMonth ? autoInsightsHtml() : '')]) +
+      reportGrid([reportCard('autoInsights', () => (isMonth ? autoInsightsHtml() : ''))]) +
 
       // 2 — Cash flow over time within the period
       reportGroup('rgFlow', [
-        reportCard('<div class="section-title">' + t('trend') + '</div>' +
-          '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div></div>'),
-        reportCard(isMonth ? dailySpendHtml() : ''),
+        reportCard('trend', '<div class="section-title">' + t('trend') + '</div>' +
+          '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div>' +
+          (td.ranges ? '<div class="hint">' + t('trendTapHint') + '</div>' : '') + '</div>'),
+        reportCard('dailySpend', () => (isMonth ? dailySpendHtml() : '')),
       ]) +
 
       // 3 — Where money went / came from, and how that tracks the budget
       reportGroup('rgStructure', [
-        reportCard('<div class="section-title">' + t('byCategory') + '</div>' +
+        reportCard('byCategory', '<div class="section-title">' + t('byCategory') + '</div>' +
           '<div class="card"><div class="chart-box"><canvas id="repDonut"></canvas></div><div id="repLegend" class="legend"></div></div>'),
-        reportCard(Object.keys(byIncCat).length ?
+        reportCard('incomeByCat', Object.keys(byIncCat).length ?
           '<div class="section-title">' + t('incomeByCat') + '</div>' +
           '<div class="card"><div class="chart-box"><canvas id="repIncDonut"></canvas></div><div id="repIncLegend" class="legend"></div></div>' : ''),
-        reportCard(isMonth ?
+        reportCard('budgetProgress', () => (isMonth ?
           '<div class="section-title">' + t('budgetProgress') + '</div><div class="budget-list">' +
-          budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : ''),
+          budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : '')),
       ]) +
 
       // 4 — Deeper analysis: multi-month trend/forecast + who money was spent for
       reportGroup('rgAnalysis', [
-        reportCard(trendsForecastHtml()),
-        reportCard(byBeneficiaryHtml(pp)),
+        reportCard('trendsForecast', trendsForecastHtml),
+        reportCard('byBeneficiary', () => byBeneficiaryHtml(pp)),
       ]) +
 
       // 5 — Detail: the biggest individual transactions
       reportGroup('rgDetail', [
-        reportCard('<div class="section-title">' + t('topSpending') + '</div>' +
+        reportCard('topSpending', '<div class="section-title">' + t('topSpending') + '</div>' +
           '<div class="tx-list">' + (top.length ? top.map(txRow).join('') : '<div class="empty">' + t('noTx') + '</div>') + '</div>'),
       ]) +
 
-      // 6 — Assets snapshot + the closing action (done AFTER reading the report)
+      // 6 — The closing action, done AFTER reading the report
       reportGroup('rgAssets', [
-        reportCard(netWorthHtml()),
-        reportCard(isMonth ? monthlyCloseCardHtml() : ''),
+        reportCard(null, () => (isMonth ? monthlyCloseCardHtml() : '')),
       ])
     );
   }
@@ -3401,6 +3462,7 @@
       iosGroup([
         iosRow({ ic: 'globe', tint: 'teal', label: t('language'), value: (lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'), action: 'lang' }),
         iosRow({ ic: 'moon', tint: 'purple', label: t('darkMode'), control: themeSwitch, action: 'theme', noChevron: true }),
+        iosRow({ ic: 'chart', tint: 'indigo', label: t('reportCardsMgmt'), value: hiddenReportCardCount() ? String(REPORT_CARDS.length - hiddenReportCardCount()) + '/' + REPORT_CARDS.length : '', page: 'reportCards' }),
         iosRow({ ic: 'bell', tint: 'orange', label: t('reminder'), value: (getReminderCfg().enabled ? getReminderCfg().time : ''), page: 'reminder' }),
       ], t('grpGeneral')) +
       iosGroup([
@@ -3846,6 +3908,16 @@
           '<input id="remindTime" type="time" value="' + esc(r.time || '20:00') + '"/></div>' : '') +
         (blocked ? '<div class="warn-hint">' + icon('alert') + ' ' + t('reminderDenied') + '</div>' : '') +
         '<div class="hint">' + t('reminderHint') + '</div>';
+    } else if (page === 'reportCards') {
+      title = t('reportCardsMgmt');
+      const rows = REPORT_CARDS.map((c) => {
+        const on = reportCardVisible(c.key);
+        return '<button class="ios-row tappable" data-rccard="' + c.key + '">' +
+          '<span class="ios-row-label">' + t(c.labelKey) +
+          (c.monthOnly ? ' <span class="rc-note">(' + t('monthOnlyNote') + ')</span>' : '') + '</span>' +
+          '<span class="ios-switch' + (on ? ' on' : '') + '"><span class="ios-knob"></span></span></button>';
+      });
+      body = '<div class="hint">' + t('reportCardsHint') + '</div>' + iosGroup(rows);
     } else {
       settingsPage = null;
       return settingsRoot();
@@ -4219,6 +4291,12 @@
     // reports period + nav
     document.querySelectorAll('[data-period]').forEach((b) => b.addEventListener('click', () => { reportPeriod = b.dataset.period; render(); }));
     document.querySelectorAll('[data-shift]').forEach((b) => b.addEventListener('click', () => shiftReport(parseInt(b.dataset.shift, 10))));
+    // Net worth card: remember whether the per-wallet breakdown was left open
+    const nwd = document.getElementById('nwDetail');
+    if (nwd) nwd.addEventListener('toggle', () => {
+      nwWalletsOpen = nwd.open;
+      try { localStorage.setItem('nwWalletsOpen', nwd.open ? '1' : '0'); } catch (e) { /* ignore */ }
+    });
     // spending calendar: tap a day → open that month's transactions
     // budgets
     const sb = document.getElementById('saveBudgetBtn');
@@ -4923,6 +5001,12 @@
     // Reminder time picker
     const rt = document.getElementById('remindTime');
     if (rt) rt.addEventListener('change', () => { const c = getReminderCfg(); c.time = rt.value || '20:00'; setReminderCfg(c); toast(t('save') + ' ✓', 'success'); });
+    // Settings → report cards: flip one card's visibility
+    document.querySelectorAll('[data-rccard]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.rccard;
+      setReportCardVisible(k, !reportCardVisible(k));
+      render();
+    }));
     // Settings: inline actions (language popup, dark-mode toggle, reminder toggle, sign out)
     document.querySelectorAll('[data-saction]').forEach((b) => b.addEventListener('click', () => {
       const a = b.dataset.saction;
@@ -5225,21 +5309,6 @@
   });
 
   /* ============== Gold price refresh ============== */
-  // On-demand refresh (button on the Net worth card). The Edge Function updates the
-  // shared gold_prices cache; realtime + refreshData bring the new numbers back.
-  document.addEventListener('click', (e) => {
-    const btn = e.target && e.target.closest ? e.target.closest('#goldRefreshBtn') : null;
-    if (!btn) return;
-    busy(btn, async () => {
-      try {
-        await window.Store.refreshGoldPrices();
-        await refreshData(true);
-        toast(t('goldPriceUpdated'), 'success');
-      } catch (err) {
-        toast(t('goldPriceUpdateFailed'), 'warn');
-      }
-    });
-  });
   // Keep prices fresh without user action: when any gold wallet references a market
   // kind and the cache is older than 4h, poke the Edge Function fire-and-forget.
   // The function itself no-ops when someone refreshed minutes ago, so a whole
