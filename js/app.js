@@ -768,11 +768,26 @@
     if (m.avatar && /^data:image\//.test(m.avatar)) {
       return '<img class="avatar ' + (cls || '') + '" src="' + esc(m.avatar) + '" alt=""/>';
     }
-    const name = (m.displayName || m.email || '?').trim() || '?';
+    // Own row may not be loaded yet on the very first render — fall back to the
+    // signed-in email so the header shows a real initial instead of "?".
+    const own = uid && uid === currentUserId ? currentUserEmail : '';
+    const name = (m.displayName || m.email || own || '?').trim() || '?';
     const sum = (uid || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
     const tint = AVATAR_TINTS[sum % AVATAR_TINTS.length];
     return '<span class="avatar avatar-fallback ' + (cls || '') + '" style="background:' + tint + '">' +
       esc(name.charAt(0).toUpperCase()) + '</span>';
+  }
+  // Header avatar, left of the app title: the signed-in member's own photo (or
+  // initial fallback) and a shortcut into Settings → profile. Hidden until we know
+  // who is signed in, so the auth/onboarding screens never show an empty circle.
+  function renderHeaderAvatar() {
+    const btn = document.getElementById('profileBtn');
+    if (!btn) return;
+    if (!currentUserId) { btn.style.display = 'none'; btn.innerHTML = ''; return; }
+    btn.style.display = '';
+    btn.innerHTML = memberAvatar(currentUserId, 'avatar-sm');
+    btn.title = myDisplayName() || t('account');
+    btn.setAttribute('aria-label', t('account'));
   }
   // Who entered a transaction, for the tx-meta line: their avatar when they
   // have one (name in the tooltip), otherwise their name as text.
@@ -3956,7 +3971,6 @@
     document.getElementById('modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') close(); });
     document.querySelectorAll('#modalBackdrop [data-pick]').forEach((b) => b.addEventListener('click', () => {
       lang = b.dataset.pick; localStorage.setItem('lang', lang);
-      const lt = document.getElementById('langToggle'); if (lt) lt.textContent = lang.toUpperCase();
       close(); render();
     }));
   }
@@ -4215,6 +4229,7 @@
     if (!addModalOpen) clearPendingAddFiles(); // don't carry chosen photos across popup sessions
     if (currentTab !== 'settings') settingsPage = null; // leaving Settings resets the sub-page stack
     document.getElementById('appName').textContent = t('appName');
+    renderHeaderAvatar();
     const view = document.getElementById('view');
     const map = { overview: viewOverview, reports: viewReports, transactions: viewTransactions, settings: viewSettings };
     view.innerHTML = (map[currentTab] || viewOverview)();
@@ -5060,11 +5075,26 @@
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#11131a' : '#6366f1');
   }
   function toggleTheme() { applyTheme(document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+  // Header = avatar + title + refresh. Language and dark mode are NOT here: both
+  // already live in Settings → Chung (rows 'lang' / 'theme'), so duplicating them
+  // in the header only crowded it.
   function wireHeader() {
-    const lt = document.getElementById('langToggle');
-    lt.textContent = lang.toUpperCase();
-    lt.addEventListener('click', () => { lang = lang === 'vi' ? 'en' : 'vi'; localStorage.setItem('lang', lang); lt.textContent = lang.toUpperCase(); render(); });
-    document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+    // Avatar next to the title jumps straight to the profile page. Same background
+    // re-check of the verified badge as the Settings row does, since the user may
+    // have clicked the confirmation link in their inbox since the last load.
+    const pb = document.getElementById('profileBtn');
+    if (pb) {
+      pb.style.display = 'none';   // stays hidden until renderHeaderAvatar() knows the user
+      pb.addEventListener('click', () => {
+        if (!currentUserId) return;
+        currentTab = 'settings'; settingsPage = 'account'; render();
+        window.Store.getUser().then((u) => {
+          if (!u) return;
+          const v = !!(u.email_confirmed_at || u.confirmed_at);
+          if (v !== currentUserVerified) { currentUserVerified = v; render(); }
+        }).catch(() => {});
+      });
+    }
     // manual refresh: pull the latest data without reloading the page
     const rf = document.getElementById('refreshBtn');
     if (rf) {

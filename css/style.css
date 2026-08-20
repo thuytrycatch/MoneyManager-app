@@ -64,7 +64,13 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   padding: 14px 18px; background: var(--bg-secondary);
   padding-top: max(14px, env(safe-area-inset-top));
 }
-.brand { font-weight: 800; font-size: 19px; letter-spacing: -.3px; }
+.brand { font-weight: 800; font-size: 19px; letter-spacing: -.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Avatar + title as one unit on the left; min-width:0 lets a long custom app
+   name ellipsize instead of pushing the header actions off-screen. */
+.brand-box { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-avatar { background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; border-radius: 50%; flex-shrink: 0; }
+.brand-avatar:active { transform: scale(.94); }
+.brand-avatar .avatar { box-shadow: 0 0 0 2px var(--bg-elev); }
 /* Grouped as one pill (not 3 separate boxed buttons) so the header stays
    compact regardless of viewport width. */
 .header-actions {
@@ -587,6 +593,8 @@ button.btn-busy::before {
 .avatar-lg { width: 96px; height: 96px; font-size: 38px; }
 /* Tiny inline avatar in a transaction's meta line (replaces the enterer's name). */
 .avatar-xs { width: 16px; height: 16px; vertical-align: -3px; display: inline-block; }
+/* Header avatar — sized to sit level with the app title. */
+.avatar-sm { width: 30px; height: 30px; font-size: 13px; }
 .profile-head { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 6px 0 14px; }
 .profile-avatar-btns { display: flex; gap: 8px; }
 .verify-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
@@ -688,6 +696,8 @@ main { padding: 4px 12px 92px; }
 .section-title { margin: 14px 4px 8px; font-size: 12px; }
 .section-row { margin-top: 14px; }
 .brand { font-size: 17px; }
+.brand-box { gap: 8px; }
+.avatar-sm { width: 27px; height: 27px; font-size: 12px; }
 .header { padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top)); }
 .header-actions button { min-width: 34px; height: 30px; }
 .hero { padding: 16px 16px; margin-top: 6px; }

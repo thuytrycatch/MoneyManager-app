@@ -39,11 +39,14 @@
 
   <div id="appShell" class="app-shell hidden">
     <header class="header">
-      <span class="brand" id="appName">Sổ Thu Chi</span>
+      <div class="brand-box">
+        <button id="profileBtn" class="brand-avatar" type="button"></button>
+        <span class="brand" id="appName">Sổ Thu Chi</span>
+      </div>
+      <!-- Language and dark mode live in Settings → Chung; the header keeps only
+           the manual refresh so it stays uncluttered. -->
       <div class="header-actions">
         <button id="refreshBtn" title="Làm mới"></button>
-        <button id="langToggle" title="VI / EN">VI</button>
-        <button id="themeToggle" title="Sáng / Tối">🌗</button>
       </div>
     </header>
 
