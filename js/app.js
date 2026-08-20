@@ -2552,7 +2552,16 @@
         labels.push(t('weekLabel') + ' ' + (w + 1)); inc.push(0); exp.push(0);
         ranges.push({ from: new Date(y, mo, w * 7 + 1), to: new Date(y, mo, Math.min(days, (w + 1) * 7)) });
       }
-      txs.forEach((x) => { if (isAdjust(x)) return; const day = parseInt(x.date.slice(8, 10), 10); const wi = Math.min(weeks - 1, Math.floor((day - 1) / 7)); if (x.type === 'income') inc[wi] += x.amount; else exp[wi] += x.amount; });
+      // Same ledger rules as totals(): skip balance adjustments AND transfers —
+      // moving money between wallets (every debt disbursement/repayment included) is
+      // neither income nor expense, so it must not inflate a week's bar.
+      txs.forEach((x) => {
+        if (isAdjust(x) || x.type === 'transfer') return;
+        const day = parseInt(x.date.slice(8, 10), 10);
+        const wi = Math.min(weeks - 1, Math.floor((day - 1) / 7));
+        if (x.type === 'income') inc[wi] += x.amount;
+        else if (x.type === 'expense') exp[wi] += x.amount;
+      });
     }
     return { labels, inc, exp, ranges };
   }
