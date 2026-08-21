@@ -31,7 +31,9 @@ const BAND = 0.25;                     // ±25% vs stored price
 const minPerChi = Number(Deno.env.get("GOLD_MIN_PER_CHI")) || MIN_PER_CHI;
 const maxPerChi = Number(Deno.env.get("GOLD_MAX_PER_CHI")) || MAX_PER_CHI;
 
-type Quote = { buy: number; sell: number | null };
+// changeBuy: move since the previous close, in the SAME raw unit as `buy`
+// (only vang.today reports it; null everywhere else).
+type Quote = { buy: number; sell: number | null; changeBuy?: number | null };
 type Parsed = Partial<Record<"sjc" | "ring9999", Quote>>;
 
 // ---------------------------------------------------------------------
@@ -58,7 +60,41 @@ function normalizePerChi(raw: number, stored: number | null): number | null {
 }
 
 // ---------------------------------------------------------------------
-// Source 1: SJC public XML feed. Rows look like
+// Source 1 (primary): vang.today JSON. One call returns every instrument,
+// priced per LƯỢNG in VND — normalizePerChi divides by 10. We read the two
+// kinds this app tracks and ignore the rest:
+//   SJL1L10 "SJC 9999"  → sjc        SJ9999 "SJC Ring" → ring9999
+// `change_buy` is the move since the previous close; it lets us backfill
+// yesterday's history row on a cold start so the daily chart is not empty.
+// ---------------------------------------------------------------------
+type VtRow = { name?: string; buy?: number; sell?: number; change_buy?: number; currency?: string };
+async function fetchVangToday(): Promise<Parsed> {
+  const resp = await fetch("https://www.vang.today/api/prices", {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; BudgetManager/1.0)" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) throw new Error("vang.today http " + resp.status);
+  const json = await resp.json();
+  const rows: Record<string, VtRow> = json?.prices || {};
+  const out: Parsed = {};
+  const take = (code: string, kind: "sjc" | "ring9999") => {
+    const r = rows[code];
+    if (!r || !isFinite(Number(r.buy)) || Number(r.buy) <= 0) return;
+    if (r.currency && r.currency !== "VND") return;          // skip XAUUSD & friends
+    out[kind] = {
+      buy: Number(r.buy),
+      sell: isFinite(Number(r.sell)) && Number(r.sell) > 0 ? Number(r.sell) : null,
+      changeBuy: isFinite(Number(r.change_buy)) ? Number(r.change_buy) : null,
+    };
+  };
+  take("SJL1L10", "sjc");
+  take("SJ9999", "ring9999");
+  if (!out.sjc && !out.ring9999) throw new Error("vang.today: no rows matched");
+  return out;
+}
+
+// ---------------------------------------------------------------------
+// Source 2: SJC public XML feed. Rows look like
 //   <item buy="..." sell="..." type="Vàng SJC ..."/>  (per LƯỢNG pricing)
 // The exact scale has changed over the years — normalizePerChi absorbs it.
 // ---------------------------------------------------------------------
@@ -90,7 +126,7 @@ async function fetchSjc(): Promise<Parsed> {
 }
 
 // ---------------------------------------------------------------------
-// Source 2 (fallback): BTMC JSON API. Rows carry @n_i (name), @pb_i (buy),
+// Source 3 (last resort): BTMC JSON API. Rows carry @n_i (name), @pb_i (buy),
 // @ps_i (sell) attribute-style keys, one index per row.
 // ---------------------------------------------------------------------
 async function fetchBtmc(): Promise<Parsed> {
@@ -140,7 +176,7 @@ Deno.serve(async (_req) => {
   let parsed: Parsed | null = null;
   let source = "";
   const errors: string[] = [];
-  for (const [name, fn] of [["sjc.com.vn", fetchSjc], ["btmc.vn", fetchBtmc]] as const) {
+  for (const [name, fn] of [["vang.today", fetchVangToday], ["sjc.com.vn", fetchSjc], ["btmc.vn", fetchBtmc]] as const) {
     try { parsed = await fn(); source = name; break; }
     catch (e) { errors.push(name + ": " + (e as Error).message); }
   }
@@ -152,7 +188,12 @@ Deno.serve(async (_req) => {
     );
   }
 
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const yesterday = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+
   const updates: Record<string, unknown>[] = [];
+  const history: Record<string, unknown>[] = [];
   const rejected: string[] = [];
   for (const kind of ["sjc", "ring9999"] as const) {
     const q = parsed[kind];
@@ -164,7 +205,19 @@ Deno.serve(async (_req) => {
       rejected.push(kind + " raw=" + q.buy);
       continue; // keep the stored price for this kind
     }
-    updates.push({ kind, buy_per_chi: buy, sell_per_chi: sell, source, fetched_at: new Date().toISOString() });
+    updates.push({ kind, buy_per_chi: buy, sell_per_chi: sell, source, fetched_at: now.toISOString() });
+    // One row per kind per day; running again the same day overwrites it, so a
+    // day ends up holding that day's last quote (its close).
+    history.push({ kind, day: today, buy_per_chi: buy, sell_per_chi: sell, source });
+    // Cold start: the source tells us how much the price moved since the
+    // previous close, so yesterday can be derived and the daily chart has
+    // something to draw on day one. Never overwrites a real row (see below).
+    if (q.changeBuy != null && q.changeBuy !== 0) {
+      const prevClose = normalizePerChi(q.buy - q.changeBuy, buy);
+      if (prevClose != null) {
+        history.push({ kind, day: yesterday, buy_per_chi: prevClose, sell_per_chi: null, source: source + " (derived)" });
+      }
+    }
   }
   // NOTE: 'jewelry' (18k…) has no reliable public feed — it keeps its seed /
   // manual value; per-wallet `gold_factor` handles purity discounts anyway.
@@ -175,9 +228,23 @@ Deno.serve(async (_req) => {
       return new Response(JSON.stringify({ ok: false, error: error.message, prices: cached }), { status: 500, headers });
     }
   }
+  // Daily history is best-effort: the table may not exist yet on installs that
+  // haven't re-run supabase-schema.sql, and a missing chart must never break
+  // the price update itself.
+  let historyError: string | null = null;
+  if (history.length) {
+    const todayRows = history.filter((h) => h.day === today);
+    const derived = history.filter((h) => h.day === yesterday);
+    const { error } = await supa.from("gold_price_history").upsert(todayRows, { onConflict: "kind,day" });
+    if (error) historyError = error.message;
+    // ignoreDuplicates so a derived guess never replaces a day we really recorded.
+    if (!error && derived.length) {
+      await supa.from("gold_price_history").upsert(derived, { onConflict: "kind,day", ignoreDuplicates: true });
+    }
+  }
   const { data: fresh } = await supa.from("gold_prices").select("*");
   return new Response(
-    JSON.stringify({ ok: updates.length > 0, source, updated: updates.length, rejected, errors, prices: fresh }),
+    JSON.stringify({ ok: updates.length > 0, source, updated: updates.length, rejected, errors, historyError, prices: fresh }),
     { headers },
   );
 });

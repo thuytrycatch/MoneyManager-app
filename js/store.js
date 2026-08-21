@@ -553,7 +553,21 @@
         return out;
       }).catch(() => ({}));
 
-    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, categories, debts, goldPrices, aiConfig };
+    // Daily gold price history (shared, read-only) for the price chart. Newest
+    // first from the DB, flipped to oldest-first per kind so charts can plot it
+    // directly. Missing table (schema not re-run yet) → {}, chart just hides.
+    const goldHistory = await sb.from('gold_price_history')
+      .select('kind, day, buy_per_chi').order('day', { ascending: false }).limit(400)
+      .then((r) => {
+        const out = {};
+        if (!r.error) (r.data || []).forEach((h) => {
+          (out[h.kind] = out[h.kind] || []).push({ day: h.day, buyPerChi: Number(h.buy_per_chi) });
+        });
+        Object.keys(out).forEach((k) => out[k].reverse());
+        return out;
+      }).catch(() => ({}));
+
+    const data = { household: { id: household.id, name: household.name, createdBy: household.createdBy }, budgets, transactions, accounts, goals, recurring, attachments, monthlyReports, categories, debts, goldPrices, goldHistory, aiConfig };
     idbSet('data:' + hid, data).catch(() => {});
     return data;
   }

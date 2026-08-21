@@ -935,6 +935,28 @@ drop trigger if exists trg_log_debts on public.debts;
 create trigger trg_log_debts after insert or update or delete on public.debts
   for each row execute function public.log_activity();
 
+-- =====================================================================
+--  Lịch sử giá vàng theo NGÀY — để màn Báo cáo vẽ được diễn biến giá,
+--  không chỉ giá hiện tại. gold_prices giữ đúng 1 hàng/loại (giá mới
+--  nhất); bảng này giữ 1 hàng/loại/ngày (lần ghi cuối trong ngày thắng,
+--  tức giá chốt ngày). Cũng chỉ Edge Function (service role) được ghi,
+--  mọi thành viên đã đăng nhập đều đọc được. An toàn chạy lại.
+-- =====================================================================
+create table if not exists public.gold_price_history (
+  kind         text not null,               -- sjc | ring9999 | jewelry
+  day          date not null,
+  buy_per_chi  bigint not null,             -- giá tiệm MUA VÀO (VND / chỉ)
+  sell_per_chi bigint,
+  source       text,
+  updated_at   timestamptz not null default now(),
+  primary key (kind, day)
+);
+create index if not exists idx_gold_hist_day on public.gold_price_history (day desc);
+alter table public.gold_price_history enable row level security;
+drop policy if exists gold_price_history_select on public.gold_price_history;
+create policy gold_price_history_select on public.gold_price_history for select
+  using (auth.role() = 'authenticated');
+
 -- ---------------------------------------------------------------------
 -- LAST: make PostgREST (Supabase's API layer) reload its schema cache so
 -- the columns/tables added above are usable IMMEDIATELY. Without this,

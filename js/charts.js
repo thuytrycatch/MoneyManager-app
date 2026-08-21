@@ -300,14 +300,24 @@
     });
   }
 
-  /* Small sparkline (7 days) */
-  function sparkline(canvasId, data, color) {
+  /* Small sparkline (7 days). opts.line draws a filled line whose y-axis fits the
+   * data instead of starting at zero — the right shape for a series that moves by
+   * a percent or two (gold prices): zero-based bars would all look identical. */
+  function sparkline(canvasId, data, color, opts) {
     const ctx = document.getElementById(canvasId); if (!ctx) return;
     destroy(canvasId);
+    const asLine = !!(opts && opts.line);
+    const dataset = asLine
+      ? { data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 0, borderWidth: 2 }
+      : { data, backgroundColor: color, borderRadius: 2, maxBarThickness: 9 };
     reg[canvasId] = new Chart(ctx, {
-      type: 'bar',
-      data: { labels: data.map((_, i) => i), datasets: [{ data, backgroundColor: color, borderRadius: 2, maxBarThickness: 9 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } } },
+      type: asLine ? 'line' : 'bar',
+      data: { labels: data.map((_, i) => i), datasets: [dataset] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, beginAtZero: !asLine } },
+      },
     });
   }
 

@@ -125,6 +125,10 @@
       savingsDraw: 'Tiết kiệm bỏ ra chi tiêu', savingsDrawOut: 'Rút từ tiết kiệm', savingsDrawBack: 'Gửi lại tiết kiệm',
       savingsDrawNet: 'Rút ròng', savingsDrawCover: 'Bù đắp {n}% chi tiêu trong kỳ.',
       savingsDrawHint: 'Tiền chuyển từ ví Tiết kiệm sang ví Tiền mặt để chi tiêu (và chiều ngược lại). Chỉ tính tiết kiệm → tiền mặt; rút ATM từ ngân hàng không nằm ở đây. Chuyển ví không tính là thu/chi nên các số khác không đổi.',
+      goldPriceCard: 'Giá vàng', goldPerLuongShort: 'Mỗi lượng', goldSellShort: 'Bán ra',
+      goldDays: '{n} ngày gần nhất',
+      goldPriceCardHint: 'Giá tiệm MUA VÀO (số bạn nhận được khi bán) — cũng là giá dùng để định giá ví vàng, nhân với % chênh giá cài trong từng ví. Giá tự cập nhật khi mở app.',
+      nwExcludesLent: 'Chưa gồm tiền đang cho vay',
       reportCardsMgmt: 'Hiển thị báo cáo',
       reportCardsHint: 'Chọn khối báo cáo muốn thấy ở màn Báo cáo. Cài đặt lưu trên thiết bị này.',
       monthOnlyNote: 'chỉ có ở báo cáo tháng',
@@ -377,6 +381,10 @@
       savingsDraw: 'Savings spent', savingsDrawOut: 'Drawn from savings', savingsDrawBack: 'Put back',
       savingsDrawNet: 'Net drawn', savingsDrawCover: 'Covers {n}% of this period\'s spending.',
       savingsDrawHint: 'Money transferred from a Savings wallet into a Cash wallet to be spent (and back again). Only savings to cash counts; ATM withdrawals from a bank are not included. Transfers are not income or expense, so no other figure changes.',
+      goldPriceCard: 'Gold price', goldPerLuongShort: 'Per lượng', goldSellShort: 'Sell',
+      goldDays: 'last {n} days',
+      goldPriceCardHint: 'Dealer buy-back price (what you receive when selling) — the same price used to value gold wallets, times the factor set on each wallet. Refreshes when you open the app.',
+      nwExcludesLent: 'Excludes money lent out',
       reportCardsMgmt: 'Report cards',
       reportCardsHint: 'Pick which blocks show up on the Reports screen. Saved on this device.',
       monthOnlyNote: 'monthly report only',
@@ -737,6 +745,7 @@
     { key: 'trend', labelKey: 'trend' },
     { key: 'dailySpend', labelKey: 'dailySpend', monthOnly: true },
     { key: 'savingsDraw', labelKey: 'savingsDraw' },
+    { key: 'goldPrice', labelKey: 'goldPriceCard' },
     { key: 'byCategory', labelKey: 'byCategory' },
     { key: 'incomeByCat', labelKey: 'incomeByCat' },
     { key: 'budgetProgress', labelKey: 'budgetProgress', monthOnly: true },
@@ -1257,11 +1266,20 @@
   function txBalance() {
     return txAccounts().reduce((s, a) => s + accountBalance(a.id), 0);
   }
+  // Money lent out and not yet paid back: the balance of the debt_lend system
+  // wallet. It is a receivable, not cash in hand.
+  function lentOut() {
+    const w = (DATA.accounts || []).find((a) => a.systemKind === 'debt_lend' && !a.archived);
+    return w ? Math.max(0, accountBalance(w.id)) : 0;
+  }
   // Net worth = total assets − total liabilities. Balances are kept in the "money held" frame,
   // so a liability you owe shows up as a negative balance; amount owed = −balance.
+  // Money lent out is EXCLUDED on purpose: net worth here means what the household
+  // actually holds, not what it is owed. lentOut() reports it separately.
   function netWorth() {
     let assets = 0, liabilities = 0;
     activeAccounts().forEach((a) => {
+      if (a.systemKind === 'debt_lend') return;         // receivable, not in hand
       const b = accountBalance(a.id);
       if (accountClass(a) === 'liability') liabilities += Math.max(0, -b);
       else assets += b;
@@ -2702,10 +2720,14 @@
   // it is a snapshot of RIGHT NOW, unaffected by the week/month/year selection.
   // The per-wallet breakdown collapses so the card stays short at the top.
   function netWorthHtml() {
-    const accs = activeAccounts();
+    // The debt_lend system wallet is filtered out everywhere in this card: it holds
+    // money that is owed to the household, which netWorth() deliberately leaves out
+    // (it is reported on its own line below instead).
+    const accs = activeAccounts().filter((a) => a.systemKind !== 'debt_lend');
     if (!accs.length) return '<section class="nw-card"><div class="nw-hero-label">' + icon('scale') + ' ' + t('netWorth') + '</div>' +
       '<div class="empty">' + t('noAccountsNw') + '</div></section>';
     const nw = netWorth();
+    const lent = lentOut();
     const assetAccs = accs.filter((a) => accountClass(a) !== 'liability');
     const liabAccs = accs.filter((a) => accountClass(a) === 'liability');
 
@@ -2774,9 +2796,96 @@
       '<div class="sum-cell income"><span>' + t('totalAssets') + '</span><b>' + mask(fmtShort(nw.assets)) + '</b></div>' +
       '<div class="sum-cell expense"><span>' + t('totalLiabilities') + '</span><b>' + mask(fmtShort(nw.liabilities)) + '</b></div>' +
       '</div>' + goldBar +
+      (lent ? '<div class="nw-lent">' + icon('transfer') + ' ' + t('nwExcludesLent') + ': <b>' + mask(fmtShort(lent)) + '</b></div>' : '') +
       (detail ? '<details class="nw-detail" id="nwDetail"' + (nwWalletsOpen ? ' open' : '') + '>' +
         '<summary>' + t('byWallet') + ' (' + accs.length + ')</summary>' + detail + '</details>' : '') +
       '</section>';
+  }
+
+  /* ============== Gold price (daily) ==============
+   * Market prices for the gold kinds this household actually holds, straight from
+   * the shared cache the gold-price Edge Function fills (vang.today → SJC feed →
+   * BTMC). buy_per_chi is the dealer BUY-BACK price — what you would receive when
+   * selling — which is why holdings are valued with it.
+   * Per-day rows come from gold_price_history; that table is optional, so with no
+   * history the card still shows today's price, just without the chart or change. */
+  function goldKindsHeld() {
+    const used = {};
+    activeAccounts().forEach((a) => {
+      if (a.type === 'gold' && a.goldKind && a.goldKind !== 'custom') used[a.goldKind] = 1;
+    });
+    return Object.keys(used);
+  }
+  // Day-over-day move of a kind's buy price, from the two most recent history rows.
+  function goldDayChange(kind) {
+    const h = (DATA.goldHistory || {})[kind] || [];
+    if (h.length < 2) return null;
+    const last = h[h.length - 1], prev = h[h.length - 2];
+    const diff = last.buyPerChi - prev.buyPerChi;
+    return { diff: diff, pct: prev.buyPerChi ? diff / prev.buyPerChi : null, day: last.day, prevDay: prev.day };
+  }
+  function goldPriceHtml() {
+    const kinds = goldKindsHeld();
+    if (!kinds.length) return '';
+    const HIST_DAYS = 30;
+    const charts = [];                     // canvases to draw once the DOM exists
+
+    const blocks = kinds.map((kind, i) => {
+      const p = (DATA.goldPrices || {})[kind];
+      if (!p) return '';
+      const chg = goldDayChange(kind);
+      const hist = ((DATA.goldHistory || {})[kind] || []).slice(-HIST_DAYS);
+      const canvasId = 'goldSpark' + i;
+      if (hist.length >= 2) charts.push({ id: canvasId, data: hist.map((h) => h.buyPerChi) });
+      let chgHtml = '';
+      if (chg && chg.diff !== 0) {
+        const up = chg.diff > 0;
+        chgHtml = '<span class="gp-chg ' + (up ? 'income' : 'expense') + '">' + (up ? '▲' : '▼') + ' ' +
+          fmtShort(Math.abs(chg.diff)) + (chg.pct != null ? ' (' + (up ? '+' : '−') +
+            Math.abs(Math.round(chg.pct * 1000) / 10) + '%)' : '') + '</span>';
+      } else if (chg) {
+        chgHtml = '<span class="gp-chg">–</span>';
+      }
+      // Holdings of this kind, valued the same way the wallet card values them:
+      // weight × buy-back price × the wallet's own factor (unbranded gold discount).
+      const mine = activeAccounts().filter((a) => a.type === 'gold' && a.goldKind === kind);
+      const chi = mine.reduce((s, a) => s + (a.goldWeightChi || 0), 0);
+      const value = mine.reduce((s, a) => s + goldValue(a), 0);
+      const factors = Array.from(new Set(mine.map((a) => Math.round((a.goldFactor || 1) * 1000) / 10)));
+      return '<div class="gp-block">' +
+        '<div class="gp-head"><span class="gp-kind">' + goldKindLabel(kind) + '</span>' +
+        '<span class="gp-price">' + fmtShort(p.buyPerChi) + '<small>/' + t('unitChi') + '</small></span>' + chgHtml + '</div>' +
+        '<div class="gp-sub">' + t('goldPerLuongShort') + ' ' + fmtShort(p.buyPerChi * 10) +
+        (p.sellPerChi ? ' · ' + t('goldSellShort') + ' ' + fmtShort(p.sellPerChi) + '/' + t('unitChi') : '') + '</div>' +
+        (hist.length >= 2 ? '<div class="gp-spark"><canvas id="' + canvasId + '"></canvas></div>' +
+          '<div class="gp-range"><span>' + esc(hist[0].day.slice(5)) + '</span><span>' +
+          t('goldDays').replace('{n}', hist.length) + '</span><span>' + esc(hist[hist.length - 1].day.slice(5)) + '</span></div>' : '') +
+        (chi ? '<div class="gp-mine">' + fmtChi(chi) + ' ' + t('unitChi') +
+          (factors.length === 1 && factors[0] !== 100 ? ' × ' + factors[0] + '%' : '') +
+          ' = <b>' + mask(fmtShort(value)) + '</b></div>' : '') +
+        '</div>';
+    }).filter(Boolean).join('');
+    if (!blocks) return '';
+
+    if (charts.length) {
+      setTimeout(() => {
+        const acc = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#6366f1';
+        charts.forEach((c) => window.Charts.sparkline(c.id, c.data, acc, { line: true }));
+      }, 0);
+    }
+    // Whole-portfolio P&L against what was actually paid (cost basis per wallet).
+    const pnlTotal = totalGoldPnl();
+    const hasBasis = activeAccounts().some((a) => a.type === 'gold' && a.goldBuyPerChi);
+    const fa = goldPriceFetchedAt();
+    const when = fa ? t('priceUpdatedAt') + ' ' + pad(fa.getDate()) + '/' + pad(fa.getMonth() + 1) + ' ' +
+      pad(fa.getHours()) + ':' + pad(fa.getMinutes()) : '';
+    return '<div class="section-title">' + t('goldPriceCard') + '</div>' +
+      '<div class="card">' + blocks +
+      (hasBasis ? '<div class="gp-pnl ' + (pnlTotal >= 0 ? 'income' : 'expense') + '">' + t('goldPnlTotal') + ': ' +
+        mask((pnlTotal >= 0 ? '+' : '−') + fmtShort(Math.abs(pnlTotal))) + '</div>' : '') +
+      (when ? '<div class="hint">' + when + '</div>' : '') +
+      '<div class="hint">' + t('goldPriceCardHint') + '</div>' +
+      '</div>';
   }
 
   // Wrap a report section as an atomic card (skipped when empty so the masonry
@@ -3199,10 +3308,12 @@
           budgetBarsHtml(byCat, DATA.budgets, monthElapsedFraction(reportAnchor)) + '</div>' : '')),
       ]) +
 
-      // 4 — Deeper analysis: multi-month trend/forecast + who money was spent for
+      // 4 — Deeper analysis: multi-month trend/forecast, who money was spent for,
+      //     and the market prices behind the gold half of net worth
       reportGroup('rgAnalysis', [
         reportCard('trendsForecast', trendsForecastHtml),
         reportCard('byBeneficiary', () => byBeneficiaryHtml(pp)),
+        reportCard('goldPrice', goldPriceHtml),
       ]) +
 
       // 5 — Detail: the biggest individual transactions
@@ -5378,6 +5489,7 @@
     if (!DATA.monthlyReports) DATA.monthlyReports = [];
     if (!DATA.categories) DATA.categories = [];
     if (!DATA.goldPrices) DATA.goldPrices = {};
+    if (!DATA.goldHistory) DATA.goldHistory = {};
     syncParserCategories();
     myHouseholds = await window.Store.listHouseholds().catch(() => []);
     householdMembers = await window.Store.listMembers().catch(() => []);
@@ -5450,6 +5562,7 @@
     if (!DATA.monthlyReports) DATA.monthlyReports = [];
     if (!DATA.categories) DATA.categories = [];
     if (!DATA.goldPrices) DATA.goldPrices = {};
+    if (!DATA.goldHistory) DATA.goldHistory = {};
     syncParserCategories();
       householdMembers = await window.Store.listMembers().catch(() => householdMembers);
       myRole = computeMyRole();
