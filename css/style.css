@@ -392,20 +392,20 @@ button.btn-busy::before {
 .legend-val { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
 
 /* ---------- Spending by beneficiary (Chi theo thành viên) ----------
-   .ben-* is also reused by the provisioning card's per-wallet breakdown. */
+   .ben-* is also reused by the savings-drawn card per-wallet breakdown. */
 .ben-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
 .ben-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 6px; border-radius: 10px; }
 .ben-row:nth-child(odd) { background: var(--bg-secondary); }
 .ben-name { font-weight: 600; font-size: 13.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ben-amt { font-size: 12.5px; color: var(--text-secondary); font-weight: 700; flex: none; }
 
-/* ---------- Provisioning card (Trích lập dự phòng) ----------
+/* ---------- Savings drawn for spending (Tiết kiệm bỏ ra chi tiêu) ----------
    Three figures. On a phone the odd third one takes the full row rather than
    leaving half the grid blank; from tablet up all three sit in a single row. */
-.summary-grid.prov-grid > .sum-cell:nth-child(3) { grid-column: 1 / -1; }
+.summary-grid.sd-grid > .sum-cell:nth-child(3) { grid-column: 1 / -1; }
 @media (min-width: 768px) {
-  .summary-grid.prov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .summary-grid.prov-grid > .sum-cell:nth-child(3) { grid-column: auto; }
+  .summary-grid.sd-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .summary-grid.sd-grid > .sum-cell:nth-child(3) { grid-column: auto; }
 }
 
 /* Visually hidden but available to screen readers */

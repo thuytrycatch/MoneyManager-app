@@ -122,9 +122,9 @@
       rgOverview: 'Tổng quan', rgFlow: 'Dòng tiền trong kỳ', rgStructure: 'Cơ cấu danh mục',
       rgAnalysis: 'Phân tích & dự báo', rgDetail: 'Chi tiết', rgAssets: 'Chốt sổ',
       byWallet: 'Chi tiết theo ví', trendTapHint: 'Chạm vào cột để xem khoảng ngày.',
-      provision: 'Trích lập dự phòng', provisionDrawn: 'Rút về tiền mặt', provisionReturned: 'Chuyển ngược lại',
-      provisionNet: 'Rút ròng', provisionCover: 'Bù đắp {n}% chi tiêu trong kỳ.',
-      provisionHint: 'Tiền từ ví không phải tiền mặt chuyển sang ví tiền mặt để chi tiêu, gồm cả rút ATM. Chuyển ví không tính là thu/chi nên các số khác không đổi.',
+      savingsDraw: 'Tiết kiệm bỏ ra chi tiêu', savingsDrawOut: 'Rút từ tiết kiệm', savingsDrawBack: 'Gửi lại tiết kiệm',
+      savingsDrawNet: 'Rút ròng', savingsDrawCover: 'Bù đắp {n}% chi tiêu trong kỳ.',
+      savingsDrawHint: 'Tiền chuyển từ ví Tiết kiệm sang ví Tiền mặt để chi tiêu (và chiều ngược lại). Chỉ tính tiết kiệm → tiền mặt; rút ATM từ ngân hàng không nằm ở đây. Chuyển ví không tính là thu/chi nên các số khác không đổi.',
       reportCardsMgmt: 'Hiển thị báo cáo',
       reportCardsHint: 'Chọn khối báo cáo muốn thấy ở màn Báo cáo. Cài đặt lưu trên thiết bị này.',
       monthOnlyNote: 'chỉ có ở báo cáo tháng',
@@ -374,9 +374,9 @@
       rgOverview: 'Overview', rgFlow: 'Cash flow', rgStructure: 'Category breakdown',
       rgAnalysis: 'Analysis & forecast', rgDetail: 'Details', rgAssets: 'Monthly close',
       byWallet: 'By wallet', trendTapHint: 'Tap a bar to see its date range.',
-      provision: 'Cash provisioning', provisionDrawn: 'Moved into cash', provisionReturned: 'Moved back out',
-      provisionNet: 'Net drawn', provisionCover: 'Covers {n}% of this period\'s spending.',
-      provisionHint: 'Money moved from non-cash wallets into a cash wallet to be spent, ATM withdrawals included. Transfers are not income or expense, so no other figure changes.',
+      savingsDraw: 'Savings spent', savingsDrawOut: 'Drawn from savings', savingsDrawBack: 'Put back',
+      savingsDrawNet: 'Net drawn', savingsDrawCover: 'Covers {n}% of this period\'s spending.',
+      savingsDrawHint: 'Money transferred from a Savings wallet into a Cash wallet to be spent (and back again). Only savings to cash counts; ATM withdrawals from a bank are not included. Transfers are not income or expense, so no other figure changes.',
       reportCardsMgmt: 'Report cards',
       reportCardsHint: 'Pick which blocks show up on the Reports screen. Saved on this device.',
       monthOnlyNote: 'monthly report only',
@@ -736,7 +736,7 @@
     { key: 'autoInsights', labelKey: 'insights', monthOnly: true },
     { key: 'trend', labelKey: 'trend' },
     { key: 'dailySpend', labelKey: 'dailySpend', monthOnly: true },
-    { key: 'provision', labelKey: 'provision' },
+    { key: 'savingsDraw', labelKey: 'savingsDraw' },
     { key: 'byCategory', labelKey: 'byCategory' },
     { key: 'incomeByCat', labelKey: 'incomeByCat' },
     { key: 'budgetProgress', labelKey: 'budgetProgress', monthOnly: true },
@@ -2842,28 +2842,30 @@
       '<div class="ben-list">' + rows + '</div></div>';
   }
 
-  /* ============== Provisioning (trích lập dự phòng) ==============
-   * Money pulled out of a NON-CASH wallet into a CASH wallet in order to spend it,
-   * and the reverse leg (cash put back). Both are plain transfers, so none of this
-   * touches income/expense — it answers a question those totals can't: how much of
-   * the period's spending had to be funded from somewhere other than cash on hand.
-   * Note: an ATM withdrawal (bank → cash) counts, by design — the household asked
-   * for every non-cash source, not just savings-type wallets.
-   * The debt system wallets are excluded: their transfers are lending/borrowing
-   * bookkeeping, not a real money movement between the household's own wallets. */
+  /* ============== Savings drawn for spending ==============
+   * How much came OUT of a savings wallet into a cash wallet so it could be spent,
+   * and how much went back the other way. Both legs are plain transfers, so nothing
+   * here touches income/expense — it answers what those totals cannot: how much of
+   * this period's cash spending had to be funded by dipping into savings.
+   * Only savings → cash counts. Bank → cash (an ATM run) is ordinary cash handling,
+   * not savings being spent, so it is deliberately left out.
+   * The debt system wallets MUST stay excluded: store.js creates them with
+   * type 'savings', so without this guard every repayment would look like a
+   * savings withdrawal. */
   function isCashAccount(acc) { return !!acc && acc.type === 'cash'; }
-  function provisionTotals(txs) {
-    const by = {};                       // source wallet id → amount drawn into cash
+  function isSavingsAccount(acc) { return !!acc && acc.type === 'savings' && !acc.systemKind; }
+  function savingsDrawTotals(txs) {
+    const by = {};                       // savings wallet id → amount drawn into cash
     let drawn = 0, returned = 0;
     txs.forEach((tx) => {
       if (tx.type !== 'transfer') return;
       const from = accountById(tx.accountId), to = accountById(tx.toAccountId);
-      if (!from || !to) return;                          // wallet deleted → skip
-      if (from.systemKind || to.systemKind) return;      // debt bookkeeping, not provisioning
-      if (!isCashAccount(from) && isCashAccount(to)) {
+      if (!from || !to) return;                                   // wallet deleted → skip
+      if (from.systemKind || to.systemKind) return;               // debt bookkeeping, not savings
+      if (isSavingsAccount(from) && isCashAccount(to)) {
         drawn += tx.amount;
         by[from.id] = (by[from.id] || 0) + tx.amount;
-      } else if (isCashAccount(from) && !isCashAccount(to)) {
+      } else if (isCashAccount(from) && isSavingsAccount(to)) {
         returned += tx.amount;
       }
     });
@@ -2875,29 +2877,31 @@
       amounts: keys.map((id) => by[id]),
     };
   }
-  // Card: how much was moved into cash this period, from which wallets, and what
-  // share of the period's spending that covers. Hidden when nothing moved.
-  function provisionHtml(pv, expenseTotal) {
-    if (!pv.drawn && !pv.returned) return '';
-    const rows = pv.keys.map((id, i) => {
-      const pct = pv.drawn ? Math.round(pv.amounts[i] / pv.drawn * 100) : 0;
+  // Card: how much savings went into cash this period, from which savings wallets,
+  // and what share of the period's spending that covers. Hidden when nothing moved.
+  function savingsDrawHtml(sd, expenseTotal) {
+    if (!sd.drawn && !sd.returned) return '';
+    const rows = sd.keys.map((id, i) => {
+      const pct = sd.drawn ? Math.round(sd.amounts[i] / sd.drawn * 100) : 0;
       const acc = accountById(id);
       return '<div class="ben-row"><span class="ben-name">' +
-        (acc ? accountTypeIcon(acc.type) + ' ' : '') + esc(pv.labels[i]) + '</span>' +
-        '<span class="ben-amt">' + mask(fmtShort(pv.amounts[i])) + ' · ' + pct + '%</span></div>';
+        (acc ? accountTypeIcon(acc.type) + ' ' : '') + esc(sd.labels[i]) + '</span>' +
+        '<span class="ben-amt">' + mask(fmtShort(sd.amounts[i])) + ' · ' + pct + '%</span></div>';
     }).join('');
-    const coverPct = expenseTotal ? Math.round(pv.net / expenseTotal * 100) : 0;
-    return '<div class="section-title">' + t('provision') + '</div>' +
+    const coverPct = expenseTotal ? Math.round(sd.net / expenseTotal * 100) : 0;
+    // The per-wallet list only repeats the headline when there is a single wallet.
+    const showRows = sd.keys.length > 1;
+    return '<div class="section-title">' + t('savingsDraw') + '</div>' +
       '<div class="card">' +
-      '<div class="summary-grid prov-grid">' +
-      '<div class="sum-cell expense"><span>' + t('provisionDrawn') + '</span><b>' + mask(fmtShort(pv.drawn)) + '</b></div>' +
-      '<div class="sum-cell income"><span>' + t('provisionReturned') + '</span><b>' + mask(fmtShort(pv.returned)) + '</b></div>' +
-      '<div class="sum-cell ' + (pv.net > 0 ? 'expense' : 'neutral') + '"><span>' + t('provisionNet') + '</span><b>' +
-      mask((pv.net > 0 ? '' : '+') + fmtShort(Math.abs(pv.net))) + '</b></div>' +
+      '<div class="summary-grid sd-grid">' +
+      '<div class="sum-cell expense"><span>' + t('savingsDrawOut') + '</span><b>' + mask(fmtShort(sd.drawn)) + '</b></div>' +
+      '<div class="sum-cell income"><span>' + t('savingsDrawBack') + '</span><b>' + mask(fmtShort(sd.returned)) + '</b></div>' +
+      '<div class="sum-cell ' + (sd.net > 0 ? 'expense' : 'neutral') + '"><span>' + t('savingsDrawNet') + '</span><b>' +
+      mask((sd.net > 0 ? '' : '+') + fmtShort(Math.abs(sd.net))) + '</b></div>' +
       '</div>' +
-      (rows ? '<div class="ben-list">' + rows + '</div>' : '') +
-      (pv.net > 0 && expenseTotal ? '<div class="hint">' + t('provisionCover').replace('{n}', coverPct) + '</div>' : '') +
-      '<div class="hint">' + t('provisionHint') + '</div>' +
+      (showRows ? '<div class="ben-list">' + rows + '</div>' : '') +
+      (sd.net > 0 && expenseTotal ? '<div class="hint">' + t('savingsDrawCover').replace('{n}', coverPct) + '</div>' : '') +
+      '<div class="hint">' + t('savingsDrawHint') + '</div>' +
       '</div>';
   }
 
@@ -3180,7 +3184,7 @@
           '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div>' +
           (td.ranges ? '<div class="hint">' + t('trendTapHint') + '</div>' : '') + '</div>'),
         reportCard('dailySpend', () => (isMonth ? dailySpendHtml() : '')),
-        reportCard('provision', () => provisionHtml(provisionTotals(txs), tt.expense)),
+        reportCard('savingsDraw', () => savingsDrawHtml(savingsDrawTotals(txs), tt.expense)),
       ]) +
 
       // 3 — Where money went / came from, and how that tracks the budget
