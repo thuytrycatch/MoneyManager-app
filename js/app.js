@@ -122,6 +122,9 @@
       rgOverview: 'Tổng quan', rgFlow: 'Dòng tiền trong kỳ', rgStructure: 'Cơ cấu danh mục',
       rgAnalysis: 'Phân tích & dự báo', rgDetail: 'Chi tiết', rgAssets: 'Chốt sổ',
       byWallet: 'Chi tiết theo ví', trendTapHint: 'Chạm vào cột để xem khoảng ngày.',
+      provision: 'Trích lập dự phòng', provisionDrawn: 'Rút về tiền mặt', provisionReturned: 'Chuyển ngược lại',
+      provisionNet: 'Rút ròng', provisionCover: 'Bù đắp {n}% chi tiêu trong kỳ.',
+      provisionHint: 'Tiền từ ví không phải tiền mặt chuyển sang ví tiền mặt để chi tiêu, gồm cả rút ATM. Chuyển ví không tính là thu/chi nên các số khác không đổi.',
       reportCardsMgmt: 'Hiển thị báo cáo',
       reportCardsHint: 'Chọn khối báo cáo muốn thấy ở màn Báo cáo. Cài đặt lưu trên thiết bị này.',
       monthOnlyNote: 'chỉ có ở báo cáo tháng',
@@ -371,6 +374,9 @@
       rgOverview: 'Overview', rgFlow: 'Cash flow', rgStructure: 'Category breakdown',
       rgAnalysis: 'Analysis & forecast', rgDetail: 'Details', rgAssets: 'Monthly close',
       byWallet: 'By wallet', trendTapHint: 'Tap a bar to see its date range.',
+      provision: 'Cash provisioning', provisionDrawn: 'Moved into cash', provisionReturned: 'Moved back out',
+      provisionNet: 'Net drawn', provisionCover: 'Covers {n}% of this period\'s spending.',
+      provisionHint: 'Money moved from non-cash wallets into a cash wallet to be spent, ATM withdrawals included. Transfers are not income or expense, so no other figure changes.',
       reportCardsMgmt: 'Report cards',
       reportCardsHint: 'Pick which blocks show up on the Reports screen. Saved on this device.',
       monthOnlyNote: 'monthly report only',
@@ -730,6 +736,7 @@
     { key: 'autoInsights', labelKey: 'insights', monthOnly: true },
     { key: 'trend', labelKey: 'trend' },
     { key: 'dailySpend', labelKey: 'dailySpend', monthOnly: true },
+    { key: 'provision', labelKey: 'provision' },
     { key: 'byCategory', labelKey: 'byCategory' },
     { key: 'incomeByCat', labelKey: 'incomeByCat' },
     { key: 'budgetProgress', labelKey: 'budgetProgress', monthOnly: true },
@@ -2835,6 +2842,65 @@
       '<div class="ben-list">' + rows + '</div></div>';
   }
 
+  /* ============== Provisioning (trích lập dự phòng) ==============
+   * Money pulled out of a NON-CASH wallet into a CASH wallet in order to spend it,
+   * and the reverse leg (cash put back). Both are plain transfers, so none of this
+   * touches income/expense — it answers a question those totals can't: how much of
+   * the period's spending had to be funded from somewhere other than cash on hand.
+   * Note: an ATM withdrawal (bank → cash) counts, by design — the household asked
+   * for every non-cash source, not just savings-type wallets.
+   * The debt system wallets are excluded: their transfers are lending/borrowing
+   * bookkeeping, not a real money movement between the household's own wallets. */
+  function isCashAccount(acc) { return !!acc && acc.type === 'cash'; }
+  function provisionTotals(txs) {
+    const by = {};                       // source wallet id → amount drawn into cash
+    let drawn = 0, returned = 0;
+    txs.forEach((tx) => {
+      if (tx.type !== 'transfer') return;
+      const from = accountById(tx.accountId), to = accountById(tx.toAccountId);
+      if (!from || !to) return;                          // wallet deleted → skip
+      if (from.systemKind || to.systemKind) return;      // debt bookkeeping, not provisioning
+      if (!isCashAccount(from) && isCashAccount(to)) {
+        drawn += tx.amount;
+        by[from.id] = (by[from.id] || 0) + tx.amount;
+      } else if (isCashAccount(from) && !isCashAccount(to)) {
+        returned += tx.amount;
+      }
+    });
+    const keys = Object.keys(by).sort((a, b) => by[b] - by[a]);
+    return {
+      drawn: drawn, returned: returned, net: drawn - returned,
+      keys: keys,
+      labels: keys.map((id) => { const a = accountById(id); return a ? a.name : t('unknownMember'); }),
+      amounts: keys.map((id) => by[id]),
+    };
+  }
+  // Card: how much was moved into cash this period, from which wallets, and what
+  // share of the period's spending that covers. Hidden when nothing moved.
+  function provisionHtml(pv, expenseTotal) {
+    if (!pv.drawn && !pv.returned) return '';
+    const rows = pv.keys.map((id, i) => {
+      const pct = pv.drawn ? Math.round(pv.amounts[i] / pv.drawn * 100) : 0;
+      const acc = accountById(id);
+      return '<div class="ben-row"><span class="ben-name">' +
+        (acc ? accountTypeIcon(acc.type) + ' ' : '') + esc(pv.labels[i]) + '</span>' +
+        '<span class="ben-amt">' + mask(fmtShort(pv.amounts[i])) + ' · ' + pct + '%</span></div>';
+    }).join('');
+    const coverPct = expenseTotal ? Math.round(pv.net / expenseTotal * 100) : 0;
+    return '<div class="section-title">' + t('provision') + '</div>' +
+      '<div class="card">' +
+      '<div class="summary-grid prov-grid">' +
+      '<div class="sum-cell expense"><span>' + t('provisionDrawn') + '</span><b>' + mask(fmtShort(pv.drawn)) + '</b></div>' +
+      '<div class="sum-cell income"><span>' + t('provisionReturned') + '</span><b>' + mask(fmtShort(pv.returned)) + '</b></div>' +
+      '<div class="sum-cell ' + (pv.net > 0 ? 'expense' : 'neutral') + '"><span>' + t('provisionNet') + '</span><b>' +
+      mask((pv.net > 0 ? '' : '+') + fmtShort(Math.abs(pv.net))) + '</b></div>' +
+      '</div>' +
+      (rows ? '<div class="ben-list">' + rows + '</div>' : '') +
+      (pv.net > 0 && expenseTotal ? '<div class="hint">' + t('provisionCover').replace('{n}', coverPct) + '</div>' : '') +
+      '<div class="hint">' + t('provisionHint') + '</div>' +
+      '</div>';
+  }
+
   /* ============== Monthly close (chốt sổ) ============== */
   function anchorFromPeriod(p) { const parts = String(p || '').split('-'); return new Date(Number(parts[0]), (Number(parts[1]) || 1) - 1, 1); }
 
@@ -3114,6 +3180,7 @@
           '<div class="card"><div class="chart-box tall"><canvas id="repTrend"></canvas></div>' +
           (td.ranges ? '<div class="hint">' + t('trendTapHint') + '</div>' : '') + '</div>'),
         reportCard('dailySpend', () => (isMonth ? dailySpendHtml() : '')),
+        reportCard('provision', () => provisionHtml(provisionTotals(txs), tt.expense)),
       ]) +
 
       // 3 — Where money went / came from, and how that tracks the budget
